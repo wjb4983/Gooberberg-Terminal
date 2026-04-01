@@ -28,6 +28,19 @@ async def _broadcast_job_event(event: JobLifecycleEvent) -> None:
         },
     )
 
+    await ws_manager.publish_topic(
+        topic="logs",
+        payload={
+            "timestamp": event.updated_at.isoformat(),
+            "service": "api-control-plane",
+            "level": "info",
+            "trace_id": event.trace_id,
+            "message": event.detail,
+            "category": "jobs",
+            "fields": {"job_id": str(event.job_id), "status": event.status.value},
+        },
+    )
+
 
 @router.post("", response_model=JobResponse, status_code=status.HTTP_202_ACCEPTED)
 async def create_job(job_request: JobCreateRequest, request: Request) -> JobResponse:

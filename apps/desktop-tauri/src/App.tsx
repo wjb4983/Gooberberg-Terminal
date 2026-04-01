@@ -7,6 +7,7 @@ import { JobsPage } from './pages/JobsPage';
 import { ModelDeploymentsPage } from './pages/ModelDeploymentsPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { GraphPage } from './pages/GraphPage';
+import { AlertsHealthPage } from './pages/AlertsHealthPage';
 import { PortfolioPage } from './pages/PortfolioPage';
 import { loadPreferences, savePreferences } from './settings/preferences';
 import { createTokenStorage } from './settings/tokenStorage';
@@ -30,6 +31,7 @@ export function App(): JSX.Element {
         <Route path="strategies" element={<StrategiesPage baseUrl={baseUrl} />} />
         <Route path="portfolio" element={<PortfolioPage baseUrl={baseUrl} />} />
         <Route path="graph" element={<GraphPage baseUrl={baseUrl} />} />
+        <Route path="alerts-health" element={<AlertsHealthPage baseUrl={baseUrl} />} />
         <Route
           path="settings"
           element={

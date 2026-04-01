@@ -7,6 +7,7 @@ const navItems = [
   { label: 'Strategies', to: '/strategies' },
   { label: 'Portfolio', to: '/portfolio' },
   { label: 'Graph', to: '/graph' },
+  { label: 'Alerts/Health', to: '/alerts-health' },
   { label: 'Settings', to: '/settings' },
 ];
 

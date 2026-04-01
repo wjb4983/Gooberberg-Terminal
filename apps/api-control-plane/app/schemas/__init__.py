@@ -1,5 +1,13 @@
 from app.schemas.graph import GraphEdge, GraphNode, GraphNodeType, GraphTopologyResponse
 from app.schemas.health import DependencyStatus, HealthResponse
+from app.schemas.events import (
+    AlertAcknowledgeResponse,
+    AlertEvent,
+    AlertSeverity,
+    AlertStatus,
+    LogEvent,
+    LogLevel,
+)
 from app.schemas.jobs import (
     JobCreateRequest,
     JobLifecycleUpdateRequest,
@@ -30,6 +38,12 @@ __all__ = [
     "GraphTopologyResponse",
     "DependencyStatus",
     "HealthResponse",
+    "AlertAcknowledgeResponse",
+    "AlertEvent",
+    "AlertSeverity",
+    "AlertStatus",
+    "LogEvent",
+    "LogLevel",
     "JobCreateRequest",
     "JobLifecycleUpdateRequest",
     "JobResponse",

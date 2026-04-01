@@ -88,19 +88,30 @@ export interface ContractEnvelopeBase {
   emittedAtIso: string;
 }
 
-export interface AlertEvent extends ContractEnvelopeBase {
-  type: 'alert';
-  severity: 'info' | 'warning' | 'critical';
-  source: string;
+export type AlertSeverity = 'info' | 'warning' | 'critical';
+export type AlertStatus = 'active' | 'acknowledged';
+
+export interface AlertEvent {
+  id: string;
+  timestamp: string;
+  service: string;
+  level: AlertSeverity;
+  trace_id: string;
   message: string;
-  metadata?: Record<string, unknown>;
+  category: string;
+  status: AlertStatus;
+  acknowledged_at?: string;
 }
 
-export interface LogEvent extends ContractEnvelopeBase {
-  type: 'log';
-  level: 'debug' | 'info' | 'warning' | 'error';
-  source: string;
+export type LogLevel = 'debug' | 'info' | 'warning' | 'error';
+
+export interface LogEvent {
+  timestamp: string;
+  service: string;
+  level: LogLevel;
+  trace_id: string;
   message: string;
+  category?: string;
   fields?: Record<string, unknown>;
 }
 
