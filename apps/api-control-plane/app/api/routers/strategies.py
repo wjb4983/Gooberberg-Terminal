@@ -4,6 +4,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, status
 
+from app.api.routers.risk import authority as risk_authority
 from app.api.routers.ws import manager as ws_manager
 from app.schemas import (
     StrategyInstance,
@@ -45,6 +46,7 @@ async def list_strategy_instances() -> list[StrategyInstance]:
 )
 async def create_strategy_instance(payload: StrategyInstanceCreateRequest) -> StrategyInstance:
     timestamp = datetime.now(UTC)
+    payload.intent.strategy_key = payload.strategy_key
     instance = StrategyInstance(
         strategy_key=payload.strategy_key,
         mode=payload.mode,
@@ -53,6 +55,7 @@ async def create_strategy_instance(payload: StrategyInstanceCreateRequest) -> St
         created_at=timestamp,
         updated_at=timestamp,
     )
+    instance.intent.strategy_instance_id = instance.id
     _instances[instance.id] = instance
     await _broadcast_strategy_event(instance, action="create", detail="strategy instance created")
     return instance
@@ -70,13 +73,20 @@ async def start_strategy_instance(instance_id: UUID) -> StrategyInstanceActionRe
             detail="strategy instance is already running",
         )
 
+    risk_decision = risk_authority.consume_intent(instance.intent)
+    if not risk_decision.approved:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"risk rejected intent: {risk_decision.reason_code}",
+        )
+
     timestamp = datetime.now(UTC)
     instance.status = StrategyInstanceStatus.RUNNING
     instance.started_at = timestamp
     instance.stopped_at = None
     instance.updated_at = timestamp
 
-    detail = "strategy instance started"
+    detail = f"strategy instance started with risk decision {risk_decision.decision_id}"
     await _broadcast_strategy_event(instance, action="start", detail=detail)
     return StrategyInstanceActionResponse(instance=instance, detail=detail)
 

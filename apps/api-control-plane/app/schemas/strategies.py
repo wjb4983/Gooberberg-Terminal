@@ -1,9 +1,10 @@
 from datetime import UTC, datetime
 from enum import StrEnum
-from typing import Any
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel, Field
+
+from gb_core.schemas import StrategyIntent
 
 
 class StrategyMode(StrEnum):
@@ -15,11 +16,6 @@ class StrategyInstanceStatus(StrEnum):
     CREATED = "created"
     RUNNING = "running"
     STOPPED = "stopped"
-
-
-class StrategyIntent(BaseModel):
-    notes: str | None = None
-    params: dict[str, Any] = Field(default_factory=dict)
 
 
 class StrategyInstance(BaseModel):
