@@ -1,4 +1,15 @@
-"""Entry module for service_risk_exec."""
+"""Risk execution service skeleton with shared risk authority wiring."""
+
+from gb_core.risk import RiskExecutionAuthority
+from gb_core.schemas import ExecutionDecision, StrategyIntent
+
+
+authority = RiskExecutionAuthority()
+
+
+def consume_strategy_intent(intent: StrategyIntent) -> ExecutionDecision:
+    """Consume a strategy intent event and emit an execution decision."""
+    return authority.consume_intent(intent)
 
 
 def main() -> None:

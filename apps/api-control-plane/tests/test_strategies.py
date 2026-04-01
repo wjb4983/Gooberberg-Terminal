@@ -12,7 +12,14 @@ def test_strategy_instance_mocked_lifecycle() -> None:
         json={
             "strategy_key": "mean_reversion",
             "mode": "paper",
-            "intent": {"notes": "placeholder intent", "params": {"window": 20}},
+            "intent": {
+                "notes": "placeholder intent",
+                "params": {"window": 20},
+                "symbol": "AAPL",
+                "side": "buy",
+                "quantity": 20,
+                "limit_price": 150,
+            },
         },
     )
     assert create_response.status_code == 201
@@ -31,6 +38,7 @@ def test_strategy_instance_mocked_lifecycle() -> None:
     started = start_response.json()
     assert started["instance"]["status"] == "running"
     assert started["instance"]["started_at"] is not None
+    assert "risk decision" in started["detail"]
 
     invalid_start_response = client.post(f"/api/v1/strategies/instances/{instance_id}/start")
     assert invalid_start_response.status_code == 409
@@ -51,3 +59,19 @@ def test_strategy_instance_requires_valid_mode() -> None:
         json={"strategy_key": "breakout", "mode": "demo"},
     )
     assert response.status_code == 422
+
+
+def test_strategy_cannot_start_without_risk_approval() -> None:
+    create_response = client.post(
+        "/api/v1/strategies/instances",
+        json={
+            "strategy_key": "mean_reversion",
+            "mode": "paper",
+            "intent": {"notes": "missing order fields"},
+        },
+    )
+    instance_id = create_response.json()["id"]
+
+    start_response = client.post(f"/api/v1/strategies/instances/{instance_id}/start")
+    assert start_response.status_code == 403
+    assert "risk rejected intent" in start_response.json()["detail"]
