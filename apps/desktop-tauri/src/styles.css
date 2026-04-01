@@ -68,3 +68,24 @@ body {
   font: inherit;
   padding: 0.5rem;
 }
+
+.muted {
+  color: #9fb0e9;
+}
+
+.jobs-card {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.jobs-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.jobs-table th,
+.jobs-table td {
+  text-align: left;
+  border-bottom: 1px solid #2b3558;
+  padding: 0.5rem;
+}

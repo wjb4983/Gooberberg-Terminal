@@ -1,5 +1,6 @@
 import asyncio
 import contextlib
+import json
 import logging
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
@@ -10,6 +11,7 @@ from app.ws.manager import ConnectionManager
 router = APIRouter(tags=["ws"])
 logger = logging.getLogger(__name__)
 manager = ConnectionManager()
+VALID_TOPICS = {"jobs", "alerts", "logs", "portfolio", "risk"}
 
 
 async def _heartbeat(websocket: WebSocket, interval_seconds: float) -> None:
@@ -34,10 +36,34 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
             normalized = message.strip().lower()
             if normalized in {"pong", "ping"}:
                 await manager.send_json(websocket, {"type": "pong"})
+                continue
+
+            try:
+                payload = json.loads(message)
+            except json.JSONDecodeError:
+                await manager.send_json(websocket, {"type": "error", "detail": "invalid json"})
+                continue
+
+            action = payload.get("action")
+            requested_topics = payload.get("topics", [])
+            topics = [topic for topic in requested_topics if topic in VALID_TOPICS]
+
+            if action == "subscribe":
+                subscriptions = manager.subscribe(websocket, topics)
+                await manager.send_json(
+                    websocket,
+                    {"type": "subscribed", "topics": subscriptions},
+                )
+            elif action == "unsubscribe":
+                subscriptions = manager.unsubscribe(websocket, topics)
+                await manager.send_json(
+                    websocket,
+                    {"type": "unsubscribed", "topics": subscriptions},
+                )
             else:
                 await manager.send_json(
                     websocket,
-                    {"type": "echo", "message": message},
+                    {"type": "error", "detail": "unsupported action"},
                 )
     except WebSocketDisconnect:
         logger.info("websocket disconnected")

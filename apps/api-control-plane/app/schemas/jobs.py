@@ -27,3 +27,8 @@ class JobStatusResponse(BaseModel):
     detail: str
     trace_id: str
     updated_at: datetime
+
+
+class JobLifecycleUpdateRequest(BaseModel):
+    status: JobStatus
+    detail: str = Field(min_length=1)
