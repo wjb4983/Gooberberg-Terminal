@@ -1,0 +1,3 @@
+# env
+
+Scaffold directory placeholder.

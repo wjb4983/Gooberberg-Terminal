@@ -1,0 +1,3 @@
+# risk
+
+Scaffold directory placeholder.
