@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "Skeleton package for service_risk_exec."
 readme = "README.md"
 requires-python = ">=3.11"
-dependencies = []
+dependencies = ["redis>=5.0,<6.0", "gb-gb-core"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/service_risk_exec"]

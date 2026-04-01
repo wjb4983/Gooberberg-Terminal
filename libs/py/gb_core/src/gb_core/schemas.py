@@ -22,6 +22,8 @@ class StrategyIntent(BaseModel):
     quantity: float | None = Field(default=None, gt=0)
     limit_price: float | None = Field(default=None, gt=0)
     notes: str | None = None
+    trace_id: UUID = Field(default_factory=uuid4)
+    confidence: float = Field(default=0.5, ge=0, le=1)
     params: dict[str, Any] = Field(default_factory=dict)
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
