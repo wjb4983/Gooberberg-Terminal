@@ -2,8 +2,6 @@
   font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
   line-height: 1.5;
   font-weight: 400;
-  color: #e6ecff;
-  background-color: #101628;
 }
 
 body {
@@ -20,10 +18,29 @@ body {
   min-height: 100vh;
 }
 
+.theme-dark {
+  color: #e6ecff;
+  background-color: #101628;
+}
+
+.theme-light {
+  color: #17223d;
+  background-color: #f3f6ff;
+}
+
+.compact-layout .content {
+  padding: 0.8rem;
+}
+
 .sidebar {
   padding: 1rem;
   background: #0b1020;
   border-right: 1px solid #2b3558;
+}
+
+.theme-light .sidebar {
+  background: #dce6ff;
+  border-right: 1px solid #b6c4ec;
 }
 
 .sidebar ul {
@@ -36,13 +53,31 @@ body {
   text-decoration: none;
 }
 
+.theme-light .sidebar a {
+  color: #334770;
+}
+
 .active-link {
   color: #fff;
   font-weight: 700;
 }
 
+.theme-light .active-link {
+  color: #0d1f47;
+}
+
 .content {
   padding: 1.25rem;
+}
+
+.status-bar {
+  display: flex;
+  justify-content: space-between;
+  border: 1px solid #2b3558;
+  border-radius: 8px;
+  padding: 0.4rem 0.8rem;
+  margin-bottom: 1rem;
+  background: #131b31;
 }
 
 .card {
@@ -51,6 +86,10 @@ body {
   padding: 1rem;
   max-width: 480px;
   background: #131b31;
+}
+
+.api-error {
+  margin-bottom: 1rem;
 }
 
 .error {
@@ -64,7 +103,8 @@ body {
 }
 
 .settings-form input,
-.settings-form button {
+.settings-form button,
+.settings-form select {
   font: inherit;
   padding: 0.5rem;
 }
@@ -76,6 +116,7 @@ body {
 .jobs-card {
   max-width: 100%;
   overflow-x: auto;
+  margin-top: 1rem;
 }
 
 .jobs-table {
@@ -88,6 +129,13 @@ body {
   text-align: left;
   border-bottom: 1px solid #2b3558;
   padding: 0.5rem;
+}
+
+.table-toolbar {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
 }
 
 .graph-page {
@@ -133,4 +181,29 @@ body {
   border: 1px solid #2b3558;
   border-radius: 6px;
   padding: 0.75rem;
+}
+
+.toast-layer {
+  position: fixed;
+  top: 1rem;
+  right: 1rem;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.toast {
+  min-width: 280px;
+  padding: 0.6rem 0.8rem;
+  border-radius: 8px;
+  border: 1px solid;
+}
+
+.toast-warning {
+  background: #3d2f09;
+  border-color: #facc15;
+}
+
+.toast-critical {
+  background: #3c1212;
+  border-color: #ef4444;
 }

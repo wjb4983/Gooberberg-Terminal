@@ -4,7 +4,17 @@ export interface ApiClient {
   getHealth(): Promise<ServiceHealth>;
 }
 
-export interface ApiPreferences {
+export type ThemePreference = 'dark' | 'light';
+
+export interface UiPreferences {
+  theme: ThemePreference;
+  compactLayout: boolean;
+  filterDefaults: {
+    severity: 'all' | 'info' | 'warning' | 'critical';
+  };
+}
+
+export interface ApiPreferences extends UiPreferences {
   baseUrl: string;
 }
 

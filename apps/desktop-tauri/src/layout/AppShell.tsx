@@ -1,4 +1,5 @@
 import { NavLink, Outlet } from 'react-router-dom';
+import type { ThemePreference } from '../types/api';
 
 const navItems = [
   { label: 'Dashboard', to: '/' },
@@ -11,9 +12,17 @@ const navItems = [
   { label: 'Settings', to: '/settings' },
 ];
 
-export function AppShell(): JSX.Element {
+interface AppShellProps {
+  apiStatus: 'connected' | 'degraded' | 'offline';
+  wsStatus: string;
+  theme: ThemePreference;
+  compactLayout: boolean;
+  toasts: Array<{ id: number; message: string; tone: 'warning' | 'critical' }>;
+}
+
+export function AppShell({ apiStatus, wsStatus, theme, compactLayout, toasts }: AppShellProps): JSX.Element {
   return (
-    <div className="app-shell">
+    <div className={`app-shell theme-${theme} ${compactLayout ? 'compact-layout' : ''}`}>
       <aside className="sidebar">
         <h1>Gooberberg</h1>
         <nav>
@@ -29,8 +38,17 @@ export function AppShell(): JSX.Element {
         </nav>
       </aside>
       <main className="content">
+        <div className="status-bar">
+          <span>API: <strong>{apiStatus}</strong></span>
+          <span>WebSocket: <strong>{wsStatus}</strong></span>
+        </div>
         <Outlet />
       </main>
+      <div className="toast-layer">
+        {toasts.map((toast) => (
+          <div key={toast.id} className={`toast toast-${toast.tone}`}>{toast.message}</div>
+        ))}
+      </div>
     </div>
   );
 }

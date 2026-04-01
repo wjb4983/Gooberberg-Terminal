@@ -1,6 +1,8 @@
 import { GbApiClient, parseJobLifecyclePayload } from '@gb/api-client';
 import type { JobLifecyclePayload } from '@gb/schemas';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { DataTable } from '../components/DataTable';
+import { useOperatorConsole } from '../context/OperatorConsoleContext';
 
 interface JobsPageProps {
   baseUrl: string;
@@ -11,6 +13,11 @@ export function JobsPage({ baseUrl }: JobsPageProps): JSX.Element {
   const [events, setEvents] = useState<JobLifecyclePayload[]>([]);
   const [connectionState, setConnectionState] = useState('connecting');
   const lastSeqRef = useRef<number | undefined>(undefined);
+  const { reportWebSocketStatus } = useOperatorConsole();
+
+  useEffect(() => {
+    reportWebSocketStatus(connectionState);
+  }, [connectionState, reportWebSocketStatus]);
 
   useEffect(() => {
     const connection = client.connectTopicWebSocket({
@@ -28,7 +35,7 @@ export function JobsPage({ baseUrl }: JobsPageProps): JSX.Element {
           return;
         }
 
-        setEvents((previous) => [payload, ...previous].slice(0, 50));
+        setEvents((previous) => [payload, ...previous].slice(0, 100));
       },
     });
 
@@ -41,36 +48,19 @@ export function JobsPage({ baseUrl }: JobsPageProps): JSX.Element {
     <section>
       <h2>Jobs</h2>
       <p>Live job lifecycle updates via topic WebSocket.</p>
-      <p className="muted">Connection: {connectionState}</p>
-
-      <div className="card jobs-card">
-        <table className="jobs-table">
-          <thead>
-            <tr>
-              <th>Job ID</th>
-              <th>Status</th>
-              <th>Detail</th>
-              <th>Updated</th>
-            </tr>
-          </thead>
-          <tbody>
-            {events.length === 0 ? (
-              <tr>
-                <td colSpan={4}>Waiting for job events…</td>
-              </tr>
-            ) : (
-              events.map((event) => (
-                <tr key={`${event.job_id}-${event.updated_at}`}>
-                  <td>{event.job_id}</td>
-                  <td>{event.status}</td>
-                  <td>{event.detail}</td>
-                  <td>{new Date(event.updated_at).toLocaleString()}</td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+      <DataTable
+        title="Job events"
+        rows={events}
+        emptyLabel="Waiting for job events…"
+        searchPlaceholder="Search by id/status/detail"
+        searchValue={(event) => `${event.job_id} ${event.status} ${event.detail}`}
+        columns={[
+          { key: 'job', header: 'Job ID', render: (event) => event.job_id },
+          { key: 'status', header: 'Status', render: (event) => event.status },
+          { key: 'detail', header: 'Detail', render: (event) => event.detail },
+          { key: 'updated', header: 'Updated', render: (event) => new Date(event.updated_at).toLocaleString() },
+        ]}
+      />
     </section>
   );
 }
