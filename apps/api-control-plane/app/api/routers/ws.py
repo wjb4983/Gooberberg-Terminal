@@ -11,7 +11,7 @@ from app.ws.manager import ConnectionManager
 router = APIRouter(tags=["ws"])
 logger = logging.getLogger(__name__)
 manager = ConnectionManager()
-VALID_TOPICS = {"jobs", "alerts", "logs", "portfolio", "risk", "strategy"}
+VALID_TOPICS = {"jobs", "alerts", "logs", "portfolio", "risk", "strategy", "models"}
 
 
 async def _heartbeat(websocket: WebSocket, interval_seconds: float) -> None:
