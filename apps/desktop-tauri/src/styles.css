@@ -1,0 +1,70 @@
+:root {
+  font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+  color: #e6ecff;
+  background-color: #101628;
+}
+
+body {
+  margin: 0;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+.app-shell {
+  display: grid;
+  grid-template-columns: 240px 1fr;
+  min-height: 100vh;
+}
+
+.sidebar {
+  padding: 1rem;
+  background: #0b1020;
+  border-right: 1px solid #2b3558;
+}
+
+.sidebar ul {
+  list-style: none;
+  padding: 0;
+}
+
+.sidebar a {
+  color: #a5b4fc;
+  text-decoration: none;
+}
+
+.active-link {
+  color: #fff;
+  font-weight: 700;
+}
+
+.content {
+  padding: 1.25rem;
+}
+
+.card {
+  border: 1px solid #2b3558;
+  border-radius: 8px;
+  padding: 1rem;
+  max-width: 480px;
+  background: #131b31;
+}
+
+.error {
+  color: #ff9b9b;
+}
+
+.settings-form {
+  display: grid;
+  gap: 0.5rem;
+  max-width: 480px;
+}
+
+.settings-form input,
+.settings-form button {
+  font: inherit;
+  padding: 0.5rem;
+}

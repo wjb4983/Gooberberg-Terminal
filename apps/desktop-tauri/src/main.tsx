@@ -1,13 +1,20 @@
-import { parseServiceHealth } from '@gb/api-client';
-import type { ServiceHealth } from '@gb/schemas';
-import { formatHealthLabel } from '@gb/ui-components';
+import React from 'react';
+import { createRoot } from 'react-dom/client';
+import { BrowserRouter } from 'react-router-dom';
 
-const payload: ServiceHealth = {
-  service: 'desktop-shell',
-  status: 'healthy',
-  checkedAtIso: new Date().toISOString(),
-};
+import { App } from './App';
+import './styles.css';
 
-const parsed = parseServiceHealth(payload);
+const container = document.getElementById('root');
 
-export const appHealthLabel = parsed ? formatHealthLabel(parsed) : 'desktop-shell: unknown';
+if (!container) {
+  throw new Error('Root container not found. Expected element with id="root".');
+}
+
+createRoot(container).render(
+  <React.StrictMode>
+    <BrowserRouter>
+      <App />
+    </BrowserRouter>
+  </React.StrictMode>,
+);
