@@ -1,25 +1,73 @@
-from uuid import UUID
+import logging
+from datetime import UTC, datetime
+from uuid import UUID, uuid4
 
-from fastapi import APIRouter, status
+from fastapi import APIRouter, HTTPException, Request, status
 
+from app.core.logging import request_id_ctx_var
+from app.jobs.models import JobEnvelope, JobLifecycleEvent, JobStatus
+from app.jobs.store import job_state_store
 from app.schemas import JobCreateRequest, JobResponse, JobStatusResponse
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])
 
 
 @router.post("", response_model=JobResponse, status_code=status.HTTP_202_ACCEPTED)
-def create_job(job_request: JobCreateRequest) -> JobResponse:
-    return JobResponse(
+async def create_job(job_request: JobCreateRequest, request: Request) -> JobResponse:
+    trace_id = request_id_ctx_var.get() or str(uuid4())
+    job_id = uuid4()
+    accepted_at = datetime.now(UTC)
+
+    envelope = JobEnvelope(
+        job_id=job_id,
+        trace_id=trace_id,
         job_type=job_request.job_type,
         payload=job_request.payload,
-        status="accepted",
+        queued_at=accepted_at,
+    )
+    queued_event = JobLifecycleEvent(
+        job_id=job_id,
+        trace_id=trace_id,
+        status=JobStatus.QUEUED,
+        detail="job accepted by api-control-plane",
+        updated_at=accepted_at,
+    )
+
+    job_state_store.upsert(queued_event)
+    await request.app.state.job_repo.enqueue(envelope, queued_event)
+
+    logger.info("job accepted", extra={"job_id": str(job_id), "trace_id": trace_id})
+    return JobResponse(
+        id=job_id,
+        job_type=job_request.job_type,
+        status=JobStatus.QUEUED,
+        payload=job_request.payload,
+        trace_id=trace_id,
+        accepted_at=accepted_at,
     )
 
 
 @router.get("/{job_id}", response_model=JobStatusResponse)
-def get_job(job_id: UUID) -> JobStatusResponse:
+async def get_job(job_id: UUID, request: Request) -> JobStatusResponse:
+    event = job_state_store.get(job_id)
+    if event is None:
+        event = await request.app.state.job_repo.get_latest_event(job_id)
+        if event:
+            job_state_store.upsert(event)
+
+    if event is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="job not found")
+
+    logger.info(
+        "job status fetched",
+        extra={"job_id": str(job_id), "trace_id": event.trace_id},
+    )
     return JobStatusResponse(
-        id=job_id,
-        status="pending",
-        detail="placeholder: fetch from persistent job store not implemented",
+        id=event.job_id,
+        status=event.status,
+        detail=event.detail,
+        trace_id=event.trace_id,
+        updated_at=event.updated_at,
     )
