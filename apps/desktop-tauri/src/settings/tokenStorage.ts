@@ -4,11 +4,16 @@ import type { ApiCredentials } from '../types/api';
 
 export interface TokenStorage {
   save(credentials: ApiCredentials): Promise<void>;
+  getToken(): Promise<string>;
 }
 
 class TauriTokenStorage implements TokenStorage {
   async save(credentials: ApiCredentials): Promise<void> {
     await invoke('save_api_token', { token: credentials.token });
+  }
+
+  async getToken(): Promise<string> {
+    return invoke<string>('get_api_token');
   }
 }
 
@@ -19,7 +24,7 @@ class InMemoryTokenStorage implements TokenStorage {
     this.token = credentials.token;
   }
 
-  getToken(): string {
+  async getToken(): Promise<string> {
     return this.token;
   }
 }

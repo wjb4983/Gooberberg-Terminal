@@ -16,6 +16,8 @@ class Settings(BaseSettings):
     redis_dsn: str | None = Field(default=None)
 
     heartbeat_interval_seconds: float = Field(default=15.0)
+    api_auth_token: str | None = Field(default=None)
+    api_auth_scope: str = Field(default="control-plane:full")
 
     model_config = SettingsConfigDict(env_prefix="GB_", extra="ignore")
 

@@ -25,7 +25,7 @@ export function App(): JSX.Element {
   return (
     <Routes>
       <Route path="/" element={<AppShell />}>
-        <Route index element={<DashboardPage baseUrl={baseUrl} />} />
+        <Route index element={<DashboardPage baseUrl={baseUrl} getToken={() => tokenStorage.getToken()} />} />
         <Route path="jobs" element={<JobsPage baseUrl={baseUrl} />} />
         <Route path="models" element={<ModelDeploymentsPage baseUrl={baseUrl} />} />
         <Route path="strategies" element={<StrategiesPage baseUrl={baseUrl} />} />

@@ -1,0 +1,52 @@
+services:
+  api-control-plane:
+    image: ghcr.io/gooberberg/api-control-plane:latest
+    restart: unless-stopped
+    environment:
+      GB_ENVIRONMENT: production
+      GB_API_AUTH_TOKEN: ${GB_API_AUTH_TOKEN:?set_a_strong_token}
+      GB_API_AUTH_SCOPE: control-plane:full
+      GB_POSTGRES_DSN: postgresql://postgres:${POSTGRES_PASSWORD}@postgres:5432/gooberberg
+      GB_REDIS_DSN: redis://redis:6379/0
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:8000:8000"
+
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: gooberberg
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set_postgres_password}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d gooberberg"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    expose:
+      - "5432"
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    expose:
+      - "6379"
+
+volumes:
+  postgres-data:
+  redis-data:

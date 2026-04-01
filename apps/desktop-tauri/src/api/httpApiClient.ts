@@ -4,12 +4,19 @@ import type { ServiceHealth } from '@gb/schemas';
 import type { ApiClient } from '../types/api';
 
 export class HttpApiClient implements ApiClient {
-  constructor(private readonly baseUrl: string) {}
+  constructor(
+    private readonly baseUrl: string,
+    private readonly getToken: () => Promise<string> = async () => '',
+  ) {}
 
   async getHealth(): Promise<ServiceHealth> {
+    const token = await this.getToken();
     const response = await fetch(`${this.baseUrl}/health`, {
       method: 'GET',
-      headers: { Accept: 'application/json' },
+      headers: {
+        Accept: 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
     });
 
     if (!response.ok) {
