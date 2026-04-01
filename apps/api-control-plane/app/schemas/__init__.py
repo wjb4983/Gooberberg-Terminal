@@ -6,6 +6,7 @@ from app.schemas.jobs import (
     JobResponse,
     JobStatusResponse,
 )
+from app.schemas.portfolio import PortfolioSnapshot, Position
 from app.schemas.models import (
     ModelDeployment,
     ModelDeploymentActionResponse,
@@ -44,4 +45,6 @@ __all__ = [
     "StrategyInstanceStatus",
     "StrategyIntent",
     "StrategyMode",
+    "PortfolioSnapshot",
+    "Position",
 ]
