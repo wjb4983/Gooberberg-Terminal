@@ -1,6 +1,7 @@
 import type {
   CreateJobRequest,
   CreateJobResponse,
+  GraphTopology,
   HealthResponse,
   JobLifecyclePayload,
   JobStatusResponse,
@@ -8,6 +9,7 @@ import type {
   WebSocketEventEnvelope,
   WebSocketTopic,
 } from '@gb/schemas';
+import { parseGraphTopology } from '@gb/schemas';
 
 export interface ApiClientOptions {
   baseHttpUrl: string;
@@ -52,6 +54,16 @@ export class GbApiClient {
     });
 
     return parseHealthResponse(payload);
+  }
+
+
+  async getGraphTopology(): Promise<GraphTopology> {
+    const payload = await this.requestJson<unknown>(`${this.apiPrefix}/graph/topology`, {
+      method: 'GET',
+      headers: { Accept: 'application/json' },
+    });
+
+    return parseGraphTopology(payload);
   }
 
   async createJob(request: CreateJobRequest): Promise<CreateJobResponse> {
