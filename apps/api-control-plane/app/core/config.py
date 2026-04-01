@@ -1,0 +1,25 @@
+from functools import lru_cache
+
+from pydantic import Field
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class Settings(BaseSettings):
+    """Application settings loaded from environment variables."""
+
+    app_name: str = Field(default="gooberberg-api-control-plane")
+    environment: str = Field(default="development")
+    app_version: str = Field(default="0.1.0")
+    api_prefix: str = Field(default="/api/v1")
+
+    postgres_dsn: str | None = Field(default=None)
+    redis_dsn: str | None = Field(default=None)
+
+    heartbeat_interval_seconds: float = Field(default=15.0)
+
+    model_config = SettingsConfigDict(env_prefix="GB_", extra="ignore")
+
+
+@lru_cache
+def get_settings() -> Settings:
+    return Settings()
