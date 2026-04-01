@@ -1,0 +1,17 @@
+[build-system]
+requires = ["hatchling>=1.26"]
+build-backend = "hatchling.build"
+
+[project]
+name = "gb-api-control-plane"
+version = "0.1.0"
+description = "Skeleton package for api_control_plane."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = ["fastapi>=0.115,<1.0"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/api_control_plane"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]

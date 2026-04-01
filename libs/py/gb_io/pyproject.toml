@@ -1,0 +1,17 @@
+[build-system]
+requires = ["hatchling>=1.26"]
+build-backend = "hatchling.build"
+
+[project]
+name = "gb-gb-io"
+version = "0.1.0"
+description = "Skeleton package for gb_io."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = []
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/gb_io"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
