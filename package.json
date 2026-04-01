@@ -1,0 +1,23 @@
+{
+  "name": "gooberberg-terminal",
+  "private": true,
+  "packageManager": "pnpm@10.18.3",
+  "workspaces": [
+    "apps/*",
+    "libs/ts/@gb/*"
+  ],
+  "scripts": {
+    "build": "pnpm -r build",
+    "typecheck": "tsc -b",
+    "lint": "pnpm -r lint",
+    "test": "pnpm -r test"
+  },
+  "devDependencies": {
+    "@typescript-eslint/eslint-plugin": "^8.31.1",
+    "@typescript-eslint/parser": "^8.31.1",
+    "eslint": "^9.23.0",
+    "prettier": "^3.5.3",
+    "typescript": "^5.8.3",
+    "@eslint/js": "^9.23.0"
+  }
+}

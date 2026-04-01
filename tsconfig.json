@@ -1,0 +1,9 @@
+{
+  "files": [],
+  "references": [
+    { "path": "libs/ts/@gb/schemas" },
+    { "path": "libs/ts/@gb/api-client" },
+    { "path": "libs/ts/@gb/ui-components" },
+    { "path": "apps/desktop-tauri" }
+  ]
+}

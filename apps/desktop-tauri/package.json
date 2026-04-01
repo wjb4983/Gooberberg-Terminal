@@ -1,0 +1,22 @@
+{
+  "name": "@gb/desktop-tauri",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -b",
+    "lint": "eslint \"src/**/*.{ts,tsx}\"",
+    "test": "echo \"No desktop-tauri tests yet\""
+  },
+  "dependencies": {
+    "@gb/api-client": "workspace:*",
+    "@gb/schemas": "workspace:*",
+    "@gb/ui-components": "workspace:*",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.1.2",
+    "@types/react-dom": "^19.1.2"
+  }
+}
