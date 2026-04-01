@@ -7,10 +7,11 @@ import { HttpApiClient } from '../api/httpApiClient';
 
 interface HealthWidgetProps {
   baseUrl: string;
+  getToken: () => Promise<string>;
 }
 
-export function HealthWidget({ baseUrl }: HealthWidgetProps): JSX.Element {
-  const apiClient = useMemo(() => new HttpApiClient(baseUrl), [baseUrl]);
+export function HealthWidget({ baseUrl, getToken }: HealthWidgetProps): JSX.Element {
+  const apiClient = useMemo(() => new HttpApiClient(baseUrl, getToken), [baseUrl, getToken]);
 
   const [health, setHealth] = useState<ServiceHealth | null>(null);
   const [error, setError] = useState<string | null>(null);

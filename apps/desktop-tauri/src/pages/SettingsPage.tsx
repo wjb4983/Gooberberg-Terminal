@@ -17,7 +17,7 @@ export function SettingsPage({ baseUrl, onSaveBaseUrl, onSaveToken }: SettingsPa
     onSaveBaseUrl(baseUrlInput);
     await onSaveToken(tokenInput);
     setTokenInput('');
-    setStatus('Settings saved. API token stored using secure storage integration point.');
+    setStatus('Settings saved. API token stored in OS secure credential storage.');
   };
 
   return (
@@ -39,7 +39,7 @@ export function SettingsPage({ baseUrl, onSaveBaseUrl, onSaveToken }: SettingsPa
           type="password"
           value={tokenInput}
           onChange={(event) => setTokenInput(event.target.value)}
-          placeholder="Stored in OS keychain via Tauri command"
+          placeholder="Stored in OS keychain via Tauri secure storage command"
         />
 
         <button type="submit">Save Settings</button>

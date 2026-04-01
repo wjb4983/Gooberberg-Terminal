@@ -77,3 +77,7 @@ docs/
 - ✅ Skeleton structure created.
 - ✅ Documentation baseline established.
 - 🚧 Domain implementation intentionally deferred.
+
+## Security & private deployment
+
+- See `docs/private-network-auth.md` for private single-user deployment guidance, bearer token auth, and SSH tunnel access.

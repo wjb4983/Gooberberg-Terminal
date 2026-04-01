@@ -14,6 +14,7 @@ from app.api.routers.risk import router as risk_router
 from app.api.routers.ws import router as ws_router
 from app.api.routers.strategies import router as strategies_router
 from app.core.config import get_settings
+from app.core.auth import BearerTokenAuthMiddleware
 from app.core.logging import RequestIDMiddleware, configure_logging
 from app.jobs.redis_queue import lifespan_redis
 from app.portfolio import lifespan_portfolio_cache
@@ -39,6 +40,7 @@ def create_app() -> FastAPI:
         lifespan=app_lifespan,
     )
     app.add_middleware(RequestIDMiddleware)
+    app.add_middleware(BearerTokenAuthMiddleware, health_paths={f"{settings.api_prefix}/health", "/healthz"})
 
     app.include_router(health_router, prefix=settings.api_prefix)
     app.include_router(alerts_router, prefix=settings.api_prefix)

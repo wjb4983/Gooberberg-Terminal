@@ -8,7 +8,8 @@ Initial Tauri + React + TypeScript desktop shell.
 - Dashboard widget that fetches `GET /health` using a typed API client.
 - Settings page for API base URL + token.
 - Local persistence for non-sensitive preferences (`baseUrl`).
-- Tauri Rust bootstrap with `save_api_token` command as secure storage integration point.
+- Tauri Rust commands (`save_api_token`, `get_api_token`) backed by OS secure credential storage.
+- HTTP requests include `Authorization: Bearer <token>` when a token is present in secure storage.
 
 ## Development
 
