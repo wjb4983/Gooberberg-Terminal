@@ -1,11 +1,16 @@
 import type {
   CreateJobRequest,
   CreateJobResponse,
+  CreateModelDeploymentRequest,
   CreateStrategyInstanceRequest,
   GraphTopology,
   HealthResponse,
   JobLifecyclePayload,
   JobStatusResponse,
+  ModelDeployment,
+  ModelDeploymentActionResponse,
+  ModelDeploymentEventPayload,
+  ModelDeploymentStatus,
   ServiceHealth,
   StrategyInstance,
   StrategyInstanceActionResponse,
@@ -82,6 +87,47 @@ export class GbApiClient {
     });
 
     return parseCreateJobResponse(payload);
+  }
+
+  async listModelDeployments(): Promise<ModelDeployment[]> {
+    const payload = await this.requestJson<unknown>(`${this.apiPrefix}/models/deployments`, {
+      method: 'GET',
+      headers: { Accept: 'application/json' },
+    });
+
+    return parseModelDeployments(payload);
+  }
+
+  async createModelDeployment(request: CreateModelDeploymentRequest): Promise<ModelDeployment> {
+    const payload = await this.requestJson<unknown>(`${this.apiPrefix}/models/deployments`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({
+        model_name: request.modelName,
+        model_version: request.modelVersion,
+        artifact_ref: request.artifactRef,
+      }),
+    });
+
+    return parseModelDeployment(payload);
+  }
+
+  async activateModelDeployment(deploymentId: string): Promise<ModelDeploymentActionResponse> {
+    const payload = await this.requestJson<unknown>(`${this.apiPrefix}/models/deployments/${encodeURIComponent(deploymentId)}/activate`, {
+      method: 'POST',
+      headers: { Accept: 'application/json' },
+    });
+
+    return parseModelDeploymentActionResponse(payload);
+  }
+
+  async deactivateModelDeployment(deploymentId: string): Promise<ModelDeploymentActionResponse> {
+    const payload = await this.requestJson<unknown>(`${this.apiPrefix}/models/deployments/${encodeURIComponent(deploymentId)}/deactivate`, {
+      method: 'POST',
+      headers: { Accept: 'application/json' },
+    });
+
+    return parseModelDeploymentActionResponse(payload);
   }
 
   async listStrategyInstances(): Promise<StrategyInstance[]> {
@@ -259,6 +305,30 @@ export function parseJobLifecyclePayload(payload: unknown): JobLifecyclePayload 
   };
 }
 
+export function parseModelDeploymentPayload(payload: unknown): ModelDeploymentEventPayload | null {
+  if (!isRecord(payload)) return null;
+  if (typeof payload.deployment_id !== 'string') return null;
+  if (typeof payload.model_name !== 'string') return null;
+  if (typeof payload.model_version !== 'string') return null;
+  if (typeof payload.artifact_ref !== 'string') return null;
+  if (!isModelDeploymentStatus(payload.status)) return null;
+  if (payload.previous_status !== undefined && !isModelDeploymentStatus(payload.previous_status)) return null;
+  if (typeof payload.event_type !== 'string') return null;
+  if (typeof payload.detail !== 'string') return null;
+  if (typeof payload.updated_at !== 'string') return null;
+  return {
+    deployment_id: payload.deployment_id,
+    model_name: payload.model_name,
+    model_version: payload.model_version,
+    artifact_ref: payload.artifact_ref,
+    status: payload.status,
+    previous_status: payload.previous_status,
+    event_type: payload.event_type,
+    detail: payload.detail,
+    updated_at: payload.updated_at,
+  };
+}
+
 export function parseServiceHealth(payload: unknown): ServiceHealth | null {
   if (!isRecord(payload)) return null;
 
@@ -369,3 +439,40 @@ function isStrategyStatus(value: unknown): value is StrategyInstanceStatus {
   return value === 'created' || value === 'running' || value === 'stopped';
 }
 
+function parseModelDeployments(payload: unknown): ModelDeployment[] {
+  if (!Array.isArray(payload)) throw new Error('Model deployments payload must be an array.');
+  return payload.map((item, index) => parseModelDeployment(item, index));
+}
+
+function parseModelDeployment(payload: unknown, index = 0): ModelDeployment {
+  if (!isRecord(payload)) throw new Error(`Model deployment at index ${index} must be an object.`);
+  if (typeof payload.id !== 'string') throw new Error(`Model deployment at index ${index} has malformed id.`);
+  if (typeof payload.model_name !== 'string') throw new Error(`Model deployment at index ${index} has malformed model_name.`);
+  if (typeof payload.model_version !== 'string') throw new Error(`Model deployment at index ${index} has malformed model_version.`);
+  if (typeof payload.artifact_ref !== 'string') throw new Error(`Model deployment at index ${index} has malformed artifact_ref.`);
+  if (!isModelDeploymentStatus(payload.status)) throw new Error(`Model deployment at index ${index} has malformed status.`);
+  if (typeof payload.created_at !== 'string') throw new Error(`Model deployment at index ${index} has malformed created_at.`);
+  if (typeof payload.updated_at !== 'string') throw new Error(`Model deployment at index ${index} has malformed updated_at.`);
+  return {
+    id: payload.id,
+    modelName: payload.model_name,
+    modelVersion: payload.model_version,
+    artifactRef: payload.artifact_ref,
+    status: payload.status,
+    createdAtIso: payload.created_at,
+    updatedAtIso: payload.updated_at,
+  };
+}
+
+function parseModelDeploymentActionResponse(payload: unknown): ModelDeploymentActionResponse {
+  if (!isRecord(payload)) throw new Error('Model deployment action payload must be an object.');
+  if (typeof payload.detail !== 'string') throw new Error('Model deployment action payload detail is malformed.');
+  return {
+    detail: payload.detail,
+    deployment: parseModelDeployment(payload.deployment),
+  };
+}
+
+function isModelDeploymentStatus(value: unknown): value is ModelDeploymentStatus {
+  return value === 'deploying' || value === 'active' || value === 'inactive';
+}

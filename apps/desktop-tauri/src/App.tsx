@@ -5,6 +5,7 @@ import { PlaceholderPage } from './pages/PlaceholderPage';
 import { StrategiesPage } from './pages/StrategiesPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { JobsPage } from './pages/JobsPage';
+import { ModelDeploymentsPage } from './pages/ModelDeploymentsPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { GraphPage } from './pages/GraphPage';
 import { loadPreferences, savePreferences } from './settings/preferences';
@@ -25,6 +26,7 @@ export function App(): JSX.Element {
       <Route path="/" element={<AppShell />}>
         <Route index element={<DashboardPage baseUrl={baseUrl} />} />
         <Route path="jobs" element={<JobsPage baseUrl={baseUrl} />} />
+        <Route path="models" element={<ModelDeploymentsPage baseUrl={baseUrl} />} />
         <Route path="strategies" element={<StrategiesPage baseUrl={baseUrl} />} />
         <Route path="portfolio" element={<PlaceholderPage title="Portfolio" description="Portfolio overview and positions." />} />
         <Route path="graph" element={<GraphPage baseUrl={baseUrl} />} />

@@ -6,6 +6,13 @@ from app.schemas.jobs import (
     JobResponse,
     JobStatusResponse,
 )
+from app.schemas.models import (
+    ModelDeployment,
+    ModelDeploymentActionResponse,
+    ModelDeploymentCreateRequest,
+    ModelDeploymentEvent,
+    ModelDeploymentStatus,
+)
 from app.schemas.strategies import (
     StrategyInstance,
     StrategyInstanceActionResponse,
@@ -26,6 +33,11 @@ __all__ = [
     "JobLifecycleUpdateRequest",
     "JobResponse",
     "JobStatusResponse",
+    "ModelDeployment",
+    "ModelDeploymentActionResponse",
+    "ModelDeploymentCreateRequest",
+    "ModelDeploymentEvent",
+    "ModelDeploymentStatus",
     "StrategyInstance",
     "StrategyInstanceActionResponse",
     "StrategyInstanceCreateRequest",

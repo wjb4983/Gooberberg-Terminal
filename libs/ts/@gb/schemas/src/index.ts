@@ -20,6 +20,7 @@ export interface Job {
 export type StrategyMode = 'paper' | 'live';
 
 export type StrategyInstanceStatus = 'created' | 'running' | 'stopped';
+export type ModelDeploymentStatus = 'deploying' | 'active' | 'inactive';
 
 export interface StrategyIntent {
   notes?: string;
@@ -36,6 +37,27 @@ export interface StrategyInstance {
   updatedAtIso: string;
   startedAtIso?: string;
   stoppedAtIso?: string;
+}
+
+export interface ModelDeployment {
+  id: string;
+  modelName: string;
+  modelVersion: string;
+  artifactRef: string;
+  status: ModelDeploymentStatus;
+  createdAtIso: string;
+  updatedAtIso: string;
+}
+
+export interface CreateModelDeploymentRequest {
+  modelName: string;
+  modelVersion: string;
+  artifactRef: string;
+}
+
+export interface ModelDeploymentActionResponse {
+  deployment: ModelDeployment;
+  detail: string;
 }
 
 export interface PortfolioSnapshot {
@@ -119,7 +141,7 @@ export interface StrategyInstanceActionResponse {
   detail: string;
 }
 
-export type WebSocketTopic = 'jobs' | 'alerts' | 'logs' | 'portfolio' | 'risk' | 'strategy';
+export type WebSocketTopic = 'jobs' | 'alerts' | 'logs' | 'portfolio' | 'risk' | 'strategy' | 'models';
 
 export interface WebSocketEventEnvelope<TPayload = Record<string, unknown>> {
   event_id: string;
@@ -134,6 +156,18 @@ export interface JobLifecyclePayload {
   job_id: string;
   trace_id: string;
   status: JobStatus;
+  detail: string;
+  updated_at: string;
+}
+
+export interface ModelDeploymentEventPayload {
+  deployment_id: string;
+  model_name: string;
+  model_version: string;
+  artifact_ref: string;
+  status: ModelDeploymentStatus;
+  previous_status?: ModelDeploymentStatus;
+  event_type: string;
   detail: string;
   updated_at: string;
 }

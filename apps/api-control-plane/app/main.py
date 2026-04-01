@@ -7,6 +7,7 @@ from fastapi import FastAPI
 from app.api.routers.graph import router as graph_router
 from app.api.routers.health import router as health_router
 from app.api.routers.jobs import router as jobs_router
+from app.api.routers.models import router as models_router
 from app.api.routers.ws import router as ws_router
 from app.api.routers.strategies import router as strategies_router
 from app.core.config import get_settings
@@ -35,6 +36,7 @@ def create_app() -> FastAPI:
 
     app.include_router(health_router, prefix=settings.api_prefix)
     app.include_router(jobs_router, prefix=settings.api_prefix)
+    app.include_router(models_router, prefix=settings.api_prefix)
     app.include_router(graph_router, prefix=settings.api_prefix)
     app.include_router(strategies_router, prefix=settings.api_prefix)
     app.include_router(ws_router)
