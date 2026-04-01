@@ -7,7 +7,7 @@ export interface ServiceHealth {
   message?: string;
 }
 
-export type JobStatus = 'accepted' | 'pending' | 'running' | 'succeeded' | 'failed' | 'cancelled';
+export type JobStatus = 'queued' | 'running' | 'success' | 'failed' | 'accepted' | 'pending' | 'succeeded' | 'cancelled';
 
 export interface Job {
   id: string;
@@ -94,4 +94,23 @@ export interface JobStatusResponse {
   id: string;
   status: JobStatus;
   detail: string;
+}
+
+export type WebSocketTopic = 'jobs' | 'alerts' | 'logs' | 'portfolio' | 'risk';
+
+export interface WebSocketEventEnvelope<TPayload = Record<string, unknown>> {
+  event_id: string;
+  seq: number;
+  topic: WebSocketTopic;
+  timestamp: string;
+  payload: TPayload;
+  version: string;
+}
+
+export interface JobLifecyclePayload {
+  job_id: string;
+  trace_id: string;
+  status: JobStatus;
+  detail: string;
+  updated_at: string;
 }
