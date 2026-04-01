@@ -21,8 +21,8 @@ class JsonFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:
         payload = {
             "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(record.created)),
-            "level": record.levelname,
-            "logger": record.name,
+            "service": "api-control-plane",
+            "level": record.levelname.lower(),
             "message": record.getMessage(),
             "request_id": getattr(record, "request_id", request_id_ctx_var.get()),
             "trace_id": getattr(record, "trace_id", request_id_ctx_var.get()),

@@ -1,4 +1,5 @@
 import type {
+  AlertEvent,
   CreateJobRequest,
   CreateJobResponse,
   CreateModelDeploymentRequest,
@@ -19,6 +20,7 @@ import type {
   StrategyInstanceStatus,
   WebSocketEventEnvelope,
   WebSocketTopic,
+  LogEvent,
 } from '@gb/schemas';
 import { parseGraphTopology } from '@gb/schemas';
 
@@ -67,6 +69,27 @@ export class GbApiClient {
     return parseHealthResponse(payload);
   }
 
+  async getAlerts(): Promise<AlertEvent[]> {
+    const payload = await this.requestJson<unknown>(`${this.apiPrefix}/alerts`, {
+      method: 'GET',
+      headers: { Accept: 'application/json' },
+    });
+
+    return parseAlerts(payload);
+  }
+
+  async acknowledgeAlert(alertId: string): Promise<AlertEvent> {
+    const payload = await this.requestJson<unknown>(`${this.apiPrefix}/alerts/${encodeURIComponent(alertId)}/ack`, {
+      method: 'POST',
+      headers: { Accept: 'application/json' },
+    });
+
+    if (!isRecord(payload) || !isRecord(payload.alert)) {
+      throw new Error('Acknowledge alert payload is malformed.');
+    }
+
+    return parseAlert(payload.alert);
+  }
 
   async getPortfolioSnapshot(): Promise<PortfolioSnapshot> {
     const payload = await this.requestJson<unknown>(`${this.apiPrefix}/portfolio/snapshot`, {
@@ -339,6 +362,32 @@ export function parseModelDeploymentPayload(payload: unknown): ModelDeploymentEv
   };
 }
 
+export function parseAlertPayload(payload: unknown): AlertEvent | null {
+  try {
+    return parseAlert(payload);
+  } catch {
+    return null;
+  }
+}
+
+export function parseLogPayload(payload: unknown): LogEvent | null {
+  if (!isRecord(payload)) return null;
+  if (typeof payload.timestamp !== 'string') return null;
+  if (typeof payload.service !== 'string') return null;
+  if (typeof payload.level !== 'string') return null;
+  if (typeof payload.trace_id !== 'string') return null;
+  if (typeof payload.message !== 'string') return null;
+  return {
+    timestamp: payload.timestamp,
+    service: payload.service,
+    level: payload.level as LogEvent['level'],
+    trace_id: payload.trace_id,
+    message: payload.message,
+    category: typeof payload.category === 'string' ? payload.category : undefined,
+    fields: isRecord(payload.fields) ? payload.fields : undefined,
+  };
+}
+
 export function parseServiceHealth(payload: unknown): ServiceHealth | null {
   if (!isRecord(payload)) return null;
 
@@ -352,6 +401,36 @@ export function parseServiceHealth(payload: unknown): ServiceHealth | null {
     checkedAtIso: payload.checkedAtIso,
     message: typeof payload.message === 'string' ? payload.message : undefined,
   }; 
+}
+
+function parseAlerts(payload: unknown): AlertEvent[] {
+  if (!Array.isArray(payload)) {
+    throw new Error('Alerts payload must be an array.');
+  }
+  return payload.map((item) => parseAlert(item));
+}
+
+function parseAlert(payload: unknown): AlertEvent {
+  if (!isRecord(payload)) throw new Error('Alert payload must be an object.');
+  if (typeof payload.id !== 'string') throw new Error('Alert payload id is malformed.');
+  if (typeof payload.timestamp !== 'string') throw new Error('Alert payload timestamp is malformed.');
+  if (typeof payload.service !== 'string') throw new Error('Alert payload service is malformed.');
+  if (typeof payload.level !== 'string') throw new Error('Alert payload level is malformed.');
+  if (typeof payload.trace_id !== 'string') throw new Error('Alert payload trace_id is malformed.');
+  if (typeof payload.message !== 'string') throw new Error('Alert payload message is malformed.');
+  if (typeof payload.category !== 'string') throw new Error('Alert payload category is malformed.');
+  if (typeof payload.status !== 'string') throw new Error('Alert payload status is malformed.');
+  return {
+    id: payload.id,
+    timestamp: payload.timestamp,
+    service: payload.service,
+    level: payload.level as AlertEvent['level'],
+    trace_id: payload.trace_id,
+    message: payload.message,
+    category: payload.category,
+    status: payload.status as AlertEvent['status'],
+    acknowledged_at: typeof payload.acknowledged_at === 'string' ? payload.acknowledged_at : undefined,
+  };
 }
 
 function parseHealthResponse(payload: unknown): HealthResponse {

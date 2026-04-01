@@ -4,6 +4,7 @@ from contextlib import AsyncExitStack, asynccontextmanager
 
 from fastapi import FastAPI
 
+from app.api.routers.alerts import router as alerts_router
 from app.api.routers.graph import router as graph_router
 from app.api.routers.health import router as health_router
 from app.api.routers.jobs import router as jobs_router
@@ -40,6 +41,7 @@ def create_app() -> FastAPI:
     app.add_middleware(RequestIDMiddleware)
 
     app.include_router(health_router, prefix=settings.api_prefix)
+    app.include_router(alerts_router, prefix=settings.api_prefix)
     app.include_router(jobs_router, prefix=settings.api_prefix)
     app.include_router(models_router, prefix=settings.api_prefix)
     app.include_router(graph_router, prefix=settings.api_prefix)

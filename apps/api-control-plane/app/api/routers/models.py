@@ -42,15 +42,18 @@ async def _broadcast_model_event(
     await ws_manager.publish_topic(
         topic="logs",
         payload={
-            "type": "model_deployment",
+            "timestamp": deployment.updated_at.isoformat(),
+            "service": "api-control-plane",
             "level": "info",
-            "source": "api-control-plane",
+            "trace_id": str(deployment.id),
             "message": detail,
-            "deployment_id": str(deployment.id),
-            "status": deployment.status.value,
-            "model_name": deployment.model_name,
-            "model_version": deployment.model_version,
-            "updated_at": deployment.updated_at.isoformat(),
+            "category": "models",
+            "fields": {
+                "deployment_id": str(deployment.id),
+                "status": deployment.status.value,
+                "model_name": deployment.model_name,
+                "model_version": deployment.model_version,
+            },
         },
     )
 
