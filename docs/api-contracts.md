@@ -7,71 +7,125 @@ Provide a stable, shared contract between:
 - **TypeScript packages** (`libs/ts/@gb/schemas`, `libs/ts/@gb/api-client`)
 - **Desktop app consumer** (`apps/desktop-tauri`)
 
-## Source of Truth Strategy
-We use a **hybrid contract workflow**:
+## Contract layers
 
-1. **Runtime API schema source of truth** is FastAPI OpenAPI (`/openapi.json`).
-2. **Stable app-facing TypeScript contract** is manually curated in `@gb/schemas`.
-3. Optional generated OpenAPI typings live under `@gb/schemas/src/generated/openapi.ts` for diffing and reconciliation.
+1. **Runtime HTTP/WS schema authority:** FastAPI OpenAPI and router behavior.
+2. **Stable app-facing TypeScript contract:** `@gb/schemas` curated types.
+3. **Transport/runtime parsing:** `@gb/api-client` request adapters and payload parsers.
 
-This approach keeps day-to-day TypeScript imports stable while still allowing contract verification against backend OpenAPI.
+This protects app code from backend naming/shape churn while preserving type-safe contracts.
 
-## Shared Types (current stable surface)
-Defined in `libs/ts/@gb/schemas/src/index.ts`:
+## Fast path vs slow path contract
 
-- `Job`
-- `JobStatus`
-- `StrategyInstance`
-- `PortfolioSnapshot`
-- `AlertEvent`
-- `LogEvent`
+### Fast path contract (control plane)
 
-Event contracts require a versioned envelope through `ContractEnvelopeBase`:
+Use JSON payloads for:
 
-- `version: string`
-- `emittedAtIso: string`
+- Health + topology + current status.
+- Job submission/ack and lifecycle state.
+- Strategy/risk control actions.
+- WS event envelopes and lightweight payloads.
 
-`AlertEvent` and `LogEvent` both include this envelope.
+### Slow path contract (data plane)
 
-## API Client Surface
-`libs/ts/@gb/api-client/src/index.ts` exports `GbApiClient` with typed methods:
+For heavy outputs or artifacts:
 
-- `getHealth()`
-- `createJob(request)`
-- `getJob(jobId)`
-- `connectWebSocket(options?)`
+- Return pointers like `result_ref` / `artifact_ref`.
+- Do not embed large tabular payloads directly in API or WS events.
+- Resolve refs through data services/object storage readers.
 
-### Endpoint mapping
-- `getHealth` → `GET /api/v1/health`
-- `createJob` → `POST /api/v1/jobs`
-- `getJob` → `GET /api/v1/jobs/{job_id}`
-- `connectWebSocket` → `GET ws://.../ws`
+## Data handling policy
 
-## Update Workflow
+### JSON control plane (required)
+
+- HTTP DTOs and WS envelopes are JSON.
+- Keep control-plane payloads small and operationally focused (IDs, status, timestamps, reason/detail, refs).
+
+### Arrow/Parquet references (required for bulk)
+
+- Large tabular outputs should be produced as Arrow/Parquet artifacts.
+- Control-plane returns only immutable reference strings/URIs.
+- Include enough metadata in control plane for discoverability (job/model/version identifiers).
+
+## Current endpoint surface
+
+### HTTP
+
+- `GET /api/v1/health`
+- `GET /api/v1/alerts`
+- `POST /api/v1/alerts/{alert_id}/ack`
+- `POST /api/v1/jobs`
+- `GET /api/v1/jobs/{job_id}`
+- `POST /api/v1/jobs/{job_id}/events`
+- `GET /api/v1/portfolio/snapshot`
+- `GET /api/v1/graph/topology`
+- `GET /api/v1/models/deployments`
+- `POST /api/v1/models/deployments`
+- `POST /api/v1/models/deployments/{deployment_id}/activate`
+- `POST /api/v1/models/deployments/{deployment_id}/deactivate`
+- `GET /api/v1/strategies/instances`
+- `POST /api/v1/strategies/instances`
+- `POST /api/v1/strategies/instances/{instance_id}/start`
+- `POST /api/v1/strategies/instances/{instance_id}/stop`
+- `GET /api/v1/risk/overrides`
+- `POST /api/v1/risk/overrides`
+- `GET /api/v1/risk/decisions/recent`
+
+### WebSocket
+
+- `GET ws://<host>/ws`
+- Client messages:
+  - `{ "action": "subscribe", "topics": [...] }`
+  - `{ "action": "unsubscribe", "topics": [...] }`
+  - `ping` / `pong`
+- Server control messages:
+  - `{"type":"ping"}` heartbeat
+  - subscribe/unsubscribe acknowledgments
+  - error payloads
+- Server data messages (topic events):
+  - `{ event_id, seq, topic, timestamp, payload, version }`
+
+## Risk/execution authority contract
+
+Strategy start endpoint enforces risk gate before running:
+
+- API consumes strategy intent through `RiskExecutionAuthority`.
+- Rejection returns `403` with `risk rejected intent: <reason_code>`.
+- Approval transitions strategy state and includes decision reference in returned detail.
+
+Risk API provides:
+
+- Override management (`/risk/overrides`)
+- Decision introspection (`/risk/decisions/recent`)
+
+## Compatibility and versioning rules
+
+- Additive fields: minor release.
+- Breaking field changes/removals: major release.
+- WS topic event envelopes include explicit `version`.
+- Backends should preserve previous keys until clients are migrated.
+
+## Update workflow
+
 When backend contracts change:
 
-1. Update FastAPI response/request models.
-2. Regenerate raw OpenAPI TS types:
+1. Update FastAPI request/response models and routers.
+2. Regenerate OpenAPI typings:
    ```bash
-   ./scripts/gen-schemas.sh
+   timeout 3m ./scripts/gen-schemas.sh
    ```
-3. Reconcile differences into stable `libs/ts/@gb/schemas/src/index.ts`.
-4. Update `@gb/api-client` parsing/mapping logic.
-5. Run typecheck/build for affected packages.
-6. Bump package versions (or changeset) if contract changes are externally visible.
+3. Reconcile with stable `@gb/schemas` exports.
+4. Update `@gb/api-client` parser/mapping logic.
+5. Run checks:
+   ```bash
+   timeout 10m scripts/lint-all.sh
+   timeout 10m scripts/test-all.sh
+   ```
+6. Ship with semantic versioning discipline.
 
-## Versioning Rules
-- Additive fields may be introduced in a minor release.
-- Breaking field renames/removals require a major release.
-- Event envelopes must always include `version` to support forward/backward compatibility.
-- If backend introduces a breaking API response shape, update both:
-  - `@gb/schemas` stable contract
-  - `@gb/api-client` mapping/parsers
+## Developer rules of thumb
 
-## Desktop Integration Note
-Desktop should import only from:
-
-- `@gb/schemas` for DTO/event types
-- `@gb/api-client` for transport logic and endpoint methods
-
-Avoid re-defining API payload types inside app packages.
+- Keep HTTP/WS payloads operational and compact.
+- Put large/binary/tabular data behind `*_ref` links.
+- Enforce risk gate before execution transitions.
+- Prefer explicit, versioned event contracts over implicit payload assumptions.
