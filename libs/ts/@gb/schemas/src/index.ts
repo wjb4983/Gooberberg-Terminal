@@ -114,3 +114,80 @@ export interface JobLifecyclePayload {
   detail: string;
   updated_at: string;
 }
+
+export type GraphNodeType = 'strategy' | 'model' | 'data_source' | 'risk_rule' | 'execution_adapter' | 'job';
+
+export interface GraphNode {
+  id: string;
+  type: GraphNodeType;
+  label: string;
+  group?: string;
+  metadata: Record<string, unknown>;
+}
+
+export interface GraphEdge {
+  id: string;
+  source: string;
+  target: string;
+  label?: string;
+}
+
+export interface GraphTopology {
+  nodes: GraphNode[];
+  edges: GraphEdge[];
+}
+
+const graphNodeTypes: ReadonlySet<GraphNodeType> = new Set([
+  'strategy',
+  'model',
+  'data_source',
+  'risk_rule',
+  'execution_adapter',
+  'job',
+]);
+
+export function parseGraphTopology(payload: unknown): GraphTopology {
+  if (!isRecord(payload)) throw new Error('Graph topology payload must be an object.');
+  if (!Array.isArray(payload.nodes) || !Array.isArray(payload.edges)) {
+    throw new Error('Graph topology payload is missing nodes or edges arrays.');
+  }
+
+  const nodes = payload.nodes.map((node, index) => parseGraphNode(node, index));
+  const edges = payload.edges.map((edge, index) => parseGraphEdge(edge, index));
+  return { nodes, edges };
+}
+
+function parseGraphNode(payload: unknown, index: number): GraphNode {
+  if (!isRecord(payload)) throw new Error(`Graph node at index ${index} must be an object.`);
+  if (typeof payload.id !== 'string') throw new Error(`Graph node at index ${index} has malformed id.`);
+  if (typeof payload.label !== 'string') throw new Error(`Graph node at index ${index} has malformed label.`);
+  if (typeof payload.type !== 'string' || !graphNodeTypes.has(payload.type as GraphNodeType)) {
+    throw new Error(`Graph node at index ${index} has unsupported type.`);
+  }
+
+  return {
+    id: payload.id,
+    label: payload.label,
+    type: payload.type as GraphNodeType,
+    group: typeof payload.group === 'string' ? payload.group : undefined,
+    metadata: isRecord(payload.metadata) ? payload.metadata : {},
+  };
+}
+
+function parseGraphEdge(payload: unknown, index: number): GraphEdge {
+  if (!isRecord(payload)) throw new Error(`Graph edge at index ${index} must be an object.`);
+  if (typeof payload.id !== 'string') throw new Error(`Graph edge at index ${index} has malformed id.`);
+  if (typeof payload.source !== 'string') throw new Error(`Graph edge at index ${index} has malformed source.`);
+  if (typeof payload.target !== 'string') throw new Error(`Graph edge at index ${index} has malformed target.`);
+
+  return {
+    id: payload.id,
+    source: payload.source,
+    target: payload.target,
+    label: typeof payload.label === 'string' ? payload.label : undefined,
+  };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
