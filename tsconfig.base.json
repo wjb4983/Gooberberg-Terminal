@@ -1,0 +1,21 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "baseUrl": ".",
+    "paths": {
+      "@gb/schemas": ["libs/ts/@gb/schemas/src/index.ts"],
+      "@gb/api-client": ["libs/ts/@gb/api-client/src/index.ts"],
+      "@gb/ui-components": ["libs/ts/@gb/ui-components/src/index.ts"]
+    },
+    "strict": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true
+  }
+}
