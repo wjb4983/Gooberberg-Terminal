@@ -17,13 +17,25 @@ export interface Job {
   acceptedAtIso: string;
 }
 
+export type StrategyMode = 'paper' | 'live';
+
+export type StrategyInstanceStatus = 'created' | 'running' | 'stopped';
+
+export interface StrategyIntent {
+  notes?: string;
+  params: Record<string, unknown>;
+}
+
 export interface StrategyInstance {
   id: string;
   strategyKey: string;
-  status: 'inactive' | 'active' | 'paused' | 'error';
-  symbols: string[];
-  startedAtIso?: string;
+  mode: StrategyMode;
+  status: StrategyInstanceStatus;
+  intent: StrategyIntent;
+  createdAtIso: string;
   updatedAtIso: string;
+  startedAtIso?: string;
+  stoppedAtIso?: string;
 }
 
 export interface PortfolioSnapshot {
@@ -96,7 +108,18 @@ export interface JobStatusResponse {
   detail: string;
 }
 
-export type WebSocketTopic = 'jobs' | 'alerts' | 'logs' | 'portfolio' | 'risk';
+export interface CreateStrategyInstanceRequest {
+  strategyKey: string;
+  mode: StrategyMode;
+  intent?: StrategyIntent;
+}
+
+export interface StrategyInstanceActionResponse {
+  instance: StrategyInstance;
+  detail: string;
+}
+
+export type WebSocketTopic = 'jobs' | 'alerts' | 'logs' | 'portfolio' | 'risk' | 'strategy';
 
 export interface WebSocketEventEnvelope<TPayload = Record<string, unknown>> {
   event_id: string;
