@@ -1,11 +1,16 @@
 import type {
   CreateJobRequest,
   CreateJobResponse,
+  CreateStrategyInstanceRequest,
   GraphTopology,
   HealthResponse,
   JobLifecyclePayload,
   JobStatusResponse,
   ServiceHealth,
+  StrategyInstance,
+  StrategyInstanceActionResponse,
+  StrategyMode,
+  StrategyInstanceStatus,
   WebSocketEventEnvelope,
   WebSocketTopic,
 } from '@gb/schemas';
@@ -77,6 +82,47 @@ export class GbApiClient {
     });
 
     return parseCreateJobResponse(payload);
+  }
+
+  async listStrategyInstances(): Promise<StrategyInstance[]> {
+    const payload = await this.requestJson<unknown>(`${this.apiPrefix}/strategies/instances`, {
+      method: 'GET',
+      headers: { Accept: 'application/json' },
+    });
+
+    return parseStrategyInstances(payload);
+  }
+
+  async createStrategyInstance(request: CreateStrategyInstanceRequest): Promise<StrategyInstance> {
+    const payload = await this.requestJson<unknown>(`${this.apiPrefix}/strategies/instances`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({
+        strategy_key: request.strategyKey,
+        mode: request.mode,
+        intent: request.intent ?? { params: {} },
+      }),
+    });
+
+    return parseStrategyInstance(payload);
+  }
+
+  async startStrategyInstance(instanceId: string): Promise<StrategyInstanceActionResponse> {
+    const payload = await this.requestJson<unknown>(`${this.apiPrefix}/strategies/instances/${encodeURIComponent(instanceId)}/start`, {
+      method: 'POST',
+      headers: { Accept: 'application/json' },
+    });
+
+    return parseStrategyInstanceActionResponse(payload);
+  }
+
+  async stopStrategyInstance(instanceId: string): Promise<StrategyInstanceActionResponse> {
+    const payload = await this.requestJson<unknown>(`${this.apiPrefix}/strategies/instances/${encodeURIComponent(instanceId)}/stop`, {
+      method: 'POST',
+      headers: { Accept: 'application/json' },
+    });
+
+    return parseStrategyInstanceActionResponse(payload);
   }
 
   async getJob(jobId: string): Promise<JobStatusResponse> {
@@ -276,3 +322,50 @@ function parseJobStatusResponse(payload: unknown): JobStatusResponse {
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
 }
+
+
+function parseStrategyInstances(payload: unknown): StrategyInstance[] {
+  if (!Array.isArray(payload)) throw new Error('Strategy instances payload must be an array.');
+  return payload.map((item, index) => parseStrategyInstance(item, index));
+}
+
+function parseStrategyInstance(payload: unknown, index = 0): StrategyInstance {
+  if (!isRecord(payload)) throw new Error(`Strategy instance at index ${index} must be an object.`);
+  if (typeof payload.id !== 'string') throw new Error(`Strategy instance at index ${index} has malformed id.`);
+  if (typeof payload.strategy_key !== 'string') throw new Error(`Strategy instance at index ${index} has malformed strategy_key.`);
+  if ((payload.mode !== 'paper' && payload.mode !== 'live')) throw new Error(`Strategy instance at index ${index} has malformed mode.`);
+  if (!isStrategyStatus(payload.status)) throw new Error(`Strategy instance at index ${index} has malformed status.`);
+  if (!isRecord(payload.intent)) throw new Error(`Strategy instance at index ${index} has malformed intent.`);
+  if (typeof payload.created_at !== 'string') throw new Error(`Strategy instance at index ${index} has malformed created_at.`);
+  if (typeof payload.updated_at !== 'string') throw new Error(`Strategy instance at index ${index} has malformed updated_at.`);
+
+  return {
+    id: payload.id,
+    strategyKey: payload.strategy_key,
+    mode: payload.mode as StrategyMode,
+    status: payload.status as StrategyInstanceStatus,
+    intent: {
+      notes: typeof payload.intent.notes === 'string' ? payload.intent.notes : undefined,
+      params: isRecord(payload.intent.params) ? payload.intent.params : {},
+    },
+    createdAtIso: payload.created_at,
+    updatedAtIso: payload.updated_at,
+    startedAtIso: typeof payload.started_at === 'string' ? payload.started_at : undefined,
+    stoppedAtIso: typeof payload.stopped_at === 'string' ? payload.stopped_at : undefined,
+  };
+}
+
+function parseStrategyInstanceActionResponse(payload: unknown): StrategyInstanceActionResponse {
+  if (!isRecord(payload)) throw new Error('Strategy action payload must be an object.');
+  if (typeof payload.detail !== 'string') throw new Error('Strategy action payload detail is malformed.');
+
+  return {
+    detail: payload.detail,
+    instance: parseStrategyInstance(payload.instance),
+  };
+}
+
+function isStrategyStatus(value: unknown): value is StrategyInstanceStatus {
+  return value === 'created' || value === 'running' || value === 'stopped';
+}
+

@@ -2,6 +2,7 @@ import { Route, Routes } from 'react-router-dom';
 
 import { AppShell } from './layout/AppShell';
 import { PlaceholderPage } from './pages/PlaceholderPage';
+import { StrategiesPage } from './pages/StrategiesPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { JobsPage } from './pages/JobsPage';
 import { SettingsPage } from './pages/SettingsPage';
@@ -24,7 +25,7 @@ export function App(): JSX.Element {
       <Route path="/" element={<AppShell />}>
         <Route index element={<DashboardPage baseUrl={baseUrl} />} />
         <Route path="jobs" element={<JobsPage baseUrl={baseUrl} />} />
-        <Route path="strategies" element={<PlaceholderPage title="Strategies" description="Strategy catalog and controls." />} />
+        <Route path="strategies" element={<StrategiesPage baseUrl={baseUrl} />} />
         <Route path="portfolio" element={<PlaceholderPage title="Portfolio" description="Portfolio overview and positions." />} />
         <Route path="graph" element={<GraphPage baseUrl={baseUrl} />} />
         <Route

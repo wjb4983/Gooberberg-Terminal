@@ -6,6 +6,14 @@ from app.schemas.jobs import (
     JobResponse,
     JobStatusResponse,
 )
+from app.schemas.strategies import (
+    StrategyInstance,
+    StrategyInstanceActionResponse,
+    StrategyInstanceCreateRequest,
+    StrategyInstanceStatus,
+    StrategyIntent,
+    StrategyMode,
+)
 
 __all__ = [
     "GraphEdge",
@@ -18,4 +26,10 @@ __all__ = [
     "JobLifecycleUpdateRequest",
     "JobResponse",
     "JobStatusResponse",
+    "StrategyInstance",
+    "StrategyInstanceActionResponse",
+    "StrategyInstanceCreateRequest",
+    "StrategyInstanceStatus",
+    "StrategyIntent",
+    "StrategyMode",
 ]
