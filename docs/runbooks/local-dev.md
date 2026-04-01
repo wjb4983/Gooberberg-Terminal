@@ -1,34 +1,123 @@
 # Local development runbook
 
-This runbook documents a repeatable local workflow for linting, testing, and validating release artifacts without deploying anything to cloud providers.
+This runbook is designed so a new engineer can clone, run, validate, and troubleshoot the control plane locally.
 
-## Prerequisites
+## 1) Prerequisites
 
-- Node.js + pnpm (workspace root `packageManager` is pinned in `package.json`).
-- Python tooling (`ruff`, `black`, `mypy`, `pytest`) for backend checks.
-- Docker engine for local image builds.
-- Git with tags available for release/version automation.
+- Node.js + pnpm (workspace uses pinned package manager in root `package.json`).
+- Python toolchain for backend checks (`ruff`, `black`, `mypy`, `pytest`).
+- Docker Engine + Compose plugin.
+- Git (tags required for release dry-runs).
 
-## Day-to-day workflow
-
-1. Install dependencies.
-2. Run lint checks.
-3. Run tests.
-4. Build relevant packages/apps.
-5. Optionally generate release artifacts locally.
-
-### Commands
+## 2) Repository bootstrap
 
 ```bash
 timeout 10m pnpm install --frozen-lockfile
+```
+
+## 3) Fast path mental model (local)
+
+Use this to understand request flow while developing:
+
+1. REST call hits FastAPI control plane.
+2. Request is auth-validated and handled by router.
+3. Lightweight state changes occur in memory (+ Redis repository if configured).
+4. WS event is published for subscribed clients.
+5. Immediate JSON response returns to caller.
+
+Slow path work (workers, heavy compute, batch artifacts) is out-of-band and represented by references (`result_ref`/`artifact_ref`) in fast-path responses.
+
+## 4) Core quality gates
+
+```bash
 timeout 5m scripts/lint-all.sh
 timeout 10m scripts/test-all.sh
 timeout 10m pnpm build
 ```
 
-## Local release dry-run (no cloud deployment)
+## 5) Run API control plane locally
 
-Choose a semantic version and run release scripts locally:
+From repository root:
+
+```bash
+cd apps/api-control-plane
+timeout 2m uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
+```
+
+> Tip: for longer sessions, use terminal multiplexers or a script wrapper that restarts uvicorn; keep non-interactive commands timeout-bounded in automation.
+
+## 6) Local API smoke checks
+
+Set an auth token if `GB_API_AUTH_TOKEN` is configured:
+
+```bash
+export TOKEN="<your-token>"
+```
+
+Health:
+
+```bash
+timeout 20s curl -fsS http://127.0.0.1:8000/api/v1/health
+```
+
+Create and fetch job:
+
+```bash
+timeout 20s curl -fsS -X POST http://127.0.0.1:8000/api/v1/jobs \
+  -H "Authorization: Bearer $TOKEN" \
+  -H 'content-type: application/json' \
+  -d '{"job_type":"backfill","payload":{"symbol":"AAPL"}}'
+
+# then fetch with returned id
+# timeout 20s curl -fsS http://127.0.0.1:8000/api/v1/jobs/<job_id> -H "Authorization: Bearer $TOKEN"
+```
+
+## 7) WebSocket smoke checks
+
+Use a WS CLI/client to:
+
+1. Connect `ws://127.0.0.1:8000/ws`.
+2. Send: `{"action":"subscribe","topics":["jobs","logs"]}`.
+3. Trigger a job creation through HTTP.
+4. Confirm topic envelopes with `event_id`, `seq`, `topic`, `timestamp`, `payload`, `version`.
+
+## 8) Troubleshooting (local)
+
+### API issues
+
+- **401 Unauthorized**
+  - Verify `Authorization: Bearer <token>` matches `GB_API_AUTH_TOKEN`.
+  - Health paths are exempt; use `/api/v1/health` to confirm service liveness.
+- **404 on expected route**
+  - Confirm prefix is `/api/v1` (or your configured `GB_API_PREFIX`).
+- **500s at startup**
+  - Check uvicorn tracebacks and environment variables.
+
+### WebSocket issues
+
+- **No topic events received**
+  - Ensure you subscribed to valid topics (`jobs`, `alerts`, `logs`, `portfolio`, `risk`, `strategy`, `models`).
+- **Frequent disconnects**
+  - Verify heartbeat handling (`ping`/`pong`) in client.
+- **Malformed message errors**
+  - Send valid JSON messages with supported `action`.
+
+### Redis issues
+
+- **Redis unavailable locally**
+  - API should continue with in-memory fallback; verify logs for `redis ping failed; api continues with in-memory fallback`.
+- **Job state not surviving restart**
+  - Expected without Redis persistence.
+- **Portfolio snapshots not updating**
+  - Ensure Redis pub/sub message is JSON string on `portfolio.snapshot` channel.
+
+### Postgres issues
+
+- Health endpoint currently reports placeholder connectivity detail.
+- Verify DSN configuration separately in env and service logs.
+- In compose environments, confirm `postgres` container health and credentials.
+
+## 9) Local release dry-run (no cloud deployment)
 
 ```bash
 VERSION=0.1.0
@@ -38,9 +127,4 @@ timeout 30m scripts/release/build-desktop-artifacts.sh "$VERSION"
 timeout 90m scripts/release/build-push-server-images.sh "$VERSION"
 ```
 
-By default, `build-push-server-images.sh` builds Docker images and **does not push**. To push to a container registry, set `PUSH_IMAGES=true` explicitly.
-
-## Scope guardrails
-
-- This repository currently supports **build and packaging preparation only**.
-- No script in the baseline release flow deploys to AWS, GCP, Azure, or any cloud provider.
+By default, server image script builds but does not push unless `PUSH_IMAGES=true`.
