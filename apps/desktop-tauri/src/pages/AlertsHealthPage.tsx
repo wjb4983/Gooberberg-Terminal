@@ -1,24 +1,44 @@
 import { GbApiClient, parseAlertPayload, parseLogPayload } from '@gb/api-client';
 import type { AlertEvent, AlertSeverity, LogEvent } from '@gb/schemas';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { DataTable } from '../components/DataTable';
+import { ApiErrorCallout } from '../components/ApiErrorCallout';
+import { useOperatorConsole } from '../context/OperatorConsoleContext';
 
 interface AlertsHealthPageProps {
   baseUrl: string;
+  defaultSeverity: 'all' | AlertSeverity;
 }
 
-export function AlertsHealthPage({ baseUrl }: AlertsHealthPageProps): JSX.Element {
+export function AlertsHealthPage({ baseUrl, defaultSeverity }: AlertsHealthPageProps): JSX.Element {
   const client = useMemo(() => new GbApiClient({ baseHttpUrl: baseUrl }), [baseUrl]);
   const [alerts, setAlerts] = useState<AlertEvent[]>([]);
   const [logs, setLogs] = useState<LogEvent[]>([]);
-  const [severityFilter, setSeverityFilter] = useState<'all' | AlertSeverity>('all');
+  const [severityFilter, setSeverityFilter] = useState<'all' | AlertSeverity>(defaultSeverity);
   const [serviceFilter, setServiceFilter] = useState('all');
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [connectionState, setConnectionState] = useState('connecting');
+  const [error, setError] = useState<string | null>(null);
   const lastSeqRef = useRef<number | undefined>(undefined);
+  const { reportWebSocketStatus, reportApiStatus, pushToast } = useOperatorConsole();
 
   useEffect(() => {
-    void client.getAlerts().then(setAlerts);
-  }, [client]);
+    reportWebSocketStatus(connectionState);
+  }, [connectionState, reportWebSocketStatus]);
+
+  useEffect(() => {
+    void client
+      .getAlerts()
+      .then((payload) => {
+        setAlerts(payload);
+        reportApiStatus('connected');
+        setError(null);
+      })
+      .catch((loadError) => {
+        setError(loadError instanceof Error ? loadError.message : 'Failed to load alerts.');
+        reportApiStatus('offline');
+      });
+  }, [client, reportApiStatus]);
 
   useEffect(() => {
     const connection = client.connectTopicWebSocket({
@@ -30,7 +50,10 @@ export function AlertsHealthPage({ baseUrl }: AlertsHealthPageProps): JSX.Elemen
         if (event.topic === 'alerts') {
           const alert = parseAlertPayload(event.payload);
           if (!alert) return;
-          setAlerts((previous) => [alert, ...previous.filter((existing) => existing.id !== alert.id)].slice(0, 100));
+          if (alert.level === 'warning' || alert.level === 'critical') {
+            pushToast({ message: `${alert.level.toUpperCase()}: ${alert.service} — ${alert.message}`, tone: alert.level });
+          }
+          setAlerts((previous) => [alert, ...previous.filter((existing) => existing.id !== alert.id)].slice(0, 200));
         }
 
         if (event.topic === 'logs') {
@@ -42,7 +65,7 @@ export function AlertsHealthPage({ baseUrl }: AlertsHealthPageProps): JSX.Elemen
     });
 
     return () => connection.close();
-  }, [client]);
+  }, [client, pushToast]);
 
   const services = useMemo(() => ['all', ...new Set(alerts.map((alert) => alert.service))], [alerts]);
   const categories = useMemo(() => ['all', ...new Set(alerts.map((alert) => alert.category))], [alerts]);
@@ -62,7 +85,6 @@ export function AlertsHealthPage({ baseUrl }: AlertsHealthPageProps): JSX.Elemen
   return (
     <section>
       <h2>Alerts &amp; Health</h2>
-      <p className="muted">Connection: {connectionState}</p>
 
       <div className="graph-filter-grid">
         <label>
@@ -92,32 +114,41 @@ export function AlertsHealthPage({ baseUrl }: AlertsHealthPageProps): JSX.Elemen
         </label>
       </div>
 
-      <div className="card jobs-card">
-        <h3>Alerts</h3>
-        <table className="jobs-table">
-          <thead><tr><th>Service</th><th>Severity</th><th>Category</th><th>Message</th><th>Status</th><th /></tr></thead>
-          <tbody>
-            {filteredAlerts.map((alert) => (
-              <tr key={alert.id}>
-                <td>{alert.service}</td><td>{alert.level}</td><td>{alert.category}</td><td>{alert.message}</td><td>{alert.status}</td>
-                <td>{alert.status === 'active' ? <button onClick={() => void acknowledgeAlert(alert)}>Ack</button> : '—'}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      {error ? <ApiErrorCallout message={error} /> : null}
 
-      <div className="card jobs-card">
-        <h3>Logs</h3>
-        <table className="jobs-table">
-          <thead><tr><th>Timestamp</th><th>Service</th><th>Level</th><th>Message</th></tr></thead>
-          <tbody>
-            {logs.length === 0 ? <tr><td colSpan={4}>Waiting for logs…</td></tr> : logs.slice(0, 30).map((log, idx) => (
-              <tr key={`${log.timestamp}-${idx}`}><td>{new Date(log.timestamp).toLocaleTimeString()}</td><td>{log.service}</td><td>{log.level}</td><td>{log.message}</td></tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <DataTable
+        title="Alerts"
+        rows={filteredAlerts}
+        emptyLabel="No alerts"
+        searchPlaceholder="Search service/category/message"
+        searchValue={(alert) => `${alert.service} ${alert.category} ${alert.message}`}
+        columns={[
+          { key: 'service', header: 'Service', render: (alert) => alert.service },
+          { key: 'severity', header: 'Severity', render: (alert) => alert.level },
+          { key: 'category', header: 'Category', render: (alert) => alert.category },
+          { key: 'message', header: 'Message', render: (alert) => alert.message },
+          { key: 'status', header: 'Status', render: (alert) => alert.status },
+          {
+            key: 'action',
+            header: 'Action',
+            render: (alert) => (alert.status === 'active' ? <button onClick={() => void acknowledgeAlert(alert)}>Ack</button> : '—'),
+          },
+        ]}
+      />
+
+      <DataTable
+        title="Logs"
+        rows={logs}
+        emptyLabel="Waiting for logs…"
+        searchPlaceholder="Search logs"
+        searchValue={(log) => `${log.service} ${log.level} ${log.message}`}
+        columns={[
+          { key: 'time', header: 'Timestamp', render: (log) => new Date(log.timestamp).toLocaleTimeString() },
+          { key: 'service', header: 'Service', render: (log) => log.service },
+          { key: 'level', header: 'Level', render: (log) => log.level },
+          { key: 'message', header: 'Message', render: (log) => log.message },
+        ]}
+      />
     </section>
   );
 }

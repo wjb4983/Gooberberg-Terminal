@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 
 import { GbApiClient } from '@gb/api-client';
 import type { PortfolioSnapshot } from '@gb/schemas';
+import { ApiErrorCallout } from '../components/ApiErrorCallout';
+import { useOperatorConsole } from '../context/OperatorConsoleContext';
 
 interface PortfolioPageProps {
   baseUrl: string;
@@ -13,6 +15,7 @@ export function PortfolioPage({ baseUrl }: PortfolioPageProps): JSX.Element {
   const [error, setError] = useState<string | null>(null);
 
   const client = useMemo(() => new GbApiClient({ baseHttpUrl: baseUrl }), [baseUrl]);
+  const { reportApiStatus } = useOperatorConsole();
 
   useEffect(() => {
     let active = true;
@@ -23,9 +26,11 @@ export function PortfolioPage({ baseUrl }: PortfolioPageProps): JSX.Element {
         if (!active) return;
         setSnapshot(next);
         setError(null);
+        reportApiStatus('connected');
       } catch (err) {
         if (!active) return;
         setError(err instanceof Error ? err.message : 'Failed to load portfolio snapshot.');
+        reportApiStatus('degraded');
       } finally {
         if (active) setLoading(false);
       }
@@ -40,14 +45,14 @@ export function PortfolioPage({ baseUrl }: PortfolioPageProps): JSX.Element {
       active = false;
       clearInterval(timer);
     };
-  }, [client]);
+  }, [client, reportApiStatus]);
 
   return (
     <div>
       <h2>Portfolio</h2>
       <p>Latest account snapshot from control-plane API.</p>
       {loading && <p className="muted">Loading snapshot...</p>}
-      {error && <p className="error">{error}</p>}
+      {error && <ApiErrorCallout message={error} />}
       {snapshot && (
         <div className="card jobs-card">
           <p><strong>Account:</strong> {snapshot.accountId}</p>
