@@ -1,0 +1,38 @@
+# Example deployment config for secret managers or IaC templates.
+# Keep real values out of version control.
+
+server:
+  name: gooberberg-control-plane
+  environment: production
+
+compose:
+  file: infra/compose/docker-compose.prod.yml
+  project_name: gooberberg-prod
+  profiles:
+    # Default: no public service endpoints except optional reverse proxy profile.
+    - nginx
+
+network:
+  private_only: true
+
+env:
+  GB_ENVIRONMENT: production
+  GB_APP_VERSION: "0.1.0"
+  GB_API_PREFIX: /api/v1
+  GB_HEARTBEAT_INTERVAL_SECONDS: 15
+
+  GB_API_AUTH_TOKEN: "<set-a-long-random-token>"
+  GB_API_AUTH_SCOPE: control-plane:full
+
+  POSTGRES_DB: gooberberg
+  POSTGRES_USER: postgres
+  POSTGRES_PASSWORD: "<set-a-strong-password>"
+
+  API_BIND_PORT: 8000
+  NGINX_HTTP_PORT: 80
+  NGINX_HTTPS_PORT: 443
+
+tls:
+  mode: manual
+  certificate_file: /etc/nginx/certs/fullchain.pem
+  private_key_file: /etc/nginx/certs/privkey.pem
