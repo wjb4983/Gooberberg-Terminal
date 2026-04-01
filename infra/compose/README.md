@@ -1,0 +1,3 @@
+# compose
+
+Scaffold directory placeholder.

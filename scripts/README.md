@@ -1,0 +1,3 @@
+# scripts
+
+Scaffold directory placeholder.
