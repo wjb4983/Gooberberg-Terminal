@@ -26,6 +26,7 @@ class JobLifecycleEvent(BaseModel):
     trace_id: str
     status: JobStatus
     detail: str
+    result_ref: str | None = None
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 

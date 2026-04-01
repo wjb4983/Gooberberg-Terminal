@@ -57,13 +57,16 @@ class JobRedisRepository:
 
     @staticmethod
     def _event_mapping(event: JobLifecycleEvent) -> dict[str, str]:
-        return {
+        mapping = {
             "job_id": str(event.job_id),
             "trace_id": event.trace_id,
             "status": event.status.value,
             "detail": event.detail,
             "updated_at": event.updated_at.astimezone(UTC).isoformat(),
         }
+        if event.result_ref:
+            mapping["result_ref"] = event.result_ref
+        return mapping
 
 
 @asynccontextmanager

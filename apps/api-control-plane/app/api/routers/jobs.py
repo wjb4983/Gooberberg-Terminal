@@ -24,6 +24,7 @@ async def _broadcast_job_event(event: JobLifecycleEvent) -> None:
             "status": event.status.value,
             "detail": event.detail,
             "updated_at": event.updated_at.isoformat(),
+            "result_ref": event.result_ref,
         },
     )
 
@@ -84,6 +85,7 @@ async def get_job(job_id: UUID, request: Request) -> JobStatusResponse:
         status=event.status,
         detail=event.detail,
         trace_id=event.trace_id,
+        result_ref=event.result_ref,
         updated_at=event.updated_at,
     )
 
@@ -118,5 +120,6 @@ async def publish_job_event(
         status=event.status,
         detail=event.detail,
         trace_id=event.trace_id,
+        result_ref=event.result_ref,
         updated_at=event.updated_at,
     )
