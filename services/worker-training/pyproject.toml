@@ -1,0 +1,17 @@
+[build-system]
+requires = ["hatchling>=1.26"]
+build-backend = "hatchling.build"
+
+[project]
+name = "gb-worker-training"
+version = "0.1.0"
+description = "Skeleton package for worker_training."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = []
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/worker_training"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]

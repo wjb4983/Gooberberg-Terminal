@@ -1,0 +1,17 @@
+[build-system]
+requires = ["hatchling>=1.26"]
+build-backend = "hatchling.build"
+
+[project]
+name = "gb-service-risk-exec"
+version = "0.1.0"
+description = "Skeleton package for service_risk_exec."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = []
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/service_risk_exec"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]

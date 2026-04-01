@@ -1,0 +1,17 @@
+[build-system]
+requires = ["hatchling>=1.26"]
+build-backend = "hatchling.build"
+
+[project]
+name = "gb-service-data"
+version = "0.1.0"
+description = "Skeleton package for service_data."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = []
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/service_data"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]

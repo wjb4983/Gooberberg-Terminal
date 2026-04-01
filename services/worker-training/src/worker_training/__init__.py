@@ -1,0 +1,1 @@
+"""Worker Training package skeleton."""
