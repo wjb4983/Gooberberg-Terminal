@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "Skeleton package for service_portfolio_state."
 readme = "README.md"
 requires-python = ">=3.11"
-dependencies = []
+dependencies = ["pydantic>=2.9,<3.0", "redis>=5.0,<6.0"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/service_portfolio_state"]

@@ -1,13 +1,13 @@
 import { Route, Routes } from 'react-router-dom';
 
 import { AppShell } from './layout/AppShell';
-import { PlaceholderPage } from './pages/PlaceholderPage';
 import { StrategiesPage } from './pages/StrategiesPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { JobsPage } from './pages/JobsPage';
 import { ModelDeploymentsPage } from './pages/ModelDeploymentsPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { GraphPage } from './pages/GraphPage';
+import { PortfolioPage } from './pages/PortfolioPage';
 import { loadPreferences, savePreferences } from './settings/preferences';
 import { createTokenStorage } from './settings/tokenStorage';
 import { useMemo, useState } from 'react';
@@ -28,7 +28,7 @@ export function App(): JSX.Element {
         <Route path="jobs" element={<JobsPage baseUrl={baseUrl} />} />
         <Route path="models" element={<ModelDeploymentsPage baseUrl={baseUrl} />} />
         <Route path="strategies" element={<StrategiesPage baseUrl={baseUrl} />} />
-        <Route path="portfolio" element={<PlaceholderPage title="Portfolio" description="Portfolio overview and positions." />} />
+        <Route path="portfolio" element={<PortfolioPage baseUrl={baseUrl} />} />
         <Route path="graph" element={<GraphPage baseUrl={baseUrl} />} />
         <Route
           path="settings"

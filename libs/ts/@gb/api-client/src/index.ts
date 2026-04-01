@@ -11,6 +11,7 @@ import type {
   ModelDeploymentActionResponse,
   ModelDeploymentEventPayload,
   ModelDeploymentStatus,
+  PortfolioSnapshot,
   ServiceHealth,
   StrategyInstance,
   StrategyInstanceActionResponse,
@@ -66,6 +67,15 @@ export class GbApiClient {
     return parseHealthResponse(payload);
   }
 
+
+  async getPortfolioSnapshot(): Promise<PortfolioSnapshot> {
+    const payload = await this.requestJson<unknown>(`${this.apiPrefix}/portfolio/snapshot`, {
+      method: 'GET',
+      headers: { Accept: 'application/json' },
+    });
+
+    return parsePortfolioSnapshot(payload);
+  }
 
   async getGraphTopology(): Promise<GraphTopology> {
     const payload = await this.requestJson<unknown>(`${this.apiPrefix}/graph/topology`, {
@@ -356,6 +366,41 @@ function parseHealthResponse(payload: unknown): HealthResponse {
     version: payload.version,
     postgres: payload.postgres as HealthResponse['postgres'],
     redis: payload.redis as HealthResponse['redis'],
+  };
+}
+
+
+function parsePortfolioSnapshot(payload: unknown): PortfolioSnapshot {
+  if (!isRecord(payload)) throw new Error('Portfolio snapshot payload must be an object.');
+  if (typeof payload.account_id !== 'string') throw new Error('Portfolio snapshot account_id is malformed.');
+  if (typeof payload.timestamp !== 'string') throw new Error('Portfolio snapshot timestamp is malformed.');
+  if (!Array.isArray(payload.positions)) throw new Error('Portfolio snapshot positions is malformed.');
+
+  const positions = payload.positions.map((position, index) => {
+    if (!isRecord(position)) throw new Error(`Portfolio position at index ${index} must be an object.`);
+    if (typeof position.symbol !== 'string') throw new Error(`Portfolio position at index ${index} has malformed symbol.`);
+    return {
+      symbol: position.symbol,
+      quantity: Number(position.quantity ?? 0),
+      averagePrice: Number(position.average_price ?? 0),
+      marketPrice: Number(position.market_price ?? 0),
+      marketValue: Number(position.market_value ?? 0),
+      unrealizedPnl: Number(position.unrealized_pnl ?? 0),
+      side: position.side === 'short' ? 'short' : 'long',
+    };
+  });
+
+  return {
+    accountId: payload.account_id,
+    timestampIso: payload.timestamp,
+    equity: Number(payload.equity ?? 0),
+    cash: Number(payload.cash ?? 0),
+    buyingPower: Number(payload.buying_power ?? 0),
+    grossExposure: Number(payload.gross_exposure ?? 0),
+    netExposure: Number(payload.net_exposure ?? 0),
+    unrealizedPnl: Number(payload.unrealized_pnl ?? 0),
+    realizedPnl: Number(payload.realized_pnl ?? 0),
+    positions,
   };
 }
 

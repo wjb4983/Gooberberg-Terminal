@@ -60,18 +60,27 @@ export interface ModelDeploymentActionResponse {
   detail: string;
 }
 
+export interface Position {
+  symbol: string;
+  quantity: number;
+  averagePrice: number;
+  marketPrice: number;
+  marketValue: number;
+  unrealizedPnl: number;
+  side: 'long' | 'short';
+}
+
 export interface PortfolioSnapshot {
   accountId: string;
   timestampIso: string;
   equity: number;
   cash: number;
   buyingPower: number;
-  positions: Array<{
-    symbol: string;
-    quantity: number;
-    averagePrice: number;
-    marketPrice?: number;
-  }>;
+  grossExposure: number;
+  netExposure: number;
+  unrealizedPnl: number;
+  realizedPnl: number;
+  positions: Position[];
 }
 
 export interface ContractEnvelopeBase {

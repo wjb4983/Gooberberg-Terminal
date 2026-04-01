@@ -80,6 +80,7 @@ async def lifespan_redis(app: FastAPI) -> AsyncIterator[None]:
             await client.aclose()
             client = None
 
+    app.state.redis_client = client
     app.state.job_repo = JobRedisRepository(client)
     try:
         yield
