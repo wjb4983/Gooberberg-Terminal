@@ -1,0 +1,175 @@
+services:
+  api-control-plane:
+    build:
+      context: ../..
+      dockerfile: infra/docker/api.Dockerfile
+    container_name: gb-api-control-plane
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/gooberberg
+      REDIS_URL: redis://redis:6379/0
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=2)",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    networks:
+      - gb-dev-net
+
+  orchestrator:
+    build:
+      context: ../..
+      dockerfile: infra/docker/service.Dockerfile
+      args:
+        SERVICE_PATH: services/orchestrator
+        MODULE_NAME: orchestrator.main
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - gb-dev-net
+
+  worker-research:
+    build:
+      context: ../..
+      dockerfile: infra/docker/worker.Dockerfile
+      args:
+        SERVICE_PATH: services/worker-research
+        MODULE_NAME: worker_research.main
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - gb-dev-net
+
+  worker-training:
+    build:
+      context: ../..
+      dockerfile: infra/docker/worker.Dockerfile
+      args:
+        SERVICE_PATH: services/worker-training
+        MODULE_NAME: worker_training.main
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - gb-dev-net
+
+  service-inference-live:
+    build:
+      context: ../..
+      dockerfile: infra/docker/service.Dockerfile
+      args:
+        SERVICE_PATH: services/service-inference-live
+        MODULE_NAME: service_inference_live.main
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - gb-dev-net
+
+  service-portfolio-state:
+    build:
+      context: ../..
+      dockerfile: infra/docker/service.Dockerfile
+      args:
+        SERVICE_PATH: services/service-portfolio-state
+        MODULE_NAME: service_portfolio_state.main
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - gb-dev-net
+
+  service-risk-exec:
+    build:
+      context: ../..
+      dockerfile: infra/docker/service.Dockerfile
+      args:
+        SERVICE_PATH: services/service-risk-exec
+        MODULE_NAME: service_risk_exec.main
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - gb-dev-net
+
+  service-data:
+    build:
+      context: ../..
+      dockerfile: infra/docker/service.Dockerfile
+      args:
+        SERVICE_PATH: services/service-data
+        MODULE_NAME: service_data.main
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - gb-dev-net
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: gooberberg
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d gooberberg"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - gb-dev-net
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    networks:
+      - gb-dev-net
+
+networks:
+  gb-dev-net:
+    driver: bridge
+    internal: true
+
+volumes:
+  postgres-data:
+  redis-data:
