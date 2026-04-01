@@ -1,4 +1,6 @@
 import logging
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
@@ -7,15 +9,26 @@ from app.api.routers.jobs import router as jobs_router
 from app.api.routers.ws import router as ws_router
 from app.core.config import get_settings
 from app.core.logging import RequestIDMiddleware, configure_logging
+from app.jobs.redis_queue import lifespan_redis
 
 logger = logging.getLogger(__name__)
+
+
+@asynccontextmanager
+async def app_lifespan(app: FastAPI) -> AsyncIterator[None]:
+    async with lifespan_redis(app):
+        yield
 
 
 def create_app() -> FastAPI:
     settings = get_settings()
     configure_logging()
 
-    app = FastAPI(title=settings.app_name, version=settings.app_version)
+    app = FastAPI(
+        title=settings.app_name,
+        version=settings.app_version,
+        lifespan=app_lifespan,
+    )
     app.add_middleware(RequestIDMiddleware)
 
     app.include_router(health_router, prefix=settings.api_prefix)
