@@ -26,6 +26,7 @@ class JobStatusResponse(BaseModel):
     status: JobStatus
     detail: str
     trace_id: str
+    result_ref: str | None = None
     updated_at: datetime
 
 
