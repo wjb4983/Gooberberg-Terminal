@@ -4,8 +4,8 @@ Initial Tauri + React + TypeScript desktop shell.
 
 ## Implemented
 
-- Route-based shell with pages: Dashboard, Jobs, Strategies, Portfolio, Graph, Settings.
-- Dashboard widget that fetches `GET /health` using a typed API client.
+- Route-based shell with pages: Dashboard, Jobs, Models, Strategies, Portfolio, Graph, Alerts & Health, Settings.
+- Dashboard widget that fetches `GET /api/v1/health` using shared `@gb/api-client` and `@gb/schemas` contracts.
 - Settings page for API base URL + token.
 - Local persistence for non-sensitive preferences (`baseUrl`).
 - Tauri Rust commands (`save_api_token`, `get_api_token`) backed by OS secure credential storage.

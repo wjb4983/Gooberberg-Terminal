@@ -1,21 +1,20 @@
 import { useEffect, useMemo, useState } from 'react';
 
-import type { ServiceHealth } from '@gb/schemas';
+import { GbApiClient } from '@gb/api-client';
+import type { HealthResponse } from '@gb/schemas';
 import { formatHealthLabel } from '@gb/ui-components';
 
-import { HttpApiClient } from '../api/httpApiClient';
 import { useOperatorConsole } from '../context/OperatorConsoleContext';
 import { ApiErrorCallout } from './ApiErrorCallout';
 
 interface HealthWidgetProps {
   baseUrl: string;
-  getToken: () => Promise<string>;
 }
 
-export function HealthWidget({ baseUrl, getToken }: HealthWidgetProps): JSX.Element {
-  const apiClient = useMemo(() => new HttpApiClient(baseUrl, getToken), [baseUrl, getToken]);
+export function HealthWidget({ baseUrl }: HealthWidgetProps): JSX.Element {
+  const apiClient = useMemo(() => new GbApiClient({ baseHttpUrl: baseUrl }), [baseUrl]);
 
-  const [health, setHealth] = useState<ServiceHealth | null>(null);
+  const [health, setHealth] = useState<HealthResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const { reportApiStatus } = useOperatorConsole();
@@ -55,7 +54,7 @@ export function HealthWidget({ baseUrl, getToken }: HealthWidgetProps): JSX.Elem
   return (
     <section className="card">
       <h2>Service Health</h2>
-      {isLoading && <p>Loading /health ...</p>}
+      {isLoading && <p>Loading /api/v1/health ...</p>}
       {!isLoading && error && <ApiErrorCallout message={error} onRetry={() => window.location.reload()} />}
       {!isLoading && !error && health && <p>{formatHealthLabel(health)}</p>}
       {!isLoading && !error && !health && <p>No health data yet.</p>}
