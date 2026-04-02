@@ -58,7 +58,7 @@ export function App(): JSX.Element {
     <OperatorConsoleProvider value={{ reportApiStatus: setApiStatus, reportWebSocketStatus: setWsStatus, pushToast }}>
       <Routes>
         <Route path="/" element={<AppShell apiStatus={apiStatus} wsStatus={wsStatus} toasts={toasts} theme={preferences.theme} compactLayout={preferences.compactLayout} />}>
-          <Route index element={<ErrorBoundary><DashboardPage baseUrl={preferences.baseUrl} getToken={() => tokenStorage.getToken()} /></ErrorBoundary>} />
+          <Route index element={<ErrorBoundary><DashboardPage baseUrl={preferences.baseUrl} /></ErrorBoundary>} />
           <Route path="jobs" element={<ErrorBoundary><JobsPage baseUrl={preferences.baseUrl} /></ErrorBoundary>} />
           <Route path="models" element={<ErrorBoundary><ModelDeploymentsPage baseUrl={preferences.baseUrl} /></ErrorBoundary>} />
           <Route path="strategies" element={<ErrorBoundary><StrategiesPage baseUrl={preferences.baseUrl} /></ErrorBoundary>} />

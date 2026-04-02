@@ -58,7 +58,7 @@ async def run_orchestrator() -> None:
         logger.warning(
             "orchestrator idle: redis dependency unavailable job_id=- trace_id=-"
         )
-        # TODO: add durable local queue fallback for orchestrator when Redis is absent.
+        # Deferred infrastructure hardening: add a durable local queue fallback when Redis is absent.
         while True:
             await asyncio.sleep(POLL_INTERVAL_SECONDS)
 

@@ -1,9 +1,3 @@
-import type { ServiceHealth } from '@gb/schemas';
-
-export interface ApiClient {
-  getHealth(): Promise<ServiceHealth>;
-}
-
 export type ThemePreference = 'dark' | 'light';
 
 export interface UiPreferences {

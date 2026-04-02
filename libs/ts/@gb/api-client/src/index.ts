@@ -13,7 +13,6 @@ import type {
   ModelDeploymentEventPayload,
   ModelDeploymentStatus,
   PortfolioSnapshot,
-  ServiceHealth,
   StrategyInstance,
   StrategyInstanceActionResponse,
   StrategyMode,
@@ -388,21 +387,6 @@ export function parseLogPayload(payload: unknown): LogEvent | null {
   };
 }
 
-export function parseServiceHealth(payload: unknown): ServiceHealth | null {
-  if (!isRecord(payload)) return null;
-
-  if (typeof payload.service !== 'string') return null;
-  if (payload.status !== 'healthy' && payload.status !== 'degraded' && payload.status !== 'unhealthy') return null;
-  if (typeof payload.checkedAtIso !== 'string') return null;
-
-  return {
-    service: payload.service,
-    status: payload.status,
-    checkedAtIso: payload.checkedAtIso,
-    message: typeof payload.message === 'string' ? payload.message : undefined,
-  }; 
-}
-
 function parseAlerts(payload: unknown): AlertEvent[] {
   if (!Array.isArray(payload)) {
     throw new Error('Alerts payload must be an array.');
@@ -465,7 +449,7 @@ function parsePortfolioSnapshot(payload: unknown): PortfolioSnapshot {
       marketPrice: Number(position.market_price ?? 0),
       marketValue: Number(position.market_value ?? 0),
       unrealizedPnl: Number(position.unrealized_pnl ?? 0),
-      side: position.side === 'short' ? 'short' : 'long',
+      side: position.side === 'short' ? ('short' as const) : ('long' as const),
     };
   });
 
