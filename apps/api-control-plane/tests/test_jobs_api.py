@@ -81,3 +81,24 @@ def test_job_create_and_get_round_trip() -> None:
         else:
             os.environ[TOKEN_ENV] = previous_token
         _reset_settings()
+
+
+def test_job_create_requires_registered_task_type() -> None:
+    previous_token = os.environ.get(TOKEN_ENV)
+    os.environ.pop(TOKEN_ENV, None)
+    _reset_settings()
+
+    try:
+        with TestClient(create_app()) as client:
+            create_response = client.post(
+                "/api/v1/jobs",
+                json={"job_type": "unknown_task", "payload": {"symbol": "SPY"}},
+            )
+            assert create_response.status_code == 400
+            assert "task type is not registered" in create_response.json()["detail"]
+    finally:
+        if previous_token is None:
+            os.environ.pop(TOKEN_ENV, None)
+        else:
+            os.environ[TOKEN_ENV] = previous_token
+        _reset_settings()

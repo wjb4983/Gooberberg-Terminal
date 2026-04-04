@@ -2,9 +2,11 @@ import logging
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
 
+from app.api.dependencies import get_model_registry
 from app.api.routers.ws import manager as ws_manager
+from app.domain.model_registry import ModelRegistry
 from app.schemas import (
     ModelDeployment,
     ModelDeploymentActionResponse,
@@ -17,6 +19,11 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/models/deployments", tags=["models"])
 
 _deployments: dict[UUID, ModelDeployment] = {}
+
+
+@router.get("/families", response_model=list[str])
+async def list_model_families(model_registry: ModelRegistry = Depends(get_model_registry)) -> list[str]:
+    return list(model_registry.list_families())
 
 
 async def _broadcast_model_event(

@@ -2,9 +2,11 @@ import logging
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 
+from app.api.dependencies import get_job_runner_service
 from app.core.logging import request_id_ctx_var
+from app.domain.job_runner import JobRunnerService
 from app.jobs.models import JobEnvelope, JobLifecycleEvent, JobStatus
 from app.jobs.store import job_state_store
 from app.schemas import JobCreateRequest, JobLifecycleUpdateRequest, JobResponse, JobStatusResponse
@@ -43,7 +45,11 @@ async def _broadcast_job_event(event: JobLifecycleEvent) -> None:
 
 
 @router.post("", response_model=JobResponse, status_code=status.HTTP_202_ACCEPTED)
-async def create_job(job_request: JobCreateRequest, request: Request) -> JobResponse:
+async def create_job(
+    job_request: JobCreateRequest,
+    request: Request,
+    job_runner_service: JobRunnerService = Depends(get_job_runner_service),
+) -> JobResponse:
     trace_id = request_id_ctx_var.get() or str(uuid4())
     job_id = uuid4()
     accepted_at = datetime.now(UTC)
@@ -55,6 +61,13 @@ async def create_job(job_request: JobCreateRequest, request: Request) -> JobResp
         payload=job_request.payload,
         queued_at=accepted_at,
     )
+    try:
+        job_runner_service.submit(envelope)
+    except KeyError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
     queued_event = JobLifecycleEvent(
         job_id=job_id,
         trace_id=trace_id,

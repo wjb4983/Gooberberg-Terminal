@@ -53,3 +53,9 @@ def test_model_deployment_validates_fields() -> None:
     )
 
     assert response.status_code == 422
+
+
+def test_model_families_exposes_hmm_spec() -> None:
+    response = client.get("/api/v1/models/deployments/families")
+    assert response.status_code == 200
+    assert "hmm_regime_switching" in response.json()
