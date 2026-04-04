@@ -10,6 +10,8 @@ readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
     "fastapi>=0.116,<1.0",
+    "polars>=1.33,<2.0",
+    "pyarrow>=21.0,<22.0",
 ]
 
 [project.optional-dependencies]
