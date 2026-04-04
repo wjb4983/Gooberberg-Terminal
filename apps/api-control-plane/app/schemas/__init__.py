@@ -14,12 +14,17 @@ from app.schemas.events import (
     AlertStatus,
     LogEvent,
     LogLevel,
+    WebSocketContractEnvelope,
 )
 from app.schemas.jobs import (
+    ArtifactSummaryResponse,
     JobCreateRequest,
     JobLifecycleUpdateRequest,
+    JobLogEventPayload,
+    JobProgressEventPayload,
     JobResponse,
     JobStatusResponse,
+    RunType,
 )
 from app.schemas.portfolio import PortfolioSnapshot, Position
 from app.schemas.models import (
@@ -29,8 +34,8 @@ from app.schemas.models import (
     ModelDeploymentEvent,
     ModelDeploymentStatus,
 )
-from app.schemas.model_configs import ModelConfigCreateRequest, ModelConfigResponse, ModelConfigUpdateRequest
-from app.schemas.training_runs import TrainingRunCreateRequest, TrainingRunResponse
+from app.schemas.model_configs import ModelConfigCreateRequest, ModelConfigResponse, ModelConfigUpdateRequest, ModelFamily
+from app.schemas.training_runs import RunStatus, TrainingRunCreateRequest, TrainingRunResponse
 from app.schemas.parameter_sweeps import ParameterSweepCreateRequest, ParameterSweepResponse
 from app.schemas.backtest_runs import BacktestRunCreateRequest, BacktestRunResponse
 from app.schemas.market_data import (
@@ -61,10 +66,15 @@ __all__ = [
     "AlertStatus",
     "LogEvent",
     "LogLevel",
+    "WebSocketContractEnvelope",
+    "ArtifactSummaryResponse",
     "JobCreateRequest",
     "JobLifecycleUpdateRequest",
+    "JobLogEventPayload",
+    "JobProgressEventPayload",
     "JobResponse",
     "JobStatusResponse",
+    "RunType",
     "ModelDeployment",
     "ModelDeploymentActionResponse",
     "ModelDeploymentCreateRequest",
@@ -79,6 +89,8 @@ __all__ = [
     "ModelConfigCreateRequest",
     "ModelConfigResponse",
     "ModelConfigUpdateRequest",
+    "ModelFamily",
+    "RunStatus",
     "TrainingRunCreateRequest",
     "TrainingRunResponse",
     "ParameterSweepCreateRequest",

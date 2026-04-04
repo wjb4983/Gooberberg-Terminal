@@ -15,6 +15,9 @@ class BroadcastEvent:
     timestamp: str
     payload: dict
     version: str = "1.0"
+    envelope_version: str = "1.0"
+    contract_name: str = "gb.ws.event"
+    contract_version: str = "1.0"
 
     def to_json(self) -> dict:
         return {
@@ -24,6 +27,9 @@ class BroadcastEvent:
             "timestamp": self.timestamp,
             "payload": self.payload,
             "version": self.version,
+            "envelope_version": self.envelope_version,
+            "contract_name": self.contract_name,
+            "contract_version": self.contract_version,
         }
 
 
