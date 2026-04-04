@@ -41,8 +41,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    expose:
-      - "8000"
+    ports:
+      - "${API_BIND_IP:-0.0.0.0}:${API_BIND_PORT:-8000}:8000"
     healthcheck:
       test:
         [
