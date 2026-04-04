@@ -13,7 +13,7 @@ services:
       DATABASE_URL: postgresql://postgres:postgres@postgres:5432/gooberberg
       REDIS_URL: redis://redis:6379/0
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     healthcheck:
       test:
         [
@@ -168,7 +168,7 @@ services:
 networks:
   gb-dev-net:
     driver: bridge
-    internal: true
+    internal: false
 
 volumes:
   postgres-data:
