@@ -1,9 +1,9 @@
+from uuid import UUID
+
 from app.domain.backtest_runs.repository import Repository
 
 
 class Service:
-    """Service layer for orchestrating domain operations."""
-
     def __init__(self, repository: Repository) -> None:
         self._repository = repository
 
@@ -12,3 +12,6 @@ class Service:
 
     def list_all(self) -> list[dict[str, object]]:
         return self._repository.list_all()
+
+    def get(self, item_id: UUID) -> dict[str, object] | None:
+        return self._repository.get(item_id)

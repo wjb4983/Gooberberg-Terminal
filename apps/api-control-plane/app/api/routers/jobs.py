@@ -77,7 +77,8 @@ async def create_job(
     )
 
     job_state_store.upsert(queued_event)
-    await request.app.state.job_repo.enqueue(envelope, queued_event)
+    request.app.state.job_event_repository.persist_event(queued_event)
+    await request.app.state.job_queue.enqueue(envelope)
     await _broadcast_job_event(queued_event)
 
     logger.info("job accepted", extra={"job_id": str(job_id), "trace_id": trace_id})
@@ -95,7 +96,7 @@ async def create_job(
 async def get_job(job_id: UUID, request: Request) -> JobStatusResponse:
     event = job_state_store.get(job_id)
     if event is None:
-        event = await request.app.state.job_repo.get_latest_event(job_id)
+        event = request.app.state.job_event_repository.get_latest_event(job_id)
         if event:
             job_state_store.upsert(event)
 
@@ -124,7 +125,7 @@ async def publish_job_event(
 ) -> JobStatusResponse:
     existing = job_state_store.get(job_id)
     if existing is None:
-        existing = await request.app.state.job_repo.get_latest_event(job_id)
+        existing = request.app.state.job_event_repository.get_latest_event(job_id)
 
     if existing is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="job not found")
@@ -138,7 +139,7 @@ async def publish_job_event(
     )
 
     job_state_store.upsert(event)
-    await request.app.state.job_repo.persist_event(event)
+    request.app.state.job_event_repository.persist_event(event)
     await _broadcast_job_event(event)
 
     return JobStatusResponse(
