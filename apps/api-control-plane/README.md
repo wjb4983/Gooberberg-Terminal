@@ -1,38 +1,125 @@
 # api-control-plane
 
-Placeholder package for the component at path `apps/api-control-plane`.
+FastAPI service for Gooberberg operator/control-plane APIs.
 
-## Purpose
+## What this service exposes
 
-This directory is reserved for future implementation.
+- Root status endpoint: `GET /`
+- Liveness endpoint: `GET /healthz` (no auth)
+- Versioned API health endpoint: `GET /api/v1/health` (no auth)
+- Control-plane routes under `GET/POST /api/v1/*` (bearer auth required when `GB_API_AUTH_TOKEN` is set)
 
-## Status
+## Local run (without Docker)
 
-- Skeleton only.
-- No domain implementation logic yet.
-
-## After making code updates
-
-Use this quick checklist each time you change code and want to restart the API server:
-
-1. Reinstall dependencies for the package (from repo root):
-   ```bash
-   uv pip install -e apps/api-control-plane
-   ```
-2. Run the API test suite:
-   ```bash
-   pytest apps/api-control-plane/tests -q
-   ```
-3. Restart the server:
-   ```bash
-   uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
-   ```
-
-### Docker workflow
-
-If you run the server in Docker, rebuild and restart after code updates:
+From repo root:
 
 ```bash
-docker compose -f infra/compose/docker-compose.dev.yml build api-control-plane
-docker compose -f infra/compose/docker-compose.dev.yml up -d api-control-plane
+timeout 60s uv pip install -e apps/api-control-plane
+```
+
+Start the API server:
+
+```bash
+timeout 120s uvicorn app.main:app --host 0.0.0.0 --port 8000
+```
+
+> For an interactive dev loop, run `uvicorn ... --reload` in your own terminal session (no timeout), then stop with `Ctrl+C`.
+
+## Docker run (dev compose)
+
+Build and start dependencies + API:
+
+```bash
+timeout 180s docker compose -f infra/compose/docker-compose.dev.yml up -d --build postgres redis api-control-plane
+```
+
+Important:
+
+- The dev compose file publishes the API on **`127.0.0.1:8000`**.
+- If `curl http://127.0.0.1:8001/...` fails, that is expected unless you explicitly remap ports.
+
+Restart API only after code changes:
+
+```bash
+timeout 120s docker compose -f infra/compose/docker-compose.dev.yml up -d --build api-control-plane
+```
+
+## Production-style loopback run (for SSH or Tailscale serve)
+
+Create env file once:
+
+```bash
+cp config/env/.env.example config/env/.env
+```
+
+Start loopback profile (API bound to localhost):
+
+```bash
+timeout 180s docker compose --env-file config/env/.env -f infra/compose/docker-compose.prod.yml --profile loopback up -d
+```
+
+Default binding is `127.0.0.1:8000`. To use a different local port (example `8001`):
+
+```bash
+API_BIND_PORT=8001 timeout 180s docker compose --env-file config/env/.env -f infra/compose/docker-compose.prod.yml --profile loopback up -d
+```
+
+## Tailscale connectivity
+
+If you want your Tailnet hostname (for example `https://<machine>.ts.net/`) to reach this API, forward Tailscale HTTPS traffic to local API port 8000:
+
+```bash
+timeout 30s tailscale serve --bg 443 http://127.0.0.1:8000
+```
+
+Check serve config:
+
+```bash
+timeout 30s tailscale serve status
+```
+
+If you are using a non-default local port (for example 8001), update serve target accordingly:
+
+```bash
+timeout 30s tailscale serve --bg 443 http://127.0.0.1:8001
+```
+
+## Verification checklist
+
+After starting/restarting, run these checks in order.
+
+1) Containers are up:
+
+```bash
+timeout 30s docker compose -f infra/compose/docker-compose.dev.yml ps
+```
+
+2) Local liveness endpoint responds:
+
+```bash
+timeout 20s curl -fsS http://127.0.0.1:8000/healthz
+```
+
+3) Versioned API health responds:
+
+```bash
+timeout 20s curl -fsS http://127.0.0.1:8000/api/v1/health
+```
+
+4) Root status responds:
+
+```bash
+timeout 20s curl -fsS http://127.0.0.1:8000/
+```
+
+5) Tailscale endpoint responds (replace hostname):
+
+```bash
+timeout 20s curl -kfsS https://<machine>.ts.net/healthz
+```
+
+6) If something fails, inspect logs:
+
+```bash
+timeout 30s docker compose -f infra/compose/docker-compose.dev.yml logs --tail=200 api-control-plane postgres redis
 ```

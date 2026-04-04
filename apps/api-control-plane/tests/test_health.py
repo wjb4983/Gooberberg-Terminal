@@ -15,3 +15,10 @@ def test_health_endpoint_returns_placeholder_dependency_status() -> None:
     assert payload["service"] == "gooberberg-api-control-plane"
     assert payload["postgres"]["detail"].startswith("placeholder")
     assert payload["redis"]["detail"].startswith("placeholder")
+
+
+def test_healthz_endpoint_returns_ok() -> None:
+    response = client.get("/healthz")
+    assert response.status_code == 200
+    assert response.json() == {"status": "ok"}
+
