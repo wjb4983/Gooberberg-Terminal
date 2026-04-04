@@ -2,6 +2,37 @@
 
 FastAPI service for Gooberberg operator/control-plane APIs.
 
+## Copy/paste: bring server online + verify + Tailscale
+
+Run this exact sequence from repo root:
+
+```bash
+# 1) Clean up old compose state
+timeout 60s docker compose -f infra/compose/docker-compose.dev.yml down --remove-orphans
+
+# 2) Build and start DB/cache/API
+timeout 240s docker compose -f infra/compose/docker-compose.dev.yml up -d --build postgres redis api-control-plane
+
+# 3) Confirm API container is running
+timeout 30s docker compose -f infra/compose/docker-compose.dev.yml ps api-control-plane
+
+# 4) If not running, inspect API logs immediately
+timeout 30s docker compose -f infra/compose/docker-compose.dev.yml logs --tail=200 api-control-plane
+
+# 5) Local API checks
+timeout 20s curl -fsS http://127.0.0.1:8000/healthz
+timeout 20s curl -fsS http://127.0.0.1:8000/api/v1/health
+
+# 6) Expose over Tailscale HTTPS (run once per host, requires tailscale up)
+timeout 30s tailscale serve --bg 443 http://127.0.0.1:8000
+timeout 30s tailscale serve status
+
+# 7) Replace <machine>.ts.net with your node DNS name from `tailscale status`
+timeout 20s curl -kfsS https://<machine>.ts.net/healthz
+```
+
+If step 3 shows no `api-control-plane` row, step 4 logs are the source of truth.
+
 ## What this service exposes
 
 - Root status endpoint: `GET /`
