@@ -1,4 +1,11 @@
-from app.schemas.graph import GraphEdge, GraphNode, GraphNodeType, GraphTopologyResponse
+from app.schemas.graph import (
+    GraphEdge,
+    GraphNeighborhoodRequest,
+    GraphNeighborhoodResponse,
+    GraphNode,
+    GraphNodeType,
+    GraphTopologyResponse,
+)
 from app.schemas.health import DependencyStatus, HealthResponse
 from app.schemas.events import (
     AlertAcknowledgeResponse,
@@ -21,6 +28,16 @@ from app.schemas.models import (
     ModelDeploymentCreateRequest,
     ModelDeploymentEvent,
     ModelDeploymentStatus,
+)
+from app.schemas.model_configs import ModelConfigCreateRequest, ModelConfigResponse, ModelConfigUpdateRequest
+from app.schemas.training_runs import TrainingRunCreateRequest, TrainingRunResponse
+from app.schemas.parameter_sweeps import ParameterSweepCreateRequest, ParameterSweepResponse
+from app.schemas.backtest_runs import BacktestRunCreateRequest, BacktestRunResponse
+from app.schemas.market_data import (
+    MarketDataCacheCoverageResponse,
+    MarketDataDatasetLookupResponse,
+    MarketDataIngestionRequest,
+    MarketDataIngestionResponse,
 )
 from app.schemas.strategies import (
     StrategyInstance,
@@ -59,6 +76,21 @@ __all__ = [
     "StrategyInstanceStatus",
     "StrategyIntent",
     "StrategyMode",
+    "ModelConfigCreateRequest",
+    "ModelConfigResponse",
+    "ModelConfigUpdateRequest",
+    "TrainingRunCreateRequest",
+    "TrainingRunResponse",
+    "ParameterSweepCreateRequest",
+    "ParameterSweepResponse",
+    "BacktestRunCreateRequest",
+    "BacktestRunResponse",
+    "MarketDataIngestionRequest",
+    "MarketDataIngestionResponse",
+    "MarketDataCacheCoverageResponse",
+    "MarketDataDatasetLookupResponse",
+    "GraphNeighborhoodRequest",
+    "GraphNeighborhoodResponse",
     "PortfolioSnapshot",
     "Position",
 ]

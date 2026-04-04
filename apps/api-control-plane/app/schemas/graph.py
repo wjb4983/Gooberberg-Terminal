@@ -1,7 +1,7 @@
 from enum import StrEnum
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, conint
 
 
 class GraphNodeType(StrEnum):
@@ -29,5 +29,18 @@ class GraphEdge(BaseModel):
 
 
 class GraphTopologyResponse(BaseModel):
+    nodes: list[GraphNode]
+    edges: list[GraphEdge]
+
+
+class GraphNeighborhoodRequest(BaseModel):
+    seed_node_id: str = Field(min_length=1)
+    depth: conint(ge=1, le=6) = 1
+    include_node_types: list[GraphNodeType] = Field(default_factory=list)
+
+
+class GraphNeighborhoodResponse(BaseModel):
+    seed_node_id: str
+    depth: int
     nodes: list[GraphNode]
     edges: list[GraphEdge]
