@@ -1,7 +1,7 @@
-from datetime import timedelta
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 
-from fastapi import APIRouter, Query, status
-
+from app.api.dependencies import get_market_data_service
+from app.domain.market_data import Service as MarketDataService
 from app.schemas import (
     MarketDataCacheCoverageResponse,
     MarketDataDatasetLookupResponse,
@@ -11,37 +11,27 @@ from app.schemas import (
 
 router = APIRouter(prefix="/market-data", tags=["market-data"])
 
-_ingestion_requests: list[MarketDataIngestionResponse] = []
-
 
 @router.post("/ingestions", response_model=MarketDataIngestionResponse, status_code=status.HTTP_202_ACCEPTED)
-def request_market_data_ingestion(payload: MarketDataIngestionRequest) -> MarketDataIngestionResponse:
-    response = MarketDataIngestionResponse(
-        source=payload.source,
-        symbols=payload.symbols,
-        timeframe=payload.timeframe,
-    )
-    _ingestion_requests.append(response)
-    return response
+def request_market_data_ingestion(
+    payload: MarketDataIngestionRequest,
+    service: MarketDataService = Depends(get_market_data_service),
+) -> MarketDataIngestionResponse:
+    return service.request_ingestion(payload)
 
 
 @router.get("/cache-coverage", response_model=MarketDataCacheCoverageResponse)
-def get_cache_coverage(symbol: str = Query(min_length=1), timeframe: str = Query(min_length=1)) -> MarketDataCacheCoverageResponse:
-    return MarketDataCacheCoverageResponse(
-        symbol=symbol,
-        timeframe=timeframe,
-        available_start=None,
-        available_end=None,
-        coverage_pct=0.0,
-    )
+def get_cache_coverage(
+    symbol: str = Query(min_length=1),
+    timeframe: str = Query(min_length=1),
+    service: MarketDataService = Depends(get_market_data_service),
+) -> MarketDataCacheCoverageResponse:
+    return service.get_cache_coverage(symbol=symbol, timeframe=timeframe)
 
 
 @router.get("/datasets/{dataset_id}", response_model=MarketDataDatasetLookupResponse)
-def lookup_dataset(dataset_id: str) -> MarketDataDatasetLookupResponse:
-    return MarketDataDatasetLookupResponse(
-        dataset_id=dataset_id,
-        source="mock-cache",
-        symbol="SPY",
-        timeframe="1d",
-        metadata={"records": 0, "stale_after": str(timedelta(hours=24))},
-    )
+def lookup_dataset(dataset_id: str, service: MarketDataService = Depends(get_market_data_service)) -> MarketDataDatasetLookupResponse:
+    item = service.lookup_dataset(dataset_id)
+    if item is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="dataset not found")
+    return item

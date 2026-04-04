@@ -1,14 +1,10 @@
 from app.domain.graph_domain.repository import Repository
+from app.schemas import GraphTopologyResponse
 
 
 class Service:
-    """Service layer for orchestrating domain operations."""
-
     def __init__(self, repository: Repository) -> None:
         self._repository = repository
 
-    def create(self, payload: dict[str, object]) -> dict[str, object]:
-        return self._repository.add(payload)
-
-    def list_all(self) -> list[dict[str, object]]:
-        return self._repository.list_all()
+    def get_topology(self) -> GraphTopologyResponse:
+        return self._repository.get_topology()

@@ -1,21 +1,25 @@
 from collections import defaultdict, deque
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
 
-from app.graph.mock_provider import get_mock_topology
+from app.api.dependencies import get_graph_service
+from app.domain.graph_domain import Service as GraphService
 from app.schemas import GraphNeighborhoodRequest, GraphNeighborhoodResponse, GraphNodeType, GraphTopologyResponse
 
 router = APIRouter(prefix="/graph", tags=["graph"])
 
 
 @router.get("/topology", response_model=GraphTopologyResponse)
-def get_graph_topology() -> GraphTopologyResponse:
-    return get_mock_topology()
+def get_graph_topology(service: GraphService = Depends(get_graph_service)) -> GraphTopologyResponse:
+    return service.get_topology()
 
 
 @router.post("/neighborhood", response_model=GraphNeighborhoodResponse)
-def get_graph_neighborhood(payload: GraphNeighborhoodRequest) -> GraphNeighborhoodResponse:
-    topology = get_mock_topology()
+def get_graph_neighborhood(
+    payload: GraphNeighborhoodRequest,
+    service: GraphService = Depends(get_graph_service),
+) -> GraphNeighborhoodResponse:
+    topology = service.get_topology()
 
     by_id = {node.id: node for node in topology.nodes}
     if payload.seed_node_id not in by_id:
@@ -53,9 +57,4 @@ def get_graph_neighborhood(payload: GraphNeighborhoodRequest) -> GraphNeighborho
     nodes = [by_id[node_id] for node_id in selected_ids]
     edges = [edge for edge in topology.edges if edge.source in selected_ids and edge.target in selected_ids]
 
-    return GraphNeighborhoodResponse(
-        seed_node_id=payload.seed_node_id,
-        depth=payload.depth,
-        nodes=nodes,
-        edges=edges,
-    )
+    return GraphNeighborhoodResponse(seed_node_id=payload.seed_node_id, depth=payload.depth, nodes=nodes, edges=edges)

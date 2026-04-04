@@ -23,7 +23,10 @@ from app.core.config import get_settings
 from app.core.auth import BearerTokenAuthMiddleware
 from app.core.logging import RequestIDMiddleware, configure_logging
 from app.domain.job_runner import JobRunnerRepository, JobRunnerService
-from app.domain.model_configs import HmmRegimeSwitchingModelSpec, ModelConfigRepository, ModelConfigService
+from app.persistence import create_database
+from app.persistence.job_events import JobEventRepository
+from app.persistence.models import Base
+from app.domain.model_configs import HmmRegimeSwitchingModelSpec
 from app.domain.model_registry import ModelRegistry
 from app.domain.task_registry import TaskRegistry
 from app.jobs.redis_queue import lifespan_redis
@@ -45,10 +48,14 @@ async def app_lifespan(app: FastAPI) -> AsyncIterator[None]:
         for task_type in ("training", "parameter_sweep", "backtest"):
             task_registry.register_runner(task_type, _noop_task_runner)
 
+        database = create_database(get_settings())
+        Base.metadata.create_all(database.engine)
+
+        app.state.database = database
         app.state.model_registry = model_registry
         app.state.task_registry = task_registry
-        app.state.model_config_service = ModelConfigService(ModelConfigRepository(), model_registry)
         app.state.job_runner_service = JobRunnerService(JobRunnerRepository(), task_registry)
+        app.state.job_event_repository = JobEventRepository(app.state.database.session_factory)
         await stack.enter_async_context(lifespan_redis(app))
         await stack.enter_async_context(lifespan_portfolio_cache(app))
         yield

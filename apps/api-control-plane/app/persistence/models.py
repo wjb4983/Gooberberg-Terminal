@@ -1,0 +1,111 @@
+from __future__ import annotations
+
+from datetime import UTC, date, datetime
+
+from sqlalchemy import Date, DateTime, ForeignKey, Integer, JSON, String, Text
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+
+
+class Base(DeclarativeBase):
+    pass
+
+
+def utc_now() -> datetime:
+    return datetime.now(UTC)
+
+
+class ModelConfigRow(Base):
+    __tablename__ = "model_configs"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    model_family: Mapped[str] = mapped_column(String(128), nullable=False)
+    config: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
+
+
+class TrainingRunRow(Base):
+    __tablename__ = "training_runs"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    model_config_id: Mapped[str] = mapped_column(String(36), ForeignKey("model_configs.id"), nullable=False)
+    dataset_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    status: Mapped[str] = mapped_column(String(32), nullable=False)
+    parameters: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
+
+
+class ParameterSweepRunRow(Base):
+    __tablename__ = "parameter_sweep_runs"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    model_config_id: Mapped[str] = mapped_column(String(36), ForeignKey("model_configs.id"), nullable=False)
+    objective: Mapped[str] = mapped_column(String(255), nullable=False)
+    search_space: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False, default=dict)
+    status: Mapped[str] = mapped_column(String(32), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
+
+
+class BacktestRunRow(Base):
+    __tablename__ = "backtest_runs"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    strategy_key: Mapped[str] = mapped_column(String(128), nullable=False)
+    model_config_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("model_configs.id"), nullable=True)
+    window_start: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    window_end: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    parameters: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False, default=dict)
+    status: Mapped[str] = mapped_column(String(32), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
+
+
+class JobEventRow(Base):
+    __tablename__ = "job_events"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    job_id: Mapped[str] = mapped_column(String(36), index=True, nullable=False)
+    trace_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    status: Mapped[str] = mapped_column(String(32), nullable=False)
+    detail: Mapped[str] = mapped_column(Text, nullable=False)
+    result_ref: Mapped[str | None] = mapped_column(String(1024), nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class GraphNodeRow(Base):
+    __tablename__ = "graph_nodes"
+
+    id: Mapped[str] = mapped_column(String(128), primary_key=True)
+    type: Mapped[str] = mapped_column(String(32), nullable=False)
+    label: Mapped[str] = mapped_column(String(255), nullable=False)
+    group: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    metadata_json: Mapped[dict[str, object]] = mapped_column("metadata", JSON, nullable=False, default=dict)
+
+
+class GraphEdgeRow(Base):
+    __tablename__ = "graph_edges"
+
+    id: Mapped[str] = mapped_column(String(128), primary_key=True)
+    source: Mapped[str] = mapped_column(String(128), ForeignKey("graph_nodes.id"), nullable=False)
+    target: Mapped[str] = mapped_column(String(128), ForeignKey("graph_nodes.id"), nullable=False)
+    label: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
+
+class MarketDataCatalogRow(Base):
+    __tablename__ = "market_data_catalog"
+
+    dataset_id: Mapped[str] = mapped_column(String(128), primary_key=True)
+    source: Mapped[str] = mapped_column(String(128), nullable=False)
+    symbol: Mapped[str] = mapped_column(String(64), nullable=False)
+    timeframe: Mapped[str] = mapped_column(String(64), nullable=False)
+    metadata_json: Mapped[dict[str, object]] = mapped_column("metadata", JSON, nullable=False, default=dict)
+
+
+class DatasetPartitionRow(Base):
+    __tablename__ = "dataset_partitions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    dataset_id: Mapped[str] = mapped_column(String(128), ForeignKey("market_data_catalog.dataset_id"), nullable=False)
+    symbol: Mapped[str] = mapped_column(String(64), index=True, nullable=False)
+    timeframe: Mapped[str] = mapped_column(String(64), index=True, nullable=False)
+    partition_start: Mapped[date] = mapped_column(Date, nullable=False)
+    partition_end: Mapped[date] = mapped_column(Date, nullable=False)
