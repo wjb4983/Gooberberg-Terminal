@@ -49,3 +49,15 @@ class LogEvent(BaseModel):
     message: str = Field(min_length=1)
     category: str | None = None
     fields: dict[str, Any] = Field(default_factory=dict)
+
+
+class WebSocketContractEnvelope(BaseModel):
+    event_id: UUID = Field(default_factory=uuid4)
+    seq: int = Field(ge=1)
+    topic: str = Field(min_length=1)
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    payload: dict[str, Any] = Field(default_factory=dict)
+    version: str = "1.0"
+    envelope_version: str = "1.0"
+    contract_name: str = "gb.ws.event"
+    contract_version: str = "1.0"
