@@ -30,6 +30,7 @@ def upgrade() -> None:
     op.create_table(
         "training_runs",
         sa.Column("id", sa.String(length=36), nullable=False),
+        sa.Column("job_id", sa.String(length=36), nullable=False),
         sa.Column("model_config_id", sa.String(length=36), nullable=False),
         sa.Column("dataset_id", sa.String(length=255), nullable=False),
         sa.Column("status", sa.String(length=32), nullable=False),
@@ -42,6 +43,7 @@ def upgrade() -> None:
     op.create_table(
         "parameter_sweep_runs",
         sa.Column("id", sa.String(length=36), nullable=False),
+        sa.Column("job_id", sa.String(length=36), nullable=False),
         sa.Column("model_config_id", sa.String(length=36), nullable=False),
         sa.Column("objective", sa.String(length=255), nullable=False),
         sa.Column("search_space", sa.JSON(), nullable=False),
@@ -54,6 +56,7 @@ def upgrade() -> None:
     op.create_table(
         "backtest_runs",
         sa.Column("id", sa.String(length=36), nullable=False),
+        sa.Column("job_id", sa.String(length=36), nullable=False),
         sa.Column("strategy_key", sa.String(length=128), nullable=False),
         sa.Column("model_config_id", sa.String(length=36), nullable=True),
         sa.Column("window_start", sa.DateTime(timezone=True), nullable=False),
@@ -69,14 +72,41 @@ def upgrade() -> None:
         "job_events",
         sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
         sa.Column("job_id", sa.String(length=36), nullable=False),
+        sa.Column("run_id", sa.String(length=36), nullable=True),
+        sa.Column("run_type", sa.String(length=32), nullable=True),
         sa.Column("trace_id", sa.String(length=128), nullable=False),
         sa.Column("status", sa.String(length=32), nullable=False),
+        sa.Column("progress_pct", sa.Integer(), nullable=False),
+        sa.Column("message", sa.Text(), nullable=False),
         sa.Column("detail", sa.Text(), nullable=False),
         sa.Column("result_ref", sa.String(length=1024), nullable=True),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index("ix_job_events_job_id", "job_events", ["job_id"], unique=False)
+    op.create_index("ix_job_events_run_id", "job_events", ["run_id"], unique=False)
+
+    op.create_index("ix_training_runs_job_id", "training_runs", ["job_id"], unique=False)
+    op.create_index("ix_parameter_sweep_runs_job_id", "parameter_sweep_runs", ["job_id"], unique=False)
+    op.create_index("ix_backtest_runs_job_id", "backtest_runs", ["job_id"], unique=False)
+
+
+
+    op.create_table(
+        "run_artifacts",
+        sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
+        sa.Column("run_id", sa.String(length=36), nullable=False),
+        sa.Column("run_type", sa.String(length=32), nullable=False),
+        sa.Column("job_id", sa.String(length=36), nullable=False),
+        sa.Column("artifact_ref", sa.String(length=1024), nullable=False),
+        sa.Column("metrics", sa.JSON(), nullable=False),
+        sa.Column("notes", sa.Text(), nullable=True),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+        sa.PrimaryKeyConstraint("id"),
+    )
+    op.create_index("ix_run_artifacts_run_id", "run_artifacts", ["run_id"], unique=False)
+    op.create_index("ix_run_artifacts_job_id", "run_artifacts", ["job_id"], unique=False)
+
 
     op.create_table(
         "graph_nodes",
@@ -126,11 +156,18 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     op.drop_index("ix_dataset_partitions_timeframe", table_name="dataset_partitions")
+    op.drop_index("ix_run_artifacts_job_id", table_name="run_artifacts")
+    op.drop_index("ix_run_artifacts_run_id", table_name="run_artifacts")
+    op.drop_table("run_artifacts")
     op.drop_index("ix_dataset_partitions_symbol", table_name="dataset_partitions")
     op.drop_table("dataset_partitions")
     op.drop_table("market_data_catalog")
     op.drop_table("graph_edges")
     op.drop_table("graph_nodes")
+    op.drop_index("ix_training_runs_job_id", table_name="training_runs")
+    op.drop_index("ix_parameter_sweep_runs_job_id", table_name="parameter_sweep_runs")
+    op.drop_index("ix_backtest_runs_job_id", table_name="backtest_runs")
+    op.drop_index("ix_job_events_run_id", table_name="job_events")
     op.drop_index("ix_job_events_job_id", table_name="job_events")
     op.drop_table("job_events")
     op.drop_table("backtest_runs")

@@ -16,5 +16,6 @@ class ParameterSweepResponse(BaseModel):
     model_config_id: UUID
     objective: str
     search_space: dict[str, Any] = Field(default_factory=dict)
+    job_id: UUID
     status: str = "queued"
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
