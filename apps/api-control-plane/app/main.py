@@ -52,6 +52,11 @@ def create_app() -> FastAPI:
     app.include_router(risk_router, prefix=settings.api_prefix)
     app.include_router(ws_router)
 
+
+    @app.get("/healthz")
+    def healthz() -> dict[str, str]:
+        return {"status": "ok"}
+
     @app.get("/")
     def root() -> dict[str, str]:
         return {"service": settings.app_name, "status": "ok"}
