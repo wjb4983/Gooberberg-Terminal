@@ -14,7 +14,7 @@ FastAPI service for Gooberberg operator/control-plane APIs.
 From repo root:
 
 ```bash
-timeout 60s uv pip install -e apps/api-control-plane
+timeout 60s uv pip install -e libs/py/gb_core -e apps/api-control-plane
 ```
 
 Start the API server:
@@ -30,7 +30,13 @@ timeout 120s uvicorn app.main:app --host 0.0.0.0 --port 8000
 Build and start dependencies + API:
 
 ```bash
-timeout 180s docker compose -f infra/compose/docker-compose.dev.yml up -d --build postgres redis api-control-plane
+timeout 240s docker compose -f infra/compose/docker-compose.dev.yml up -d --build postgres redis api-control-plane
+```
+
+Then confirm the API container is actually running (not exited):
+
+```bash
+timeout 30s docker compose -f infra/compose/docker-compose.dev.yml ps api-control-plane
 ```
 
 Important:
@@ -41,7 +47,7 @@ Important:
 Restart API only after code changes:
 
 ```bash
-timeout 120s docker compose -f infra/compose/docker-compose.dev.yml up -d --build api-control-plane
+timeout 180s docker compose -f infra/compose/docker-compose.dev.yml up -d --build api-control-plane
 ```
 
 ## Production-style loopback run (for SSH or Tailscale serve)
@@ -122,4 +128,12 @@ timeout 20s curl -kfsS https://<machine>.ts.net/healthz
 
 ```bash
 timeout 30s docker compose -f infra/compose/docker-compose.dev.yml logs --tail=200 api-control-plane postgres redis
+```
+
+7) If `curl` says **connection refused** on both `8000` and `8001`, the API container likely crashed during startup. Rebuild and relaunch, then re-check logs:
+
+```bash
+timeout 240s docker compose -f infra/compose/docker-compose.dev.yml up -d --build postgres redis api-control-plane
+timeout 30s docker compose -f infra/compose/docker-compose.dev.yml ps api-control-plane
+timeout 30s docker compose -f infra/compose/docker-compose.dev.yml logs --tail=200 api-control-plane
 ```
