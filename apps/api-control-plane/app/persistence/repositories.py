@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import UTC, date, datetime
+from datetime import UTC, date
 from uuid import UUID, uuid4
 
 from sqlalchemy import func, select
@@ -16,6 +16,7 @@ from app.persistence.models import (
     MarketDataCatalogRow,
     ModelConfigRow,
     ParameterSweepRunRow,
+    RunArtifactRow,
     TrainingRunRow,
     utc_now,
 )
@@ -98,10 +99,19 @@ class RunSqlRepository:
         row = self._session.get(self._model, str(item_id))
         return self._to_dict(row) if row else None
 
+    def update_status(self, item_id: UUID, status: str) -> None:
+        row = self._session.get(self._model, str(item_id))
+        if row is None:
+            return
+        row.status = status
+        self._session.add(row)
+        self._session.commit()
+
     @staticmethod
     def _to_dict(row: TrainingRunRow | ParameterSweepRunRow | BacktestRunRow) -> dict[str, object]:
         payload: dict[str, object] = {
             "id": row.id,
+            "job_id": row.job_id,
             "status": row.status,
             "created_at": row.created_at,
         }
@@ -141,8 +151,12 @@ class JobEventSqlRepository:
     def persist_event(self, event: JobLifecycleEvent) -> None:
         row = JobEventRow(
             job_id=str(event.job_id),
+            run_id=str(event.run_id) if event.run_id else None,
+            run_type=event.run_type,
             trace_id=event.trace_id,
             status=event.status.value,
+            progress_pct=int(event.progress_pct),
+            message=event.message,
             detail=event.detail,
             result_ref=event.result_ref,
             updated_at=event.updated_at.astimezone(UTC),
@@ -161,16 +175,54 @@ class JobEventSqlRepository:
             .scalars()
             .first()
         )
+        return self._to_event(row)
+
+    def list_events(self, job_id: UUID) -> list[JobLifecycleEvent]:
+        rows = (
+            self._session.execute(
+                select(JobEventRow)
+                .where(JobEventRow.job_id == str(job_id))
+                .order_by(JobEventRow.updated_at.asc(), JobEventRow.id.asc())
+            )
+            .scalars()
+            .all()
+        )
+        return [event for event in (self._to_event(row) for row in rows) if event]
+
+    @staticmethod
+    def _to_event(row: JobEventRow | None) -> JobLifecycleEvent | None:
         if row is None:
             return None
         return JobLifecycleEvent(
             job_id=UUID(row.job_id),
+            run_id=UUID(row.run_id) if row.run_id else None,
+            run_type=row.run_type,
             trace_id=row.trace_id,
             status=JobStatus(row.status),
+            progress_pct=float(row.progress_pct),
+            message=row.message,
             detail=row.detail,
             result_ref=row.result_ref,
             updated_at=row.updated_at,
         )
+
+
+class RunArtifactSqlRepository:
+    def __init__(self, session: Session) -> None:
+        self._session = session
+
+    def add_summary(self, *, run_id: UUID, run_type: str, job_id: UUID, artifact_ref: str, metrics: dict[str, object], notes: str | None) -> None:
+        row = RunArtifactRow(
+            run_id=str(run_id),
+            run_type=run_type,
+            job_id=str(job_id),
+            artifact_ref=artifact_ref,
+            metrics=metrics,
+            notes=notes,
+            created_at=utc_now(),
+        )
+        self._session.add(row)
+        self._session.commit()
 
 
 class GraphSqlRepository:

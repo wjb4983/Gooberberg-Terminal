@@ -28,6 +28,7 @@ class TrainingRunRow(Base):
     __tablename__ = "training_runs"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    job_id: Mapped[str] = mapped_column(String(36), index=True, nullable=False)
     model_config_id: Mapped[str] = mapped_column(String(36), ForeignKey("model_configs.id"), nullable=False)
     dataset_id: Mapped[str] = mapped_column(String(255), nullable=False)
     status: Mapped[str] = mapped_column(String(32), nullable=False)
@@ -39,6 +40,7 @@ class ParameterSweepRunRow(Base):
     __tablename__ = "parameter_sweep_runs"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    job_id: Mapped[str] = mapped_column(String(36), index=True, nullable=False)
     model_config_id: Mapped[str] = mapped_column(String(36), ForeignKey("model_configs.id"), nullable=False)
     objective: Mapped[str] = mapped_column(String(255), nullable=False)
     search_space: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False, default=dict)
@@ -50,6 +52,7 @@ class BacktestRunRow(Base):
     __tablename__ = "backtest_runs"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    job_id: Mapped[str] = mapped_column(String(36), index=True, nullable=False)
     strategy_key: Mapped[str] = mapped_column(String(128), nullable=False)
     model_config_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("model_configs.id"), nullable=True)
     window_start: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
@@ -64,11 +67,28 @@ class JobEventRow(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     job_id: Mapped[str] = mapped_column(String(36), index=True, nullable=False)
+    run_id: Mapped[str | None] = mapped_column(String(36), index=True, nullable=True)
+    run_type: Mapped[str | None] = mapped_column(String(32), nullable=True)
     trace_id: Mapped[str] = mapped_column(String(128), nullable=False)
     status: Mapped[str] = mapped_column(String(32), nullable=False)
+    progress_pct: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    message: Mapped[str] = mapped_column(Text, nullable=False, default="")
     detail: Mapped[str] = mapped_column(Text, nullable=False)
     result_ref: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class RunArtifactRow(Base):
+    __tablename__ = "run_artifacts"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    run_id: Mapped[str] = mapped_column(String(36), index=True, nullable=False)
+    run_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    job_id: Mapped[str] = mapped_column(String(36), index=True, nullable=False)
+    artifact_ref: Mapped[str] = mapped_column(String(1024), nullable=False)
+    metrics: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False, default=dict)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
 
 
 class GraphNodeRow(Base):

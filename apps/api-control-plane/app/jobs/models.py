@@ -18,6 +18,8 @@ class JobEnvelope(BaseModel):
     trace_id: str
     job_type: str
     payload: dict[str, Any] = Field(default_factory=dict)
+    run_id: UUID | None = None
+    run_type: str | None = None
     queued_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
@@ -26,6 +28,10 @@ class JobLifecycleEvent(BaseModel):
     trace_id: str
     status: JobStatus
     detail: str
+    run_id: UUID | None = None
+    run_type: str | None = None
+    progress_pct: float = 0.0
+    message: str = ""
     result_ref: str | None = None
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
