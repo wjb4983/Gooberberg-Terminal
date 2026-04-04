@@ -4,7 +4,11 @@ import type { ThemePreference } from '../types/api';
 const navItems = [
   { label: 'Dashboard', to: '/' },
   { label: 'Jobs', to: '/jobs' },
-  { label: 'Model Deployments', to: '/models' },
+  { label: 'Models', to: '/models' },
+  { label: 'Training Runs', to: '/training-runs' },
+  { label: 'Parameter Sweeps', to: '/parameter-sweeps' },
+  { label: 'Backtests', to: '/backtests' },
+  { label: 'Data Cache', to: '/data-cache' },
   { label: 'Strategies', to: '/strategies' },
   { label: 'Portfolio', to: '/portfolio' },
   { label: 'Graph', to: '/graph' },
