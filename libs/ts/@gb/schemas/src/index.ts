@@ -199,7 +199,7 @@ export interface StrategyInstanceActionResponse {
   detail: string;
 }
 
-export type WebSocketTopic = 'jobs' | 'alerts' | 'logs' | 'portfolio' | 'risk' | 'strategy' | 'models';
+export type WebSocketTopic = 'jobs' | 'alerts' | 'logs' | 'portfolio' | 'risk' | 'strategy' | 'models' | 'backtests';
 
 export interface WebSocketEventEnvelope<TPayload = Record<string, unknown>> {
   event_id: string;

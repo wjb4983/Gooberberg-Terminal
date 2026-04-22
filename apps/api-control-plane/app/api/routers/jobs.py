@@ -32,6 +32,11 @@ async def _broadcast_job_event(event: JobLifecycleEvent) -> None:
     }
     await ws_manager.publish_topic(topic="jobs", payload=payload)
     await ws_manager.publish_topic(topic="logs", payload=payload)
+    if event.run_type == "backtest":
+        await ws_manager.publish_topic(
+            topic="backtests",
+            payload={**payload, "run_id": str(event.run_id) if event.run_id else None},
+        )
 
 
 @router.post("", response_model=JobResponse, status_code=status.HTTP_202_ACCEPTED)
