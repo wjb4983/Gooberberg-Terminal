@@ -72,15 +72,37 @@ def test_training_sweep_backtest_routes_emit_queued_job_flow() -> None:
     assert training.status_code == 201
     training_payload = training.json()
 
+    parameter_set = client.post(
+        "/api/v1/parameter-sets",
+        json={
+            "model_config_id": model_config["id"],
+            "name": "baseline-sweep-template",
+            "parameters": {"lr": 0.001, "hidden": 64},
+            "version_tag": "v1.0.0",
+            "provenance_metadata": {"source_run_id": "bootstrap-run", "source_model": "hmm_regime_switching", "config_hash": "abc123"},
+        },
+    )
+    assert parameter_set.status_code == 201
+    parameter_set_payload = parameter_set.json()
+
     sweep = client.post(
         "/api/v1/parameter-sweeps",
         json={
             "model_config_id": model_config["id"],
+            "parameter_set_id": parameter_set_payload["id"],
             "objective": "maximize_sharpe",
             "search_space": {"lr": [0.001, 0.01]},
+            "provenance_snapshot": {
+                "source_run_id": "bootstrap-run",
+                "source_model": "hmm_regime_switching",
+                "config_hash": "abc123",
+            },
         },
     )
     assert sweep.status_code == 201
+    sweep_payload = sweep.json()
+    assert sweep_payload["parameter_set_id"] == parameter_set_payload["id"]
+    assert sweep_payload["provenance_snapshot"]["config_hash"] == "abc123"
 
     backtest = client.post(
         "/api/v1/backtest-runs",
@@ -100,6 +122,48 @@ def test_training_sweep_backtest_routes_emit_queued_job_flow() -> None:
     assert queued["status"] == "queued"
     assert queued["run_type"] == "training"
     assert queued["progress_pct"] == 0.0
+
+
+def test_parameter_set_clone_and_version_history_routes() -> None:
+    model_config = client.post(
+        "/api/v1/model-configs",
+        json={
+            "model_family": "hmm_regime_switching",
+            "config": {
+                "n_states": 3,
+                "lookback_window": 100,
+                "covariance_type": "diag",
+                "convergence_tol": 0.01,
+                "max_iterations": 300,
+            },
+        },
+    ).json()
+
+    created = client.post(
+        "/api/v1/parameter-sets",
+        json={
+            "model_config_id": model_config["id"],
+            "name": "seed-template",
+            "parameters": {"lr": 0.001},
+            "version_tag": "v1.0.0",
+            "provenance_metadata": {"source_run_id": "run-1", "source_model": "seed", "config_hash": "h1"},
+        },
+    )
+    assert created.status_code == 201
+    root = created.json()
+
+    cloned = client.post(
+        f"/api/v1/parameter-sets/{root['id']}/clone",
+        json={"name": "seed-template-clone", "version_tag": "v1.0.1"},
+    )
+    assert cloned.status_code == 201
+    clone_payload = cloned.json()
+    assert clone_payload["parent_set_id"] == root["id"]
+
+    history = client.get(f"/api/v1/parameter-sets/{clone_payload['id']}/versions")
+    assert history.status_code == 200
+    version_payload = history.json()
+    assert [item["id"] for item in version_payload] == [root["id"], clone_payload["id"]]
 
 
 def test_graph_neighborhood_endpoint_filters_by_node_types() -> None:

@@ -15,6 +15,7 @@ from app.api.routers.market_data import router as market_data_router
 from app.api.routers.model_configs import router as model_configs_router
 from app.api.routers.models import router as models_router
 from app.api.routers.parameter_sweeps import router as parameter_sweeps_router
+from app.api.routers.parameter_sets import router as parameter_sets_router
 from app.api.routers.portfolio import router as portfolio_router
 from app.api.routers.risk import router as risk_router
 from app.api.routers.ws import router as ws_router
@@ -90,6 +91,7 @@ def create_app() -> FastAPI:
     app.include_router(model_configs_router, prefix=settings.api_prefix)
     app.include_router(training_runs_router, prefix=settings.api_prefix)
     app.include_router(parameter_sweeps_router, prefix=settings.api_prefix)
+    app.include_router(parameter_sets_router, prefix=settings.api_prefix)
     app.include_router(backtest_runs_router, prefix=settings.api_prefix)
     app.include_router(market_data_router, prefix=settings.api_prefix)
     app.include_router(graph_router, prefix=settings.api_prefix)
