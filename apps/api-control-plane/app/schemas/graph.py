@@ -1,5 +1,5 @@
 from enum import StrEnum
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field, conint
 
@@ -44,3 +44,37 @@ class GraphNeighborhoodResponse(BaseModel):
     depth: int
     nodes: list[GraphNode]
     edges: list[GraphEdge]
+
+
+class GraphNodePosition(BaseModel):
+    node_id: str
+    x: float
+    y: float
+
+
+class GraphLayoutProductsResponse(BaseModel):
+    data_label: Literal["summary/downsampled", "detailed window"]
+    zoom: float
+    viewport_x: float
+    viewport_y: float
+    viewport_width: float
+    viewport_height: float
+    nodes: list[GraphNodePosition]
+
+
+class TimeSeriesPoint(BaseModel):
+    timestamp: str
+    value: float
+
+
+class TimeSeriesTile(BaseModel):
+    series_key: str
+    points: list[TimeSeriesPoint]
+
+
+class GraphTimeSeriesTilesResponse(BaseModel):
+    data_label: Literal["summary/downsampled", "detailed window"]
+    zoom: float
+    window_start: str
+    window_end: str
+    tiles: list[TimeSeriesTile]

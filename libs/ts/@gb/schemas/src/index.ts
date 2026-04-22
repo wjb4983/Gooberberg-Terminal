@@ -348,6 +348,42 @@ export interface GraphTopology {
   edges: GraphEdge[];
 }
 
+export interface GraphNodePosition {
+  nodeId: string;
+  x: number;
+  y: number;
+}
+
+export type GraphDataLabel = 'summary/downsampled' | 'detailed window';
+
+export interface GraphLayoutProducts {
+  dataLabel: GraphDataLabel;
+  zoom: number;
+  viewportX: number;
+  viewportY: number;
+  viewportWidth: number;
+  viewportHeight: number;
+  nodes: GraphNodePosition[];
+}
+
+export interface GraphTimeSeriesPoint {
+  timestamp: string;
+  value: number;
+}
+
+export interface GraphTimeSeriesTile {
+  seriesKey: string;
+  points: GraphTimeSeriesPoint[];
+}
+
+export interface GraphTimeSeriesTiles {
+  dataLabel: GraphDataLabel;
+  zoom: number;
+  windowStart: string;
+  windowEnd: string;
+  tiles: GraphTimeSeriesTile[];
+}
+
 const graphNodeTypes: ReadonlySet<GraphNodeType> = new Set([
   'strategy',
   'model',
@@ -369,6 +405,48 @@ export function parseGraphTopology(payload: unknown): GraphTopology {
   const nodes = payload.nodes.map((node, index) => parseGraphNode(node, index));
   const edges = payload.edges.map((edge, index) => parseGraphEdge(edge, index));
   return { nodes, edges };
+}
+
+export function parseGraphLayoutProducts(payload: unknown): GraphLayoutProducts {
+  if (!isRecord(payload)) throw new Error('Graph layout payload must be an object.');
+  if (!Array.isArray(payload.nodes)) throw new Error('Graph layout payload nodes must be an array.');
+
+  const dataLabel = payload.data_label;
+  if (dataLabel !== 'summary/downsampled' && dataLabel !== 'detailed window') {
+    throw new Error('Graph layout payload data_label is malformed.');
+  }
+
+  return {
+    dataLabel,
+    zoom: Number(payload.zoom ?? 0),
+    viewportX: Number(payload.viewport_x ?? 0),
+    viewportY: Number(payload.viewport_y ?? 0),
+    viewportWidth: Number(payload.viewport_width ?? 0),
+    viewportHeight: Number(payload.viewport_height ?? 0),
+    nodes: payload.nodes.map((node, index) => parseGraphNodePosition(node, index)),
+  };
+}
+
+export function parseGraphTimeSeriesTiles(payload: unknown): GraphTimeSeriesTiles {
+  if (!isRecord(payload)) throw new Error('Graph time series payload must be an object.');
+  if (!Array.isArray(payload.tiles)) throw new Error('Graph time series payload tiles must be an array.');
+
+  const dataLabel = payload.data_label;
+  if (dataLabel !== 'summary/downsampled' && dataLabel !== 'detailed window') {
+    throw new Error('Graph time series payload data_label is malformed.');
+  }
+
+  if (typeof payload.window_start !== 'string' || typeof payload.window_end !== 'string') {
+    throw new Error('Graph time series payload window range is malformed.');
+  }
+
+  return {
+    dataLabel,
+    zoom: Number(payload.zoom ?? 0),
+    windowStart: payload.window_start,
+    windowEnd: payload.window_end,
+    tiles: payload.tiles.map((tile, index) => parseGraphTimeSeriesTile(tile, index)),
+  };
 }
 
 export function parseModelConfig(payload: unknown): ModelConfig {
@@ -528,6 +606,38 @@ function parseGraphNode(payload: unknown, index: number): GraphNode {
     type: payload.type as GraphNodeType,
     group: typeof payload.group === 'string' ? payload.group : undefined,
     metadata: isRecord(payload.metadata) ? payload.metadata : {},
+  };
+}
+
+function parseGraphNodePosition(payload: unknown, index: number): GraphNodePosition {
+  if (!isRecord(payload)) throw new Error(`Graph node position at index ${index} must be an object.`);
+  if (typeof payload.node_id !== 'string') throw new Error(`Graph node position at index ${index} has malformed node_id.`);
+
+  return {
+    nodeId: payload.node_id,
+    x: Number(payload.x ?? 0),
+    y: Number(payload.y ?? 0),
+  };
+}
+
+function parseGraphTimeSeriesTile(payload: unknown, index: number): GraphTimeSeriesTile {
+  if (!isRecord(payload)) throw new Error(`Graph tile at index ${index} must be an object.`);
+  if (typeof payload.series_key !== 'string') throw new Error(`Graph tile at index ${index} has malformed series_key.`);
+  if (!Array.isArray(payload.points)) throw new Error(`Graph tile at index ${index} points must be an array.`);
+
+  return {
+    seriesKey: payload.series_key,
+    points: payload.points.map((point, pointIndex) => parseGraphTimeSeriesPoint(point, index, pointIndex)),
+  };
+}
+
+function parseGraphTimeSeriesPoint(payload: unknown, tileIndex: number, pointIndex: number): GraphTimeSeriesPoint {
+  if (!isRecord(payload)) throw new Error(`Graph point at tile ${tileIndex} index ${pointIndex} must be an object.`);
+  if (typeof payload.timestamp !== 'string') throw new Error(`Graph point at tile ${tileIndex} index ${pointIndex} has malformed timestamp.`);
+
+  return {
+    timestamp: payload.timestamp,
+    value: Number(payload.value ?? 0),
   };
 }
 

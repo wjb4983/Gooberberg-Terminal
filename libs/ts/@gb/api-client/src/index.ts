@@ -9,6 +9,8 @@ import type {
   CreateParameterSweepRequest,
   CreateStrategyInstanceRequest,
   CreateTrainingRunRequest,
+  GraphLayoutProducts,
+  GraphTimeSeriesTiles,
   GraphTopology,
   HealthResponse,
   QueueHealthResponse,
@@ -38,6 +40,8 @@ import type {
 } from '@gb/schemas';
 import {
   parseBacktestRun,
+  parseGraphLayoutProducts,
+  parseGraphTimeSeriesTiles,
   parseGraphTopology,
   parseMarketDataCacheCoverageResponse,
   parseMarketDataIngestionResponse,
@@ -153,6 +157,42 @@ export class GbApiClient {
     });
 
     return parseGraphTopology(payload);
+  }
+
+  async getGraphLayoutProducts(params: {
+    zoom: number;
+    viewportX: number;
+    viewportY: number;
+    viewportWidth: number;
+    viewportHeight: number;
+  }): Promise<GraphLayoutProducts> {
+    const query = new URLSearchParams({
+      zoom: String(params.zoom),
+      viewport_x: String(params.viewportX),
+      viewport_y: String(params.viewportY),
+      viewport_width: String(params.viewportWidth),
+      viewport_height: String(params.viewportHeight),
+    });
+
+    const payload = await this.requestJson<unknown>(`${this.apiPrefix}/graph/layout-products?${query.toString()}`, {
+      method: 'GET',
+      headers: { Accept: 'application/json' },
+    });
+
+    return parseGraphLayoutProducts(payload);
+  }
+
+  async getGraphTimeSeriesTiles(params: { zoom: number; windowStart?: string; windowEnd?: string }): Promise<GraphTimeSeriesTiles> {
+    const query = new URLSearchParams({ zoom: String(params.zoom) });
+    if (params.windowStart) query.set('window_start', params.windowStart);
+    if (params.windowEnd) query.set('window_end', params.windowEnd);
+
+    const payload = await this.requestJson<unknown>(`${this.apiPrefix}/graph/time-series-tiles?${query.toString()}`, {
+      method: 'GET',
+      headers: { Accept: 'application/json' },
+    });
+
+    return parseGraphTimeSeriesTiles(payload);
   }
 
   async createJob(request: CreateJobRequest): Promise<CreateJobResponse> {
