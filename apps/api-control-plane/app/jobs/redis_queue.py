@@ -28,6 +28,11 @@ class JobRedisQueue:
             return
         await self._client.rpush(JOB_QUEUE_KEY, envelope.model_dump_json())
 
+    async def depth(self) -> int | None:
+        if not self._client:
+            return None
+        return int(await self._client.llen(JOB_QUEUE_KEY))
+
 
 @asynccontextmanager
 async def lifespan_redis(app: FastAPI) -> AsyncIterator[None]:

@@ -127,6 +127,14 @@ export interface HealthResponse {
   redis: DependencyStatus;
 }
 
+export interface QueueHealthResponse {
+  status: string;
+  queueDepth: number | null;
+  workerHeartbeatAt: string | null;
+  workerHeartbeatAgeSeconds: number | null;
+  detail: string;
+}
+
 export interface CreateJobRequest {
   jobType: string;
   payload: Record<string, unknown>;

@@ -6,7 +6,7 @@ from app.schemas.graph import (
     GraphNodeType,
     GraphTopologyResponse,
 )
-from app.schemas.health import DependencyStatus, HealthResponse
+from app.schemas.health import DependencyStatus, HealthResponse, QueueHealthResponse
 from app.schemas.events import (
     AlertAcknowledgeResponse,
     AlertEvent,
@@ -60,6 +60,7 @@ __all__ = [
     "GraphTopologyResponse",
     "DependencyStatus",
     "HealthResponse",
+    "QueueHealthResponse",
     "AlertAcknowledgeResponse",
     "AlertEvent",
     "AlertSeverity",

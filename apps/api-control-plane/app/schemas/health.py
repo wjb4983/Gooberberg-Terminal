@@ -13,3 +13,11 @@ class HealthResponse(BaseModel):
     version: str
     postgres: DependencyStatus
     redis: DependencyStatus
+
+
+class QueueHealthResponse(BaseModel):
+    status: str
+    queue_depth: int | None = None
+    worker_heartbeat_at: str | None = None
+    worker_heartbeat_age_seconds: float | None = None
+    detail: str

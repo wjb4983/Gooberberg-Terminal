@@ -30,7 +30,6 @@ interface ToastItem {
 export function App(): JSX.Element {
   const [preferences, setPreferences] = useState(() => loadPreferences());
   const tokenStorage = useMemo(() => createTokenStorage(), []);
-  const [apiStatus, setApiStatus] = useState<'connected' | 'degraded' | 'offline'>('degraded');
   const [wsStatus, setWsStatus] = useState('connecting');
   const [toasts, setToasts] = useState<ToastItem[]>([]);
 
@@ -60,9 +59,9 @@ export function App(): JSX.Element {
   };
 
   return (
-    <OperatorConsoleProvider value={{ reportApiStatus: setApiStatus, reportWebSocketStatus: setWsStatus, pushToast }}>
+    <OperatorConsoleProvider value={{ reportApiStatus: () => undefined, reportWebSocketStatus: setWsStatus, pushToast }}>
       <Routes>
-        <Route path="/" element={<AppShell apiStatus={apiStatus} wsStatus={wsStatus} toasts={toasts} theme={preferences.theme} compactLayout={preferences.compactLayout} />}>
+        <Route path="/" element={<AppShell baseUrl={preferences.baseUrl} wsStatus={wsStatus} toasts={toasts} theme={preferences.theme} compactLayout={preferences.compactLayout} />}>
           <Route index element={<ErrorBoundary><DashboardPage baseUrl={preferences.baseUrl} /></ErrorBoundary>} />
           <Route path="jobs" element={<ErrorBoundary><JobsPage baseUrl={preferences.baseUrl} /></ErrorBoundary>} />
           <Route path="jobs/:jobId" element={<ErrorBoundary><JobDetailPage baseUrl={preferences.baseUrl} /></ErrorBoundary>} />
