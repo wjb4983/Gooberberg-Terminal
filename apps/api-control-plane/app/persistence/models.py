@@ -77,6 +77,19 @@ class BacktestRunRow(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
 
 
+class TestingRunRow(Base):
+    __tablename__ = "testing_runs"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    job_id: Mapped[str] = mapped_column(String(36), index=True, nullable=False)
+    mode: Mapped[str] = mapped_column(String(32), nullable=False)
+    target_refs: Mapped[list[dict[str, object]]] = mapped_column(JSON, nullable=False, default=list)
+    parameters: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False, default=dict)
+    result_summary: Mapped[dict[str, object] | None] = mapped_column(JSON, nullable=True)
+    status: Mapped[str] = mapped_column(String(32), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
+
+
 class JobEventRow(Base):
     __tablename__ = "job_events"
 

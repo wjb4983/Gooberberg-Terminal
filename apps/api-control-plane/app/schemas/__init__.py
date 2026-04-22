@@ -39,6 +39,14 @@ from app.schemas.training_runs import RunStatus, TrainingRunCreateRequest, Train
 from app.schemas.parameter_sweeps import ParameterSweepCreateRequest, ParameterSweepResponse
 from app.schemas.parameter_sets import ParameterSetCloneRequest, ParameterSetCreateRequest, ParameterSetResponse
 from app.schemas.backtest_runs import BacktestRunCreateRequest, BacktestRunResponse
+from app.schemas.testing_runs import (
+    TestingArtifactReference,
+    TestingResultSummary,
+    TestingRunCreateRequest,
+    TestingRunMode,
+    TestingRunResponse,
+    TestingTargetReference,
+)
 from app.schemas.market_data import (
     MarketDataCacheCoverageResponse,
     MarketDataDatasetLookupResponse,
@@ -102,6 +110,12 @@ __all__ = [
     "ParameterSetResponse",
     "BacktestRunCreateRequest",
     "BacktestRunResponse",
+    "TestingRunMode",
+    "TestingTargetReference",
+    "TestingArtifactReference",
+    "TestingResultSummary",
+    "TestingRunCreateRequest",
+    "TestingRunResponse",
     "MarketDataIngestionRequest",
     "MarketDataIngestionResponse",
     "MarketDataCacheCoverageResponse",
