@@ -17,9 +17,11 @@ from app.domain.parameter_sweeps import Service as ParameterSweepService
 from app.domain.parameter_sets import Repository as ParameterSetRepository
 from app.domain.parameter_sets import Service as ParameterSetService
 from app.domain.task_registry import TaskRegistry
+from app.domain.testing_runs import Repository as TestingRunRepository
+from app.domain.testing_runs import Service as TestingRunService
 from app.domain.training_runs import Repository as TrainingRunRepository
 from app.domain.training_runs import Service as TrainingRunService
-from app.persistence.models import BacktestRunRow, ParameterSweepRunRow, TrainingRunRow
+from app.persistence.models import BacktestRunRow, ParameterSweepRunRow, TestingRunRow, TrainingRunRow
 from app.persistence.repositories import GraphSqlRepository, MarketDataSqlRepository, RunSqlRepository
 
 
@@ -58,6 +60,10 @@ def get_parameter_set_service(session: Session = Depends(get_db_session)) -> Par
 
 def get_backtest_run_service(session: Session = Depends(get_db_session)) -> BacktestRunService:
     return BacktestRunService(BacktestRunRepository(RunSqlRepository(session, BacktestRunRow)))
+
+
+def get_testing_run_service(session: Session = Depends(get_db_session)) -> TestingRunService:
+    return TestingRunService(TestingRunRepository(RunSqlRepository(session, TestingRunRow)))
 
 
 def get_graph_service(session: Session = Depends(get_db_session)) -> GraphService:
