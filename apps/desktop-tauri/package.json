@@ -17,10 +17,14 @@
     "@gb/schemas": "workspace:*",
     "@gb/ui-components": "workspace:*",
     "@tanstack/react-query": "^5.74.4",
-    "react": "^19.1.0",
-    "react-dom": "^19.1.0",
-    "react-router-dom": "^7.5.2",
     "@tauri-apps/api": "^2.4.0",
+    "cytoscape": "^3.31.2",
+    "plotly.js-basic-dist-min": "^3.0.1",
+    "react": "^19.1.0",
+    "react-cytoscapejs": "^2.0.0",
+    "react-dom": "^19.1.0",
+    "react-plotly.js": "^2.6.0",
+    "react-router-dom": "^7.5.2",
     "reactflow": "^11.11.4"
   },
   "devDependencies": {
