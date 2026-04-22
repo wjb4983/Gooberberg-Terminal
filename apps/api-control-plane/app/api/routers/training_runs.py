@@ -8,7 +8,7 @@ from app.api.routers.jobs import _broadcast_job_event
 from app.core.logging import request_id_ctx_var
 from app.domain.training_runs import Service as TrainingRunService
 from app.jobs.models import JobEnvelope, JobLifecycleEvent, JobStatus
-from app.jobs.store import job_state_store
+from app.jobs.store import job_state_store, job_submission_store
 from app.schemas import TrainingRunCreateRequest, TrainingRunResponse
 
 router = APIRouter(prefix="/training-runs", tags=["training-runs"])
@@ -58,6 +58,7 @@ async def create_training_run(
         updated_at=accepted_at,
     )
     job_state_store.upsert(queued_event)
+    job_submission_store.upsert(envelope)
     request.app.state.job_event_repository.persist_event(queued_event)
     await request.app.state.job_queue.enqueue(envelope)
     await _broadcast_job_event(queued_event)

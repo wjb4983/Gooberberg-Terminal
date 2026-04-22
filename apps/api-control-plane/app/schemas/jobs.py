@@ -7,6 +7,9 @@ from pydantic import BaseModel, Field
 
 from app.jobs.models import JobStatus
 
+JOB_CANCELABLE_STATES: frozenset[JobStatus] = frozenset({JobStatus.QUEUED, JobStatus.RUNNING})
+JOB_RETRYABLE_STATES: frozenset[JobStatus] = frozenset({JobStatus.FAILED, JobStatus.CANCELLED})
+
 
 class RunType(StrEnum):
     TRAINING = "training"
