@@ -1,5 +1,7 @@
 import { GbApiClient } from '@gb/api-client';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
+import { JobLifecyclePanel } from '../components/JobLifecyclePanel';
 
 interface ParameterSweepsPageProps { baseUrl: string; }
 interface ParameterSweepItem {
@@ -22,18 +24,27 @@ async function requestJson<T>(baseUrl: string, path: string, init?: RequestInit)
 
 export function ParameterSweepsPage({ baseUrl }: ParameterSweepsPageProps): JSX.Element {
   const client = useMemo(() => new GbApiClient({ baseHttpUrl: baseUrl }), [baseUrl]);
+  const [searchParams, setSearchParams] = useSearchParams();
   const [sweeps, setSweeps] = useState<ParameterSweepItem[]>([]);
   const [configs, setConfigs] = useState<ModelConfigItem[]>([]);
   const [selectedConfigId, setSelectedConfigId] = useState('');
   const [objective, setObjective] = useState('maximize_sharpe');
   const [searchSpaceJson, setSearchSpaceJson] = useState('{"learning_rate": [0.001, 0.01], "hidden_size": [16, 32, 64]}');
-  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [eventsByJob, setEventsByJob] = useState<Record<string, RunEvent[]>>({});
   const [summary, setSummary] = useState('No run selected.');
   const [error, setError] = useState<string | null>(null);
   const lastSeqRef = useRef<number | undefined>(undefined);
 
-  const selectedSweep = useMemo(() => sweeps.find((item) => item.id === selectedId) ?? null, [sweeps, selectedId]);
+  const selectedJobId = searchParams.get('job_id');
+  const selectedSweep = useMemo(() => sweeps.find((item) => item.job_id === selectedJobId) ?? null, [sweeps, selectedJobId]);
+
+  const setSelectedJobId = (jobId: string): void => {
+    setSearchParams((previous) => {
+      const next = new URLSearchParams(previous);
+      next.set('job_id', jobId);
+      return next;
+    });
+  };
 
   const load = useCallback(async (): Promise<void> => {
     try {
@@ -85,7 +96,7 @@ export function ParameterSweepsPage({ baseUrl }: ParameterSweepsPageProps): JSX.
         body: JSON.stringify({ model_config_id: selectedConfigId, objective, search_space: parsedSearchSpace }),
       });
       setSweeps((previous) => [created, ...previous]);
-      setSelectedId(created.id);
+      setSelectedJobId(created.job_id);
       setSummary('queued: parameter sweep accepted by api-control-plane');
     } catch (createError) {
       setError(createError instanceof Error ? createError.message : 'Failed launching sweep.');
@@ -119,21 +130,21 @@ export function ParameterSweepsPage({ baseUrl }: ParameterSweepsPageProps): JSX.
 
       <div className="card jobs-card">
         <table className="jobs-table">
-          <thead><tr><th>ID</th><th>Objective</th><th>Model Config</th><th>Status</th><th>Created</th></tr></thead>
+          <thead><tr><th>ID</th><th>Job ID</th><th>Objective</th><th>Model Config</th><th>Status</th><th>Created</th></tr></thead>
           <tbody>
-            {sweeps.length === 0 ? <tr><td colSpan={5}>No sweeps yet.</td></tr> : null}
+            {sweeps.length === 0 ? <tr><td colSpan={6}>No sweeps yet.</td></tr> : null}
             {sweeps.map((sweep) => (
-              <tr key={sweep.id} onClick={() => setSelectedId(sweep.id)} style={{ cursor: 'pointer', background: selectedId === sweep.id ? 'rgba(127,127,127,0.12)' : undefined }}>
-                <td>{sweep.id.slice(0, 8)}</td><td>{sweep.objective}</td><td>{sweep.model_config_id.slice(0, 8)}</td><td>{sweep.status}</td><td>{new Date(sweep.created_at).toLocaleString()}</td>
+              <tr key={sweep.id} onClick={() => setSelectedJobId(sweep.job_id)} style={{ cursor: 'pointer', background: selectedJobId === sweep.job_id ? 'rgba(127,127,127,0.12)' : undefined }}>
+                <td>{sweep.id.slice(0, 8)}</td><td>{sweep.job_id.slice(0, 8)}</td><td>{sweep.objective}</td><td>{sweep.model_config_id.slice(0, 8)}</td><td>{sweep.status}</td><td>{new Date(sweep.created_at).toLocaleString()}</td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
 
-      <div className="card" style={{ marginTop: '1rem' }}>
-        <h3>Sweep detail</h3>
-        {!selectedSweep ? <p className="muted">Select a sweep to inspect details.</p> : (
+      <JobLifecyclePanel
+        submitContent={<p>Launch a sweep and persist selection via <code>?job_id=...</code> so deep links reopen the same run.</p>}
+        runningContent={!selectedSweep ? <p className="muted">Select a sweep to inspect details.</p> : (
           <>
             <p><strong>Persisted summary:</strong> {summary}</p>
             <ul>
@@ -144,7 +155,8 @@ export function ParameterSweepsPage({ baseUrl }: ParameterSweepsPageProps): JSX.
             </ul>
           </>
         )}
-      </div>
+        artifactContent={!selectedSweep ? <p className="muted">Select a sweep to open job detail.</p> : <p><Link to={`/jobs/${encodeURIComponent(selectedSweep.job_id)}`}>Open run detail view for job {selectedSweep.job_id}</Link></p>}
+      />
     </section>
   );
 }

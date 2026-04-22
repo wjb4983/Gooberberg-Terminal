@@ -4,14 +4,9 @@ import { AppShell } from './layout/AppShell';
 import { StrategiesPage } from './pages/StrategiesPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { JobsPage } from './pages/JobsPage';
-import { ModelsPage } from './pages/ModelsPage';
 import { SettingsPage } from './pages/SettingsPage';
-import { GraphPage } from './pages/GraphPage';
 import { AlertsHealthPage } from './pages/AlertsHealthPage';
 import { PortfolioPage } from './pages/PortfolioPage';
-import { TrainingRunsPage } from './pages/TrainingRunsPage';
-import { ParameterSweepsPage } from './pages/ParameterSweepsPage';
-import { BacktestsPage } from './pages/BacktestsPage';
 import { DataCachePage } from './pages/DataCachePage';
 import { loadPreferences, savePreferences } from './settings/preferences';
 import { createTokenStorage } from './settings/tokenStorage';
@@ -19,6 +14,12 @@ import { useMemo, useState } from 'react';
 import { OperatorConsoleProvider } from './context/OperatorConsoleContext';
 import type { ThemePreference } from './types/api';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { BuildingModelsPage } from './pages/BuildingModelsPage';
+import { ParameterizationPage } from './pages/ParameterizationPage';
+import { TestingPage } from './pages/TestingPage';
+import { BacktestingPage } from './pages/BacktestingPage';
+import { GraphingPage } from './pages/GraphingPage';
+import { JobDetailPage } from './pages/JobDetailPage';
 
 interface ToastItem {
   id: number;
@@ -64,14 +65,23 @@ export function App(): JSX.Element {
         <Route path="/" element={<AppShell apiStatus={apiStatus} wsStatus={wsStatus} toasts={toasts} theme={preferences.theme} compactLayout={preferences.compactLayout} />}>
           <Route index element={<ErrorBoundary><DashboardPage baseUrl={preferences.baseUrl} /></ErrorBoundary>} />
           <Route path="jobs" element={<ErrorBoundary><JobsPage baseUrl={preferences.baseUrl} /></ErrorBoundary>} />
-          <Route path="models" element={<ErrorBoundary><ModelsPage baseUrl={preferences.baseUrl} /></ErrorBoundary>} />
-          <Route path="training-runs" element={<ErrorBoundary><TrainingRunsPage baseUrl={preferences.baseUrl} /></ErrorBoundary>} />
-          <Route path="parameter-sweeps" element={<ErrorBoundary><ParameterSweepsPage baseUrl={preferences.baseUrl} /></ErrorBoundary>} />
-          <Route path="backtests" element={<ErrorBoundary><BacktestsPage baseUrl={preferences.baseUrl} /></ErrorBoundary>} />
+          <Route path="jobs/:jobId" element={<ErrorBoundary><JobDetailPage baseUrl={preferences.baseUrl} /></ErrorBoundary>} />
+
+          <Route path="building-models" element={<ErrorBoundary><BuildingModelsPage baseUrl={preferences.baseUrl} /></ErrorBoundary>} />
+          <Route path="parameterization" element={<ErrorBoundary><ParameterizationPage baseUrl={preferences.baseUrl} /></ErrorBoundary>} />
+          <Route path="testing" element={<ErrorBoundary><TestingPage baseUrl={preferences.baseUrl} /></ErrorBoundary>} />
+          <Route path="full-on-backtesting" element={<ErrorBoundary><BacktestingPage baseUrl={preferences.baseUrl} /></ErrorBoundary>} />
+          <Route path="graphing" element={<ErrorBoundary><GraphingPage baseUrl={preferences.baseUrl} /></ErrorBoundary>} />
+
+          <Route path="models" element={<ErrorBoundary><BuildingModelsPage baseUrl={preferences.baseUrl} /></ErrorBoundary>} />
+          <Route path="training-runs" element={<ErrorBoundary><TestingPage baseUrl={preferences.baseUrl} /></ErrorBoundary>} />
+          <Route path="parameter-sweeps" element={<ErrorBoundary><ParameterizationPage baseUrl={preferences.baseUrl} /></ErrorBoundary>} />
+          <Route path="backtests" element={<ErrorBoundary><BacktestingPage baseUrl={preferences.baseUrl} /></ErrorBoundary>} />
+          <Route path="graph" element={<ErrorBoundary><GraphingPage baseUrl={preferences.baseUrl} /></ErrorBoundary>} />
+
           <Route path="data-cache" element={<ErrorBoundary><DataCachePage baseUrl={preferences.baseUrl} /></ErrorBoundary>} />
           <Route path="strategies" element={<ErrorBoundary><StrategiesPage baseUrl={preferences.baseUrl} /></ErrorBoundary>} />
           <Route path="portfolio" element={<ErrorBoundary><PortfolioPage baseUrl={preferences.baseUrl} /></ErrorBoundary>} />
-          <Route path="graph" element={<ErrorBoundary><GraphPage baseUrl={preferences.baseUrl} /></ErrorBoundary>} />
           <Route path="alerts-health" element={<ErrorBoundary><AlertsHealthPage baseUrl={preferences.baseUrl} defaultSeverity={preferences.filterDefaults.severity} /></ErrorBoundary>} />
           <Route
             path="settings"

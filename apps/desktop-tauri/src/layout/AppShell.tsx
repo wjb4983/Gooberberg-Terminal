@@ -1,19 +1,29 @@
 import { NavLink, Outlet } from 'react-router-dom';
 import type { ThemePreference } from '../types/api';
 
-const navItems = [
-  { label: 'Dashboard', to: '/' },
-  { label: 'Jobs', to: '/jobs' },
-  { label: 'Models', to: '/models' },
-  { label: 'Training Runs', to: '/training-runs' },
-  { label: 'Parameter Sweeps', to: '/parameter-sweeps' },
-  { label: 'Backtests', to: '/backtests' },
-  { label: 'Data Cache', to: '/data-cache' },
-  { label: 'Strategies', to: '/strategies' },
-  { label: 'Portfolio', to: '/portfolio' },
-  { label: 'Graph', to: '/graph' },
-  { label: 'Alerts/Health', to: '/alerts-health' },
-  { label: 'Settings', to: '/settings' },
+const navGroups = [
+  {
+    label: 'Workflows',
+    items: [
+      { label: 'Building Models', to: '/building-models' },
+      { label: 'Parameterization', to: '/parameterization' },
+      { label: 'Testing', to: '/testing' },
+      { label: 'Full-on Backtesting', to: '/full-on-backtesting' },
+      { label: 'Graphing', to: '/graphing' },
+    ],
+  },
+  {
+    label: 'Operations',
+    items: [
+      { label: 'Dashboard', to: '/' },
+      { label: 'Jobs', to: '/jobs' },
+      { label: 'Data Cache', to: '/data-cache' },
+      { label: 'Strategies', to: '/strategies' },
+      { label: 'Portfolio', to: '/portfolio' },
+      { label: 'Alerts/Health', to: '/alerts-health' },
+      { label: 'Settings', to: '/settings' },
+    ],
+  },
 ];
 
 interface AppShellProps {
@@ -30,15 +40,20 @@ export function AppShell({ apiStatus, wsStatus, theme, compactLayout, toasts }: 
       <aside className="sidebar">
         <h1>Gooberberg</h1>
         <nav>
-          <ul>
-            {navItems.map((item) => (
-              <li key={item.to}>
-                <NavLink to={item.to} className={({ isActive }) => (isActive ? 'active-link' : undefined)} end={item.to === '/'}>
-                  {item.label}
-                </NavLink>
-              </li>
-            ))}
-          </ul>
+          {navGroups.map((group) => (
+            <div key={group.label} style={{ marginBottom: '0.75rem' }}>
+              <small className="muted">{group.label}</small>
+              <ul>
+                {group.items.map((item) => (
+                  <li key={item.to}>
+                    <NavLink to={item.to} className={({ isActive }) => (isActive ? 'active-link' : undefined)} end={item.to === '/'}>
+                      {item.label}
+                    </NavLink>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
         </nav>
       </aside>
       <main className="content">

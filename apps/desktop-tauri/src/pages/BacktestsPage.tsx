@@ -1,5 +1,7 @@
 import { GbApiClient } from '@gb/api-client';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
+import { JobLifecyclePanel } from '../components/JobLifecyclePanel';
 
 interface BacktestsPageProps { baseUrl: string; }
 interface BacktestRunItem {
@@ -24,6 +26,7 @@ async function requestJson<T>(baseUrl: string, path: string, init?: RequestInit)
 
 export function BacktestsPage({ baseUrl }: BacktestsPageProps): JSX.Element {
   const client = useMemo(() => new GbApiClient({ baseHttpUrl: baseUrl }), [baseUrl]);
+  const [searchParams, setSearchParams] = useSearchParams();
   const [runs, setRuns] = useState<BacktestRunItem[]>([]);
   const [configs, setConfigs] = useState<ModelConfigItem[]>([]);
   const [strategyKey, setStrategyKey] = useState('mean_reversion');
@@ -31,13 +34,21 @@ export function BacktestsPage({ baseUrl }: BacktestsPageProps): JSX.Element {
   const [windowStart, setWindowStart] = useState('2024-01-01T00:00:00Z');
   const [windowEnd, setWindowEnd] = useState('2024-12-31T00:00:00Z');
   const [paramsJson, setParamsJson] = useState('{"slippage_bps": 2}');
-  const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
   const [eventsByJob, setEventsByJob] = useState<Record<string, RunEvent[]>>({});
   const [summary, setSummary] = useState('No run selected.');
   const [error, setError] = useState<string | null>(null);
   const lastSeqRef = useRef<number | undefined>(undefined);
 
-  const selectedRun = useMemo(() => runs.find((item) => item.id === selectedRunId) ?? null, [runs, selectedRunId]);
+  const selectedJobId = searchParams.get('job_id');
+  const selectedRun = useMemo(() => runs.find((item) => item.job_id === selectedJobId) ?? null, [runs, selectedJobId]);
+
+  const setSelectedJobId = (jobId: string): void => {
+    setSearchParams((previous) => {
+      const next = new URLSearchParams(previous);
+      next.set('job_id', jobId);
+      return next;
+    });
+  };
 
   const load = useCallback(async (): Promise<void> => {
     try {
@@ -93,7 +104,7 @@ export function BacktestsPage({ baseUrl }: BacktestsPageProps): JSX.Element {
         }),
       });
       setRuns((prev) => [created, ...prev]);
-      setSelectedRunId(created.id);
+      setSelectedJobId(created.job_id);
       setSummary('queued: backtest run accepted by api-control-plane');
     } catch (createError) {
       setError(createError instanceof Error ? createError.message : 'Failed launching backtest.');
@@ -129,21 +140,21 @@ export function BacktestsPage({ baseUrl }: BacktestsPageProps): JSX.Element {
 
       <div className="card jobs-card">
         <table className="jobs-table">
-          <thead><tr><th>ID</th><th>Strategy</th><th>Model Config</th><th>Status</th><th>Window</th></tr></thead>
+          <thead><tr><th>ID</th><th>Job ID</th><th>Strategy</th><th>Model Config</th><th>Status</th><th>Window</th></tr></thead>
           <tbody>
-            {runs.length === 0 ? <tr><td colSpan={5}>No backtests yet.</td></tr> : null}
+            {runs.length === 0 ? <tr><td colSpan={6}>No backtests yet.</td></tr> : null}
             {runs.map((run) => (
-              <tr key={run.id} onClick={() => setSelectedRunId(run.id)} style={{ cursor: 'pointer', background: selectedRunId === run.id ? 'rgba(127,127,127,0.12)' : undefined }}>
-                <td>{run.id.slice(0, 8)}</td><td>{run.strategy_key}</td><td>{run.model_config_id ? run.model_config_id.slice(0, 8) : '-'}</td><td>{run.status}</td><td>{new Date(run.window_start).toLocaleDateString()} → {new Date(run.window_end).toLocaleDateString()}</td>
+              <tr key={run.id} onClick={() => setSelectedJobId(run.job_id)} style={{ cursor: 'pointer', background: selectedJobId === run.job_id ? 'rgba(127,127,127,0.12)' : undefined }}>
+                <td>{run.id.slice(0, 8)}</td><td>{run.job_id.slice(0, 8)}</td><td>{run.strategy_key}</td><td>{run.model_config_id ? run.model_config_id.slice(0, 8) : '-'}</td><td>{run.status}</td><td>{new Date(run.window_start).toLocaleDateString()} → {new Date(run.window_end).toLocaleDateString()}</td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
 
-      <div className="card" style={{ marginTop: '1rem' }}>
-        <h3>Backtest detail</h3>
-        {!selectedRun ? <p className="muted">Select a run to inspect details.</p> : (
+      <JobLifecyclePanel
+        submitContent={<p>Submit a backtest and revisit it through URL restoration with <code>?job_id=...</code>.</p>}
+        runningContent={!selectedRun ? <p className="muted">Select a run to inspect details.</p> : (
           <>
             <p><strong>Persisted summary:</strong> {summary}</p>
             <ul>
@@ -154,7 +165,8 @@ export function BacktestsPage({ baseUrl }: BacktestsPageProps): JSX.Element {
             </ul>
           </>
         )}
-      </div>
+        artifactContent={!selectedRun ? <p className="muted">Select a run to open job detail.</p> : <p><Link to={`/jobs/${encodeURIComponent(selectedRun.job_id)}`}>Open run detail view for job {selectedRun.job_id}</Link></p>}
+      />
     </section>
   );
 }

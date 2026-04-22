@@ -1,5 +1,7 @@
 import { GbApiClient } from '@gb/api-client';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
+import { JobLifecyclePanel } from '../components/JobLifecyclePanel';
 
 interface TrainingRunsPageProps {
   baseUrl: string;
@@ -42,9 +44,9 @@ async function requestJson<T>(baseUrl: string, path: string, init?: RequestInit)
 
 export function TrainingRunsPage({ baseUrl }: TrainingRunsPageProps): JSX.Element {
   const client = useMemo(() => new GbApiClient({ baseHttpUrl: baseUrl }), [baseUrl]);
+  const [searchParams, setSearchParams] = useSearchParams();
   const [runs, setRuns] = useState<TrainingRunItem[]>([]);
   const [configs, setConfigs] = useState<ModelConfigItem[]>([]);
-  const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
   const [datasetId, setDatasetId] = useState('equities_daily_v1');
   const [parametersJson, setParametersJson] = useState('{"epochs": 20, "seed": 42}');
   const [selectedConfigId, setSelectedConfigId] = useState('');
@@ -53,7 +55,16 @@ export function TrainingRunsPage({ baseUrl }: TrainingRunsPageProps): JSX.Elemen
   const [error, setError] = useState<string | null>(null);
   const lastSeqRef = useRef<number | undefined>(undefined);
 
-  const selectedRun = useMemo(() => runs.find((run) => run.id === selectedRunId) ?? null, [runs, selectedRunId]);
+  const selectedJobId = searchParams.get('job_id');
+  const selectedRun = useMemo(() => runs.find((run) => run.job_id === selectedJobId) ?? null, [runs, selectedJobId]);
+
+  const setSelectedJobId = (jobId: string): void => {
+    setSearchParams((previous) => {
+      const next = new URLSearchParams(previous);
+      next.set('job_id', jobId);
+      return next;
+    });
+  };
 
   const load = useCallback(async (): Promise<void> => {
     setError(null);
@@ -127,7 +138,7 @@ export function TrainingRunsPage({ baseUrl }: TrainingRunsPageProps): JSX.Elemen
         }),
       });
       setRuns((previous) => [created, ...previous]);
-      setSelectedRunId(created.id);
+      setSelectedJobId(created.job_id);
       setJobDetail('queued: training run accepted by api-control-plane');
     } catch (createError) {
       setError(createError instanceof Error ? createError.message : 'Failed launching training run.');
@@ -164,21 +175,21 @@ export function TrainingRunsPage({ baseUrl }: TrainingRunsPageProps): JSX.Elemen
 
       <div className="card jobs-card">
         <table className="jobs-table">
-          <thead><tr><th>ID</th><th>Model Config</th><th>Dataset</th><th>Status</th><th>Created</th></tr></thead>
+          <thead><tr><th>ID</th><th>Job ID</th><th>Model Config</th><th>Dataset</th><th>Status</th><th>Created</th></tr></thead>
           <tbody>
-            {runs.length === 0 ? <tr><td colSpan={5}>No training runs yet.</td></tr> : null}
+            {runs.length === 0 ? <tr><td colSpan={6}>No training runs yet.</td></tr> : null}
             {runs.map((run) => (
-              <tr key={run.id} onClick={() => setSelectedRunId(run.id)} style={{ cursor: 'pointer', background: selectedRunId === run.id ? 'rgba(127,127,127,0.12)' : undefined }}>
-                <td>{run.id.slice(0, 8)}</td><td>{run.model_config_id.slice(0, 8)}</td><td>{run.dataset_id}</td><td>{run.status}</td><td>{new Date(run.created_at).toLocaleString()}</td>
+              <tr key={run.id} onClick={() => setSelectedJobId(run.job_id)} style={{ cursor: 'pointer', background: selectedJobId === run.job_id ? 'rgba(127,127,127,0.12)' : undefined }}>
+                <td>{run.id.slice(0, 8)}</td><td>{run.job_id.slice(0, 8)}</td><td>{run.model_config_id.slice(0, 8)}</td><td>{run.dataset_id}</td><td>{run.status}</td><td>{new Date(run.created_at).toLocaleString()}</td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
 
-      <div className="card" style={{ marginTop: '1rem' }}>
-        <h3>Run detail</h3>
-        {!selectedRun ? <p className="muted">Select a run to inspect persisted summary + live logs.</p> : (
+      <JobLifecyclePanel
+        submitContent={<p>Select config + dataset, then launch a server job. The selected run is restored by <code>?job_id=...</code>.</p>}
+        runningContent={!selectedRun ? <p className="muted">Select a run to inspect persisted summary + live logs.</p> : (
           <>
             <p><strong>Run ID:</strong> {selectedRun.id}</p>
             <p><strong>Job:</strong> {selectedRun.job_id}</p>
@@ -191,7 +202,8 @@ export function TrainingRunsPage({ baseUrl }: TrainingRunsPageProps): JSX.Elemen
             </ul>
           </>
         )}
-      </div>
+        artifactContent={!selectedRun ? <p className="muted">Select a run to open its detail route.</p> : <p><Link to={`/jobs/${encodeURIComponent(selectedRun.job_id)}`}>Open run detail view for job {selectedRun.job_id}</Link></p>}
+      />
     </section>
   );
 }
