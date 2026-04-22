@@ -1,4 +1,5 @@
 import logging
+from datetime import datetime
 from collections.abc import AsyncIterator
 from collections.abc import Mapping
 from contextlib import AsyncExitStack, asynccontextmanager
@@ -56,6 +57,7 @@ async def app_lifespan(app: FastAPI) -> AsyncIterator[None]:
         app.state.task_registry = task_registry
         app.state.job_runner_service = JobRunnerService(JobRunnerRepository(), task_registry)
         app.state.job_event_repository = JobEventRepository(app.state.database.session_factory)
+        app.state.last_worker_heartbeat_at: datetime | None = None
         await stack.enter_async_context(lifespan_redis(app))
         await stack.enter_async_context(lifespan_portfolio_cache(app))
         yield
@@ -71,7 +73,15 @@ def create_app() -> FastAPI:
         lifespan=app_lifespan,
     )
     app.add_middleware(RequestIDMiddleware)
-    app.add_middleware(BearerTokenAuthMiddleware, health_paths={f"{settings.api_prefix}/health", "/healthz"})
+    app.add_middleware(
+        BearerTokenAuthMiddleware,
+        health_paths={
+            f"{settings.api_prefix}/health",
+            f"{settings.api_prefix}/health/queue",
+            f"{settings.api_prefix}/health/queue/heartbeat",
+            "/healthz",
+        },
+    )
 
     app.include_router(health_router, prefix=settings.api_prefix)
     app.include_router(alerts_router, prefix=settings.api_prefix)

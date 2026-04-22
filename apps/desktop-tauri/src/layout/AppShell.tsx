@@ -1,5 +1,6 @@
 import { NavLink, Outlet } from 'react-router-dom';
 import type { ThemePreference } from '../types/api';
+import { SystemStatusBar } from '../components/SystemStatusBar';
 
 const navGroups = [
   {
@@ -27,14 +28,14 @@ const navGroups = [
 ];
 
 interface AppShellProps {
-  apiStatus: 'connected' | 'degraded' | 'offline';
+  baseUrl: string;
   wsStatus: string;
   theme: ThemePreference;
   compactLayout: boolean;
   toasts: Array<{ id: number; message: string; tone: 'warning' | 'critical' }>;
 }
 
-export function AppShell({ apiStatus, wsStatus, theme, compactLayout, toasts }: AppShellProps): JSX.Element {
+export function AppShell({ baseUrl, wsStatus, theme, compactLayout, toasts }: AppShellProps): JSX.Element {
   return (
     <div className={`app-shell theme-${theme} ${compactLayout ? 'compact-layout' : ''}`}>
       <aside className="sidebar">
@@ -57,10 +58,7 @@ export function AppShell({ apiStatus, wsStatus, theme, compactLayout, toasts }: 
         </nav>
       </aside>
       <main className="content">
-        <div className="status-bar">
-          <span>API: <strong>{apiStatus}</strong></span>
-          <span>WebSocket: <strong>{wsStatus}</strong></span>
-        </div>
+        <SystemStatusBar baseUrl={baseUrl} wsStatus={wsStatus} />
         <Outlet />
       </main>
       <div className="toast-layer">
