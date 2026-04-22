@@ -1,48 +1,19 @@
-import { GbApiClient, parseJobLifecyclePayload } from '@gb/api-client';
-import type { JobLifecyclePayload } from '@gb/schemas';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect } from 'react';
 import { DataTable } from '../components/DataTable';
 import { useOperatorConsole } from '../context/OperatorConsoleContext';
+import { useJobLifecycle } from '../hooks/useJobLifecycle';
 
 interface JobsPageProps {
   baseUrl: string;
 }
 
 export function JobsPage({ baseUrl }: JobsPageProps): JSX.Element {
-  const client = useMemo(() => new GbApiClient({ baseHttpUrl: baseUrl }), [baseUrl]);
-  const [events, setEvents] = useState<JobLifecyclePayload[]>([]);
-  const [connectionState, setConnectionState] = useState('connecting');
-  const lastSeqRef = useRef<number | undefined>(undefined);
+  const { items: events, connectionState } = useJobLifecycle(baseUrl);
   const { reportWebSocketStatus } = useOperatorConsole();
 
   useEffect(() => {
     reportWebSocketStatus(connectionState);
   }, [connectionState, reportWebSocketStatus]);
-
-  useEffect(() => {
-    const connection = client.connectTopicWebSocket({
-      topics: ['jobs'],
-      getResumeSeq: () => lastSeqRef.current,
-      onStatus: setConnectionState,
-      onEvent: (event) => {
-        if (event.topic !== 'jobs') {
-          return;
-        }
-
-        lastSeqRef.current = event.seq;
-        const payload = parseJobLifecyclePayload(event.payload);
-        if (!payload) {
-          return;
-        }
-
-        setEvents((previous) => [payload, ...previous].slice(0, 100));
-      },
-    });
-
-    return () => {
-      connection.close();
-    };
-  }, [client]);
 
   return (
     <section>

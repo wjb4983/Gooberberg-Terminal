@@ -50,6 +50,17 @@ export interface ApiClientOptions {
   apiPrefix?: string;
   websocketUrl?: string;
   fetchImpl?: typeof fetch;
+  authHeaderProvider?: AuthHeaderProvider;
+}
+
+export type AuthHeaderProvider = (path: string, init: ApiRequestOptions) => string | null | undefined | Promise<string | null | undefined>;
+
+export type ApiRequestQuery = Record<string, string | number | boolean | null | undefined>;
+
+export interface ApiRequestOptions extends Omit<RequestInit, 'headers'> {
+  headers?: HeadersInit;
+  query?: ApiRequestQuery;
+  includeAuth?: boolean;
 }
 
 export interface ConnectWebSocketOptions {
@@ -73,18 +84,21 @@ export class GbApiClient {
   private readonly baseHttpUrl: string;
   private readonly apiPrefix: string;
   private readonly websocketUrl?: string;
+  private readonly authHeaderProvider?: AuthHeaderProvider;
 
   constructor(options: ApiClientOptions) {
     this.fetchImpl = options.fetchImpl ?? fetch;
     this.baseHttpUrl = options.baseHttpUrl.replace(/\/$/, '');
     this.apiPrefix = options.apiPrefix ?? '/api/v1';
     this.websocketUrl = options.websocketUrl;
+    this.authHeaderProvider = options.authHeaderProvider;
   }
 
   async getHealth(): Promise<HealthResponse> {
     const payload = await this.requestJson<unknown>(`${this.apiPrefix}/health`, {
       method: 'GET',
       headers: { Accept: 'application/json' },
+      includeAuth: false,
     });
 
     return parseHealthResponse(payload);
@@ -320,6 +334,12 @@ export class GbApiClient {
   async createStrategyInstance(request: CreateStrategyInstanceRequest): Promise<StrategyInstance> { const payload = await this.requestJson<unknown>(`${this.apiPrefix}/strategies/instances`, { method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' }, body: JSON.stringify({ strategy_key: request.strategyKey, mode: request.mode, intent: request.intent ?? { params: {} } }) }); return parseStrategyInstance(payload); }
   async startStrategyInstance(instanceId: string): Promise<StrategyInstanceActionResponse> { const payload = await this.requestJson<unknown>(`${this.apiPrefix}/strategies/instances/${encodeURIComponent(instanceId)}/start`, { method: 'POST', headers: { Accept: 'application/json' } }); return parseStrategyInstanceActionResponse(payload); }
   async stopStrategyInstance(instanceId: string): Promise<StrategyInstanceActionResponse> { const payload = await this.requestJson<unknown>(`${this.apiPrefix}/strategies/instances/${encodeURIComponent(instanceId)}/stop`, { method: 'POST', headers: { Accept: 'application/json' } }); return parseStrategyInstanceActionResponse(payload); }
+  async cancelJob(jobId: string): Promise<JobStatusResponse> { const payload = await this.requestJson<unknown>(`${this.apiPrefix}/jobs/${encodeURIComponent(jobId)}/cancel`, { method: 'POST', headers: { Accept: 'application/json' } }); return parseJobStatusResponse(payload); }
+  async retryJob(jobId: string): Promise<JobStatusResponse> { const payload = await this.requestJson<unknown>(`${this.apiPrefix}/jobs/${encodeURIComponent(jobId)}/retry`, { method: 'POST', headers: { Accept: 'application/json' } }); return parseJobStatusResponse(payload); }
+
+  request<T>(path: string, options: ApiRequestOptions = {}): Promise<T> {
+    return this.requestJson<T>(path, options);
+  }
 
   connectWebSocket(options: ConnectWebSocketOptions = {}): WebSocket {
     const wsUrl = this.resolveWebSocketUrl();
@@ -377,10 +397,41 @@ export class GbApiClient {
     };
   }
 
-  private async requestJson<T>(path: string, init: RequestInit): Promise<T> {
-    const response = await this.fetchImpl(`${this.baseHttpUrl}${path}`, init);
+  private async requestJson<T>(path: string, init: ApiRequestOptions): Promise<T> {
+    const fullPath = this.resolveRequestPath(path, init.query);
+    const requestInit = await this.resolveRequestInit(path, init);
+    const response = await this.fetchImpl(`${this.baseHttpUrl}${fullPath}`, requestInit);
     if (!response.ok) throw new Error(`Request failed for ${path} with status ${response.status}`);
     return (await response.json()) as T;
+  }
+
+  private resolveRequestPath(path: string, query?: ApiRequestQuery): string {
+    if (!query) return path;
+    const params = new URLSearchParams();
+    Object.entries(query).forEach(([key, value]) => {
+      if (value === undefined || value === null) return;
+      params.set(key, String(value));
+    });
+    const serializedQuery = params.toString();
+    if (!serializedQuery) return path;
+    const separator = path.includes('?') ? '&' : '?';
+    return `${path}${separator}${serializedQuery}`;
+  }
+
+  private async resolveRequestInit(path: string, init: ApiRequestOptions): Promise<RequestInit> {
+    const { includeAuth = true, query: _query, headers, ...requestInit } = init;
+    const normalizedHeaders = new Headers(headers);
+    const hasAuthorization = normalizedHeaders.has('Authorization');
+    if (includeAuth && !hasAuthorization && this.authHeaderProvider) {
+      const authHeader = await this.authHeaderProvider(path, init);
+      if (authHeader) {
+        normalizedHeaders.set('Authorization', authHeader);
+      }
+    }
+    return {
+      ...requestInit,
+      headers: normalizedHeaders,
+    };
   }
 
   private resolveWebSocketUrl(): string {
