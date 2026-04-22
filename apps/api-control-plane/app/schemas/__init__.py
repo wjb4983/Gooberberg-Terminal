@@ -45,6 +45,14 @@ from app.schemas.backtest_runs import (
     BacktestRunPreflightResponse,
     BacktestRunResponse,
     BacktestStatusResponse,
+from app.schemas.backtest_runs import BacktestRunCreateRequest, BacktestRunResponse
+from app.schemas.testing_runs import (
+    TestingArtifactReference,
+    TestingResultSummary,
+    TestingRunCreateRequest,
+    TestingRunMode,
+    TestingRunResponse,
+    TestingTargetReference,
 )
 from app.schemas.market_data import (
     MarketDataCacheCoverageResponse,
@@ -113,6 +121,12 @@ __all__ = [
     "BacktestRunResponse",
     "BacktestStatusResponse",
     "BacktestPagedResponse",
+    "TestingRunMode",
+    "TestingTargetReference",
+    "TestingArtifactReference",
+    "TestingResultSummary",
+    "TestingRunCreateRequest",
+    "TestingRunResponse",
     "MarketDataIngestionRequest",
     "MarketDataIngestionResponse",
     "MarketDataCacheCoverageResponse",

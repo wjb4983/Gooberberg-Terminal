@@ -17,6 +17,7 @@ from app.persistence.models import (
     ModelConfigRow,
     ParameterSweepRunRow,
     RunArtifactRow,
+    TestingRunRow,
     TrainingRunRow,
     utc_now,
 )
@@ -80,7 +81,11 @@ class ModelConfigSqlRepository:
 
 
 class RunSqlRepository:
-    def __init__(self, session: Session, model: type[TrainingRunRow] | type[ParameterSweepRunRow] | type[BacktestRunRow]) -> None:
+    def __init__(
+        self,
+        session: Session,
+        model: type[TrainingRunRow] | type[ParameterSweepRunRow] | type[BacktestRunRow] | type[TestingRunRow],
+    ) -> None:
         self._session = session
         self._model = model
 
@@ -108,7 +113,7 @@ class RunSqlRepository:
         self._session.commit()
 
     @staticmethod
-    def _to_dict(row: TrainingRunRow | ParameterSweepRunRow | BacktestRunRow) -> dict[str, object]:
+    def _to_dict(row: TrainingRunRow | ParameterSweepRunRow | BacktestRunRow | TestingRunRow) -> dict[str, object]:
         payload: dict[str, object] = {
             "id": row.id,
             "job_id": row.job_id,
@@ -133,7 +138,7 @@ class RunSqlRepository:
                     "provenance_snapshot": dict(row.provenance_snapshot or {}),
                 }
             )
-        else:
+        elif isinstance(row, BacktestRunRow):
             payload.update(
                 {
                     "strategy_key": row.strategy_key,
@@ -141,6 +146,15 @@ class RunSqlRepository:
                     "window_start": row.window_start,
                     "window_end": row.window_end,
                     "parameters": dict(row.parameters or {}),
+                }
+            )
+        else:
+            payload.update(
+                {
+                    "mode": row.mode,
+                    "target_refs": list(row.target_refs or []),
+                    "parameters": dict(row.parameters or {}),
+                    "result_summary": dict(row.result_summary) if row.result_summary is not None else None,
                 }
             )
         return payload

@@ -24,6 +24,8 @@ DOCUMENTED_HTTP_ROUTES = {
     "/api/v1/parameter-sets/{set_id}",
     "/api/v1/parameter-sets/{set_id}/clone",
     "/api/v1/parameter-sets/{set_id}/versions",
+    "/api/v1/testing-runs",
+    "/api/v1/testing-runs/{run_id}",
 }
 
 

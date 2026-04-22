@@ -46,7 +46,7 @@ def test_model_config_route_rejects_invalid_contract_payload() -> None:
     assert response.status_code == 422
 
 
-def test_training_sweep_backtest_routes_emit_queued_job_flow() -> None:
+def test_training_sweep_backtest_testing_routes_emit_queued_job_flow() -> None:
     model_config = client.post(
         "/api/v1/model-configs",
         json={
@@ -116,12 +116,30 @@ def test_training_sweep_backtest_routes_emit_queued_job_flow() -> None:
     )
     assert backtest.status_code == 201
 
+    testing_run = client.post(
+        "/api/v1/testing-runs",
+        json={
+            "mode": "smoke",
+            "target_refs": [{"target_type": "strategy", "target_id": "mean_revert.v1", "label": "MRv1"}],
+            "parameters": {"max_duration_sec": 120},
+        },
+    )
+    assert testing_run.status_code == 201
+    testing_payload = testing_run.json()
+    assert testing_payload["mode"] == "smoke"
+    assert testing_payload["target_refs"][0]["target_type"] == "strategy"
+
     job_events = client.get(f"/api/v1/jobs/{training_payload['job_id']}/events")
     assert job_events.status_code == 200
     queued = job_events.json()[0]
     assert queued["status"] == "queued"
     assert queued["run_type"] == "training"
     assert queued["progress_pct"] == 0.0
+
+    testing_events = client.get(f"/api/v1/jobs/{testing_payload['job_id']}/events")
+    assert testing_events.status_code == 200
+    testing_queued = testing_events.json()[0]
+    assert testing_queued["run_type"] == "testing"
 
 
 def test_parameter_set_clone_and_version_history_routes() -> None:

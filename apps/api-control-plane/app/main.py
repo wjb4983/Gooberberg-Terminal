@@ -20,6 +20,7 @@ from app.api.routers.portfolio import router as portfolio_router
 from app.api.routers.risk import router as risk_router
 from app.api.routers.ws import router as ws_router
 from app.api.routers.strategies import router as strategies_router
+from app.api.routers.testing_runs import router as testing_runs_router
 from app.api.routers.training_runs import router as training_runs_router
 from app.core.config import get_settings
 from app.core.auth import BearerTokenAuthMiddleware
@@ -47,7 +48,7 @@ async def app_lifespan(app: FastAPI) -> AsyncIterator[None]:
         async def _noop_task_runner(payload: Mapping[str, object]) -> dict[str, object]:
             return {"accepted": True, "payload_keys": sorted(payload.keys())}
 
-        for task_type in ("training", "parameter_sweep", "backtest"):
+        for task_type in ("training", "parameter_sweep", "backtest", "testing"):
             task_registry.register_runner(task_type, _noop_task_runner)
 
         database = create_database(get_settings())
@@ -90,6 +91,7 @@ def create_app() -> FastAPI:
     app.include_router(models_router, prefix=settings.api_prefix)
     app.include_router(model_configs_router, prefix=settings.api_prefix)
     app.include_router(training_runs_router, prefix=settings.api_prefix)
+    app.include_router(testing_runs_router, prefix=settings.api_prefix)
     app.include_router(parameter_sweeps_router, prefix=settings.api_prefix)
     app.include_router(parameter_sets_router, prefix=settings.api_prefix)
     app.include_router(backtest_runs_router, prefix=settings.api_prefix)
