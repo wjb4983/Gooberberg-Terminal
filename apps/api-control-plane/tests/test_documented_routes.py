@@ -20,6 +20,10 @@ DOCUMENTED_HTTP_ROUTES = {
     "/api/v1/strategies/instances/{instance_id}/stop",
     "/api/v1/risk/overrides",
     "/api/v1/risk/decisions/recent",
+    "/api/v1/parameter-sets",
+    "/api/v1/parameter-sets/{set_id}",
+    "/api/v1/parameter-sets/{set_id}/clone",
+    "/api/v1/parameter-sets/{set_id}/versions",
 }
 
 

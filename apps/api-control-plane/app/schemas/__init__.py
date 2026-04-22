@@ -37,6 +37,7 @@ from app.schemas.models import (
 from app.schemas.model_configs import ModelConfigCreateRequest, ModelConfigResponse, ModelConfigUpdateRequest, ModelFamily
 from app.schemas.training_runs import RunStatus, TrainingRunCreateRequest, TrainingRunResponse
 from app.schemas.parameter_sweeps import ParameterSweepCreateRequest, ParameterSweepResponse
+from app.schemas.parameter_sets import ParameterSetCloneRequest, ParameterSetCreateRequest, ParameterSetResponse
 from app.schemas.backtest_runs import BacktestRunCreateRequest, BacktestRunResponse
 from app.schemas.market_data import (
     MarketDataCacheCoverageResponse,
@@ -96,6 +97,9 @@ __all__ = [
     "TrainingRunResponse",
     "ParameterSweepCreateRequest",
     "ParameterSweepResponse",
+    "ParameterSetCloneRequest",
+    "ParameterSetCreateRequest",
+    "ParameterSetResponse",
     "BacktestRunCreateRequest",
     "BacktestRunResponse",
     "MarketDataIngestionRequest",

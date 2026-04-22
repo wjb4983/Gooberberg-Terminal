@@ -29,8 +29,10 @@ async def create_parameter_sweep(
             "id": str(run_id),
             "job_id": str(job_id),
             "model_config_id": str(payload.model_config_id),
+            "parameter_set_id": str(payload.parameter_set_id) if payload.parameter_set_id else None,
             "objective": payload.objective,
             "search_space": payload.search_space,
+            "provenance_snapshot": payload.provenance_snapshot,
             "status": "queued",
             "created_at": accepted_at,
         }

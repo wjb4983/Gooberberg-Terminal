@@ -127,8 +127,10 @@ class RunSqlRepository:
             payload.update(
                 {
                     "model_config_id": row.model_config_id,
+                    "parameter_set_id": row.parameter_set_id,
                     "objective": row.objective,
                     "search_space": dict(row.search_space or {}),
+                    "provenance_snapshot": dict(row.provenance_snapshot or {}),
                 }
             )
         else:

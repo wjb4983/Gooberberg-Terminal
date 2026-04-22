@@ -42,9 +42,24 @@ class ParameterSweepRunRow(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
     job_id: Mapped[str] = mapped_column(String(36), index=True, nullable=False)
     model_config_id: Mapped[str] = mapped_column(String(36), ForeignKey("model_configs.id"), nullable=False)
+    parameter_set_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("parameter_sets.id"), nullable=True)
     objective: Mapped[str] = mapped_column(String(255), nullable=False)
     search_space: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False, default=dict)
+    provenance_snapshot: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False, default=dict)
     status: Mapped[str] = mapped_column(String(32), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
+
+
+class ParameterSetRow(Base):
+    __tablename__ = "parameter_sets"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    model_config_id: Mapped[str] = mapped_column(String(36), ForeignKey("model_configs.id"), nullable=False)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    parameters: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False, default=dict)
+    version_tag: Mapped[str] = mapped_column(String(64), nullable=False)
+    parent_set_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("parameter_sets.id"), nullable=True)
+    provenance_metadata: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
 
 
