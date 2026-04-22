@@ -38,6 +38,13 @@ from app.schemas.model_configs import ModelConfigCreateRequest, ModelConfigRespo
 from app.schemas.training_runs import RunStatus, TrainingRunCreateRequest, TrainingRunResponse
 from app.schemas.parameter_sweeps import ParameterSweepCreateRequest, ParameterSweepResponse
 from app.schemas.parameter_sets import ParameterSetCloneRequest, ParameterSetCreateRequest, ParameterSetResponse
+from app.schemas.backtest_runs import (
+    BacktestPagedResponse,
+    BacktestRunCreateRequest,
+    BacktestRunPreflightRequest,
+    BacktestRunPreflightResponse,
+    BacktestRunResponse,
+    BacktestStatusResponse,
 from app.schemas.backtest_runs import BacktestRunCreateRequest, BacktestRunResponse
 from app.schemas.testing_runs import (
     TestingArtifactReference,
@@ -109,7 +116,11 @@ __all__ = [
     "ParameterSetCreateRequest",
     "ParameterSetResponse",
     "BacktestRunCreateRequest",
+    "BacktestRunPreflightRequest",
+    "BacktestRunPreflightResponse",
     "BacktestRunResponse",
+    "BacktestStatusResponse",
+    "BacktestPagedResponse",
     "TestingRunMode",
     "TestingTargetReference",
     "TestingArtifactReference",
