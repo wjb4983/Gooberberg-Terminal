@@ -2,7 +2,7 @@ from collections.abc import Mapping
 from threading import Lock
 from uuid import UUID
 
-from app.jobs.models import JobLifecycleEvent
+from app.jobs.models import JobEnvelope, JobLifecycleEvent
 
 
 class InMemoryJobStateStore:
@@ -27,3 +27,27 @@ class InMemoryJobStateStore:
 
 
 job_state_store = InMemoryJobStateStore()
+
+
+class InMemoryJobSubmissionStore:
+    """Process-local fallback store for latest known job envelopes."""
+
+    def __init__(self) -> None:
+        self._envelopes: dict[UUID, JobEnvelope] = {}
+        self._lock = Lock()
+
+    def upsert(self, envelope: JobEnvelope) -> JobEnvelope:
+        with self._lock:
+            self._envelopes[envelope.job_id] = envelope
+        return envelope
+
+    def get(self, job_id: UUID) -> JobEnvelope | None:
+        with self._lock:
+            return self._envelopes.get(job_id)
+
+    def snapshot(self) -> Mapping[UUID, JobEnvelope]:
+        with self._lock:
+            return dict(self._envelopes)
+
+
+job_submission_store = InMemoryJobSubmissionStore()

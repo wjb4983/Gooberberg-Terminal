@@ -9,10 +9,11 @@ from app.api.routers.ws import manager as ws_manager
 from app.core.logging import request_id_ctx_var
 from app.domain.job_runner import JobRunnerService
 from app.jobs.models import JobEnvelope, JobLifecycleEvent, JobStatus
-from app.jobs.store import job_state_store
+from app.jobs.store import job_state_store, job_submission_store
 from app.persistence.models import BacktestRunRow, ParameterSweepRunRow, TrainingRunRow
 from app.persistence.repositories import RunSqlRepository
 from app.schemas import JobCreateRequest, JobLifecycleUpdateRequest, JobResponse, JobStatusResponse
+from app.schemas.jobs import JOB_CANCELABLE_STATES, JOB_RETRYABLE_STATES
 
 logger = logging.getLogger(__name__)
 
@@ -72,6 +73,7 @@ async def create_job(
     )
 
     job_state_store.upsert(queued_event)
+    job_submission_store.upsert(envelope)
     request.app.state.job_event_repository.persist_event(queued_event)
     await request.app.state.job_queue.enqueue(envelope)
     await _broadcast_job_event(queued_event)
@@ -87,6 +89,34 @@ async def create_job(
         run_type=job_request.run_type,
         accepted_at=accepted_at,
     )
+
+
+def _resolve_retry_envelope(job_id: UUID, request: Request) -> JobEnvelope | None:
+    stored_envelope = job_submission_store.get(job_id)
+    if stored_envelope is not None:
+        return stored_envelope
+
+    latest_event = job_state_store.get(job_id) or request.app.state.job_event_repository.get_latest_event(job_id)
+    if latest_event is None or latest_event.run_type != "training" or latest_event.run_id is None:
+        return None
+
+    with request.app.state.database.session_factory() as session:
+        training_run_row = session.get(TrainingRunRow, str(latest_event.run_id))
+        if training_run_row is None:
+            return None
+        return JobEnvelope(
+            job_id=job_id,
+            trace_id=latest_event.trace_id,
+            job_type="training",
+            run_id=latest_event.run_id,
+            run_type="training",
+            payload={
+                "run_id": str(latest_event.run_id),
+                "model_config_id": training_run_row.model_config_id,
+                "dataset_id": training_run_row.dataset_id,
+                "parameters": dict(training_run_row.parameters or {}),
+            },
+        )
 
 
 @router.get("/{job_id}", response_model=JobStatusResponse)
@@ -198,4 +228,149 @@ async def publish_job_event(
         message=event.message,
         result_ref=event.result_ref,
         updated_at=event.updated_at,
+    )
+
+
+@router.post("/{job_id}/cancel", response_model=JobStatusResponse)
+async def cancel_job(job_id: UUID, request: Request) -> JobStatusResponse:
+    existing = job_state_store.get(job_id)
+    if existing is None:
+        existing = request.app.state.job_event_repository.get_latest_event(job_id)
+        if existing:
+            job_state_store.upsert(existing)
+    if existing is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="job not found")
+    if existing.status not in JOB_CANCELABLE_STATES:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"job cannot be cancelled from state '{existing.status.value}'",
+        )
+
+    cancelled_event = JobLifecycleEvent(
+        job_id=job_id,
+        trace_id=existing.trace_id,
+        status=JobStatus.CANCELLED,
+        detail="job cancelled by operator",
+        run_id=existing.run_id,
+        run_type=existing.run_type,
+        progress_pct=existing.progress_pct,
+        message="cancelled",
+        result_ref=existing.result_ref,
+        updated_at=datetime.now(UTC),
+    )
+    job_state_store.upsert(cancelled_event)
+    request.app.state.job_event_repository.persist_event(cancelled_event)
+    await _broadcast_job_event(cancelled_event)
+
+    if cancelled_event.run_id and cancelled_event.run_type:
+        with request.app.state.database.session_factory() as session:
+            mapping = {
+                "training": TrainingRunRow,
+                "parameter_sweep": ParameterSweepRunRow,
+                "backtest": BacktestRunRow,
+            }
+            model = mapping.get(cancelled_event.run_type)
+            if model:
+                RunSqlRepository(session, model).update_status(cancelled_event.run_id, cancelled_event.status.value)
+
+    return JobStatusResponse(
+        id=cancelled_event.job_id,
+        status=cancelled_event.status,
+        detail=cancelled_event.detail,
+        trace_id=cancelled_event.trace_id,
+        run_id=cancelled_event.run_id,
+        run_type=cancelled_event.run_type,
+        progress_pct=cancelled_event.progress_pct,
+        message=cancelled_event.message,
+        result_ref=cancelled_event.result_ref,
+        updated_at=cancelled_event.updated_at,
+    )
+
+
+@router.post("/{job_id}/retry", response_model=JobStatusResponse, status_code=status.HTTP_202_ACCEPTED)
+async def retry_job(
+    job_id: UUID,
+    request: Request,
+    job_runner_service: JobRunnerService = Depends(get_job_runner_service),
+) -> JobStatusResponse:
+    existing = job_state_store.get(job_id)
+    if existing is None:
+        existing = request.app.state.job_event_repository.get_latest_event(job_id)
+        if existing:
+            job_state_store.upsert(existing)
+    if existing is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="job not found")
+    if existing.status not in JOB_RETRYABLE_STATES:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"job cannot be retried from state '{existing.status.value}'",
+        )
+
+    prior_envelope = _resolve_retry_envelope(job_id, request)
+    if prior_envelope is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="job provenance not available for retry; submit a new run manually",
+        )
+
+    trace_id = request_id_ctx_var.get() or str(uuid4())
+    retry_job_id = uuid4()
+    accepted_at = datetime.now(UTC)
+    retry_envelope = JobEnvelope(
+        job_id=retry_job_id,
+        trace_id=trace_id,
+        job_type=prior_envelope.job_type,
+        payload=prior_envelope.payload,
+        run_id=prior_envelope.run_id,
+        run_type=prior_envelope.run_type,
+        queued_at=accepted_at,
+    )
+
+    try:
+        job_runner_service.submit(retry_envelope)
+    except KeyError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+
+    retry_event = JobLifecycleEvent(
+        job_id=retry_job_id,
+        trace_id=trace_id,
+        status=JobStatus.QUEUED,
+        detail=f"retry requested for prior job {job_id}",
+        run_id=prior_envelope.run_id,
+        run_type=prior_envelope.run_type,
+        progress_pct=0.0,
+        message="queued",
+        updated_at=accepted_at,
+    )
+    job_state_store.upsert(retry_event)
+    job_submission_store.upsert(retry_envelope)
+    request.app.state.job_event_repository.persist_event(retry_event)
+    await request.app.state.job_queue.enqueue(retry_envelope)
+    await _broadcast_job_event(retry_event)
+
+    if retry_event.run_id and retry_event.run_type:
+        with request.app.state.database.session_factory() as session:
+            mapping = {
+                "training": TrainingRunRow,
+                "parameter_sweep": ParameterSweepRunRow,
+                "backtest": BacktestRunRow,
+            }
+            model = mapping.get(retry_event.run_type)
+            if model:
+                RunSqlRepository(session, model).update_status(retry_event.run_id, retry_event.status.value)
+
+    return JobStatusResponse(
+        id=retry_event.job_id,
+        status=retry_event.status,
+        detail=retry_event.detail,
+        trace_id=retry_event.trace_id,
+        run_id=retry_event.run_id,
+        run_type=retry_event.run_type,
+        progress_pct=retry_event.progress_pct,
+        message=retry_event.message,
+        result_ref=retry_event.result_ref,
+        updated_at=retry_event.updated_at,
     )
