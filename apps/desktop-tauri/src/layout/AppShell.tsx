@@ -4,13 +4,15 @@ import { SystemStatusBar } from '../components/SystemStatusBar';
 
 const navGroups = [
   {
-    label: 'Workflows',
+    label: 'Model Lifecycle',
     items: [
-      { label: 'Building Models', to: '/building-models' },
-      { label: 'Parameterization', to: '/parameterization' },
-      { label: 'Testing', to: '/testing' },
-      { label: 'Full-on Backtesting', to: '/full-on-backtesting' },
-      { label: 'Graphing', to: '/graphing' },
+      { label: 'Design', to: '/models' },
+      { label: 'Parameterize', to: '/parameterization' },
+      { label: 'Train', to: '/training-runs' },
+      { label: 'Sweep', to: '/parameter-sweeps' },
+      { label: 'Test', to: '/testing' },
+      { label: 'Backtest', to: '/backtests' },
+      { label: 'Deploy', to: '/model-deployments' },
     ],
   },
   {
@@ -22,7 +24,16 @@ const navGroups = [
       { label: 'Strategies', to: '/strategies' },
       { label: 'Portfolio', to: '/portfolio' },
       { label: 'Alerts/Health', to: '/alerts-health' },
+      { label: 'Graphing', to: '/graphing' },
       { label: 'Settings', to: '/settings' },
+    ],
+  },
+  {
+    label: 'Aliases',
+    items: [
+      { label: 'Building Models (alias)', to: '/building-models' },
+      { label: 'Full-on Backtesting (alias)', to: '/full-on-backtesting' },
+      { label: 'Graph (alias)', to: '/graph' },
     ],
   },
 ];
