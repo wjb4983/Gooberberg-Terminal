@@ -2,10 +2,19 @@ from collections.abc import Mapping
 from typing import Any, Protocol
 
 
+class ModelCompatibilityMetadata(Protocol):
+    supported_data_kinds: tuple[str, ...]
+    required_index: str | None
+    target_type: str | None
+
+
 class ModelSpec(Protocol):
     """Domain model-family contract for config validation."""
 
     model_family: str
+    supported_data_kinds: tuple[str, ...]
+    required_index: str | None
+    target_type: str | None
 
     def validate_config(self, config: Mapping[str, Any]) -> Mapping[str, Any]:
         """Validate and normalize model configuration payload."""

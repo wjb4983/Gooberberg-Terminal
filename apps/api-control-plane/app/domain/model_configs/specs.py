@@ -18,6 +18,9 @@ class HmmRegimeSwitchingConfig(BaseModel):
 
 class HmmRegimeSwitchingModelSpec(ModelSpec):
     model_family = "hmm_regime_switching"
+    supported_data_kinds = ("time_series",)
+    required_index = "datetime"
+    target_type = "classification"
 
     def validate_config(self, config: Mapping[str, Any]) -> Mapping[str, Any]:
         parsed = HmmRegimeSwitchingConfig.model_validate(config)

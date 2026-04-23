@@ -22,13 +22,21 @@ class KalmanFilterConfig(BaseModel):
     def validate_dimension_constraints(self) -> "KalmanFilterConfig":
         if self.observation_dimension > self.state_dimension:
             raise ValueError("observation_dimension must be less than or equal to state_dimension")
-        if self.transition_structure == "identity" and self.observation_dimension != self.state_dimension:
-            raise ValueError("identity transition requires observation_dimension == state_dimension")
+        if (
+            self.transition_structure == "identity"
+            and self.observation_dimension != self.state_dimension
+        ):
+            raise ValueError(
+                "identity transition requires observation_dimension == state_dimension"
+            )
         return self
 
 
 class KalmanFilterModelSpec(ModelSpec):
     model_family = "kalman_filter"
+    supported_data_kinds = ("time_series",)
+    required_index = "datetime"
+    target_type = "regression"
 
     def validate_config(self, config: Mapping[str, Any]) -> Mapping[str, Any]:
         parsed = KalmanFilterConfig.model_validate(config)

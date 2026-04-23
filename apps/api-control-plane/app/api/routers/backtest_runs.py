@@ -3,10 +3,20 @@ from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 
-from app.api.dependencies import get_backtest_run_service
+from app.api.dependencies import (
+    get_backtest_run_service,
+    get_market_data_service,
+    get_model_config_service,
+)
 from app.api.routers.jobs import _broadcast_job_event
 from app.core.logging import request_id_ctx_var
 from app.domain.backtest_runs import Service as BacktestRunService
+from app.domain.market_data import Service as MarketDataService
+from app.domain.model_configs.compatibility import (
+    resolve_dataset_compatibility,
+    validate_model_dataset_compatibility,
+)
+from app.domain.model_configs.service import ModelConfigService
 from app.jobs.models import JobEnvelope, JobLifecycleEvent, JobStatus
 from app.jobs.store import job_state_store
 from app.schemas import (
@@ -39,7 +49,9 @@ def _paginate(items: list[dict[str, object]], offset: int, limit: int) -> Backte
     safe_limit = min(max(limit, 1), 200)
     page = items[safe_offset : safe_offset + safe_limit]
     next_offset = safe_offset + safe_limit if safe_offset + safe_limit < len(items) else None
-    return BacktestPagedResponse(items=page, offset=safe_offset, limit=safe_limit, next_offset=next_offset)
+    return BacktestPagedResponse(
+        items=page, offset=safe_offset, limit=safe_limit, next_offset=next_offset
+    )
 
 
 @router.post("/preflight", response_model=BacktestRunPreflightResponse)
@@ -56,12 +68,49 @@ async def create_backtest_run(
     payload: BacktestRunCreateRequest,
     request: Request,
     service: BacktestRunService = Depends(get_backtest_run_service),
+    model_config_service: ModelConfigService = Depends(get_model_config_service),
+    market_data_service: MarketDataService = Depends(get_market_data_service),
 ) -> BacktestRunResponse:
     if not service.validate_confirmation_token(payload.model_dump(), payload.confirmation_token):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="run estimate exceeds threshold; preflight and provide confirmation_token",
         )
+
+    if payload.model_config_id is not None:
+        model_config = model_config_service.get(payload.model_config_id)
+        if model_config is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="model config not found"
+            )
+
+        dataset_id = payload.parameters.get("dataset_id")
+        if not isinstance(dataset_id, str) or not dataset_id.strip():
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="dataset metadata is required for compatibility checks; provide parameters.dataset_id",
+            )
+
+        dataset = market_data_service.lookup_dataset(dataset_id)
+        if dataset is None:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="dataset not found; ingest data and retry",
+            )
+
+        model_spec = request.app.state.model_registry.require(str(model_config["model_family"]))
+        dataset_profile = resolve_dataset_compatibility(dataset.metadata, dataset.timeframe)
+        compatibility_errors = validate_model_dataset_compatibility(
+            model_spec=model_spec, dataset_metadata=dataset_profile
+        )
+        if compatibility_errors:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail={
+                    "message": "model config is incompatible with dataset",
+                    "errors": compatibility_errors,
+                },
+            )
 
     run_id = uuid4()
     job_id = uuid4()
@@ -87,7 +136,10 @@ async def create_backtest_run(
         job_type="backtest",
         run_id=run_id,
         run_type="backtest",
-        payload={"run_id": str(run_id), **payload.model_dump(mode="json", exclude={"confirmation_token"})},
+        payload={
+            "run_id": str(run_id),
+            **payload.model_dump(mode="json", exclude={"confirmation_token"}),
+        },
         queued_at=accepted_at,
     )
     queued_event = JobLifecycleEvent(
@@ -110,12 +162,16 @@ async def create_backtest_run(
 
 
 @router.get("", response_model=list[BacktestRunResponse])
-def list_backtest_runs(service: BacktestRunService = Depends(get_backtest_run_service)) -> list[BacktestRunResponse]:
+def list_backtest_runs(
+    service: BacktestRunService = Depends(get_backtest_run_service),
+) -> list[BacktestRunResponse]:
     return [BacktestRunResponse.model_validate(item) for item in service.list_all()]
 
 
 @router.get("/{run_id}", response_model=BacktestRunResponse)
-def get_backtest_run(run_id: UUID, service: BacktestRunService = Depends(get_backtest_run_service)) -> BacktestRunResponse:
+def get_backtest_run(
+    run_id: UUID, service: BacktestRunService = Depends(get_backtest_run_service)
+) -> BacktestRunResponse:
     run = service.get(run_id)
     if run is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="backtest run not found")
@@ -123,7 +179,9 @@ def get_backtest_run(run_id: UUID, service: BacktestRunService = Depends(get_bac
 
 
 @router.get("/{run_id}/status", response_model=BacktestStatusResponse)
-def get_backtest_status(run_id: UUID, service: BacktestRunService = Depends(get_backtest_run_service)) -> BacktestStatusResponse:
+def get_backtest_status(
+    run_id: UUID, service: BacktestRunService = Depends(get_backtest_run_service)
+) -> BacktestStatusResponse:
     run = service.get(run_id)
     if run is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="backtest run not found")
@@ -137,12 +195,16 @@ def get_backtest_status(run_id: UUID, service: BacktestRunService = Depends(get_
 
 
 @router.get("/{run_id}/events", response_model=BacktestPagedResponse)
-def list_backtest_events(run_id: UUID, offset: int = Query(default=0), limit: int = Query(default=100)) -> BacktestPagedResponse:
+def list_backtest_events(
+    run_id: UUID, offset: int = Query(default=0), limit: int = Query(default=100)
+) -> BacktestPagedResponse:
     return _paginate(_seeded_rows("event", run_id, 2_000), offset, limit)
 
 
 @router.get("/{run_id}/trades", response_model=BacktestPagedResponse)
-def list_backtest_trades(run_id: UUID, offset: int = Query(default=0), limit: int = Query(default=100)) -> BacktestPagedResponse:
+def list_backtest_trades(
+    run_id: UUID, offset: int = Query(default=0), limit: int = Query(default=100)
+) -> BacktestPagedResponse:
     return _paginate(_seeded_rows("trade", run_id, 5_000), offset, limit)
 
 

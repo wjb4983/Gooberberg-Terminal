@@ -36,6 +36,9 @@ class ArimaConfig(BaseModel):
 
 class ArimaModelSpec(ModelSpec):
     model_family = "arima"
+    supported_data_kinds = ("time_series",)
+    required_index = "datetime"
+    target_type = "regression"
 
     def validate_config(self, config: Mapping[str, Any]) -> Mapping[str, Any]:
         parsed = ArimaConfig.model_validate(config)
