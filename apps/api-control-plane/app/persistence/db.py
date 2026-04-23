@@ -11,6 +11,10 @@ from app.core.config import Settings
 class Database:
     def __init__(self, settings: Settings) -> None:
         dsn = settings.postgres_dsn or "sqlite+pysqlite:///:memory:"
+        if dsn.startswith("postgresql://"):
+            dsn = dsn.replace("postgresql://", "postgresql+psycopg://", 1)
+        elif dsn.startswith("postgres://"):
+            dsn = dsn.replace("postgres://", "postgresql+psycopg://", 1)
         if dsn.startswith("sqlite"):
             self.engine = create_engine(
                 dsn,

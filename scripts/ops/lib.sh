@@ -75,7 +75,8 @@ poll_http_health() {
     return 0
   fi
 
-  die "$EXIT_HEALTH" "health check failed after ${max_retries} attempts: $url"
+  err "health check failed after ${max_retries} attempts: $url"
+  return 1
 }
 
 print_tailscale_info() {

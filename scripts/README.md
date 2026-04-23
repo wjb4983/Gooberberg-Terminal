@@ -36,6 +36,7 @@ PULL_TIMEOUT='20m' COMPOSE_TIMEOUT='25m' \
 Notes:
 
 - Scripts are non-interactive (`--ansi never`) and include explicit timeouts for long-running commands.
+- Scripts automatically load `config/env/.env` by default (`ENV_FILE` override) and pass it to Docker Compose via `--env-file`.
 - Health polling targets `API_HEALTH_URL` (default derived from `API_BIND_IP`/`API_BIND_PORT`, falling back to `http://127.0.0.1:8000/healthz`) with bounded retries.
 - Scripts print concise status and a brief Tailscale summary (if `tailscale` is installed).
 
@@ -59,10 +60,15 @@ Use this exact sequence on the **server**.
    timeout 20s tailscale serve --https=443 http://127.0.0.1:8000
    timeout 20s tailscale status --self
    ```
+   If you see `listener already exists for port 443`, run:
+   ```bash
+   timeout 20s tailscale serve status
+   ```
+   and confirm the existing mapping points to `http://127.0.0.1:8000`.
 
 3. On your **other machine** (same tailnet), open:
    - `https://<server>.<tailnet>.ts.net/healthz`
-   - `https://<server>.<tailnet>.ts.net/api/v1/health`
+   - `https://<server>.<tailnet>.ts.net/api/v1/health` (not `/api/v1/healthz`)
 
 4. For authenticated API calls from the other machine:
 
@@ -87,7 +93,7 @@ Use this exact sequence on the **server**.
 
 3. Re-check from the other machine:
    - `https://<server>.<tailnet>.ts.net/healthz`
-   - `https://<server>.<tailnet>.ts.net/api/v1/health`
+   - `https://<server>.<tailnet>.ts.net/api/v1/health` (not `/api/v1/healthz`)
 
 ### C) Routine restart (no code updates)
 
@@ -99,7 +105,7 @@ Use this exact sequence on the **server**.
 
 2. Re-check from the other machine:
    - `https://<server>.<tailnet>.ts.net/healthz`
-   - `https://<server>.<tailnet>.ts.net/api/v1/health`
+   - `https://<server>.<tailnet>.ts.net/api/v1/health` (not `/api/v1/healthz`)
 
 If a script reports health check failure, inspect containers immediately:
 

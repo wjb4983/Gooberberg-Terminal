@@ -30,6 +30,8 @@ timeout 20s tailscale serve --https=443 http://127.0.0.1:8000
 timeout 20s tailscale serve status
 ```
 
+If `tailscale serve` reports `listener already exists for port 443`, keep the existing listener and verify it already targets `http://127.0.0.1:8000` via `tailscale serve status`.
+
 #### Option B: Reverse proxy + Tailscale ingress
 
 If you already run nginx/Caddy/Traefik locally, route Tailscale traffic to that proxy and ensure it forwards:
@@ -70,6 +72,8 @@ timeout 20s curl -kfsS "https://${TS_HOST}/healthz"
 timeout 20s curl -kfsS "https://${TS_HOST}/api/v1/health"
 ```
 
+Use `/api/v1/health` (not `/api/v1/healthz`).
+
 ### 2.2 Authenticated non-health requests (bearer token)
 
 Non-health API routes require exact bearer auth when token auth is enabled:
@@ -95,6 +99,7 @@ After connect, send your subscription message per app protocol and confirm event
 | Symptom | Likely cause | Checks | Fix |
 |---|---|---|---|
 | `connection refused` | API not listening, serve/proxy not mapped, firewall/ACL block | `timeout 20s curl -fsS http://127.0.0.1:8000/healthz`; `timeout 20s tailscale serve status`; `timeout 20s tailscale status --self` | Start/restart API, correct `tailscale serve` mapping, open required ACL/firewall path. |
+| `502 Bad Gateway` from tailnet URL | Tailscale serve/proxy cannot reach local API upstream | `timeout 20s tailscale serve status`; `timeout 20s curl -fsS http://127.0.0.1:8000/healthz`; `timeout 30s docker compose --env-file config/env/.env -f infra/compose/docker-compose.prod.yml logs --tail=200 api-control-plane` | Ensure serve target is `http://127.0.0.1:8000`, restart API stack, then re-test local health before tailnet URL. |
 | `401` / `403` on non-health route | Missing/incorrect bearer token or wrong environment token | Re-run with `-H "Authorization: Bearer ${TOKEN}"`; compare with server `GB_API_AUTH_TOKEN` | Rotate/set correct token, update client secret store, retry request. |
 | WebSocket disconnects/churn | Proxy missing upgrade headers, idle timeout, unstable route | Validate `/ws` path routing; inspect proxy/API logs; test with minimal client over `wss://.../ws` | Enable upgrade headers + longer timeouts, stabilize route, reconnect with backoff. |
 | Stale DNS / wrong tailnet host | Client using outdated machine name/IP or connected to different tailnet | `timeout 20s tailscale status --self`; compare client `TS_HOST`; test both DNS and current tailnet IP | Switch client to correct `<machine>.<tailnet>.ts.net`, flush DNS cache if needed, ensure both peers are in same tailnet. |
