@@ -20,6 +20,11 @@ import { TestingPage } from './pages/TestingPage';
 import { BacktestingPage } from './pages/BacktestingPage';
 import { GraphingPage } from './pages/GraphingPage';
 import { JobDetailPage } from './pages/JobDetailPage';
+import { ParameterSweepsPage } from './pages/ParameterSweepsPage';
+import { TrainingRunsPage } from './pages/TrainingRunsPage';
+import { BacktestsPage } from './pages/BacktestsPage';
+import { ModelsPage } from './pages/ModelsPage';
+import { ModelDeploymentsPage } from './pages/ModelDeploymentsPage';
 
 interface ToastItem {
   id: number;
@@ -66,16 +71,18 @@ export function App(): JSX.Element {
           <Route path="jobs" element={<ErrorBoundary><JobsPage baseUrl={preferences.baseUrl} /></ErrorBoundary>} />
           <Route path="jobs/:jobId" element={<ErrorBoundary><JobDetailPage baseUrl={preferences.baseUrl} /></ErrorBoundary>} />
 
-          <Route path="building-models" element={<ErrorBoundary><BuildingModelsPage baseUrl={preferences.baseUrl} /></ErrorBoundary>} />
+          <Route path="models" element={<ErrorBoundary><ModelsPage baseUrl={preferences.baseUrl} /></ErrorBoundary>} />
           <Route path="parameterization" element={<ErrorBoundary><ParameterizationPage baseUrl={preferences.baseUrl} /></ErrorBoundary>} />
+          <Route path="training-runs" element={<ErrorBoundary><TrainingRunsPage baseUrl={preferences.baseUrl} /></ErrorBoundary>} />
+          <Route path="parameter-sweeps" element={<ErrorBoundary><ParameterSweepsPage baseUrl={preferences.baseUrl} /></ErrorBoundary>} />
           <Route path="testing" element={<ErrorBoundary><TestingPage baseUrl={preferences.baseUrl} /></ErrorBoundary>} />
-          <Route path="full-on-backtesting" element={<ErrorBoundary><BacktestingPage baseUrl={preferences.baseUrl} /></ErrorBoundary>} />
+          <Route path="backtests" element={<ErrorBoundary><BacktestsPage baseUrl={preferences.baseUrl} /></ErrorBoundary>} />
+          <Route path="model-deployments" element={<ErrorBoundary><ModelDeploymentsPage baseUrl={preferences.baseUrl} /></ErrorBoundary>} />
           <Route path="graphing" element={<ErrorBoundary><GraphingPage baseUrl={preferences.baseUrl} /></ErrorBoundary>} />
 
-          <Route path="models" element={<ErrorBoundary><BuildingModelsPage baseUrl={preferences.baseUrl} /></ErrorBoundary>} />
-          <Route path="training-runs" element={<ErrorBoundary><TestingPage baseUrl={preferences.baseUrl} /></ErrorBoundary>} />
-          <Route path="parameter-sweeps" element={<ErrorBoundary><ParameterizationPage baseUrl={preferences.baseUrl} /></ErrorBoundary>} />
-          <Route path="backtests" element={<ErrorBoundary><BacktestingPage baseUrl={preferences.baseUrl} /></ErrorBoundary>} />
+          {/* Legacy aliases (kept for backward compatibility) */}
+          <Route path="building-models" element={<ErrorBoundary><BuildingModelsPage baseUrl={preferences.baseUrl} /></ErrorBoundary>} />
+          <Route path="full-on-backtesting" element={<ErrorBoundary><BacktestingPage baseUrl={preferences.baseUrl} /></ErrorBoundary>} />
           <Route path="graph" element={<ErrorBoundary><GraphingPage baseUrl={preferences.baseUrl} /></ErrorBoundary>} />
 
           <Route path="data-cache" element={<ErrorBoundary><DataCachePage baseUrl={preferences.baseUrl} /></ErrorBoundary>} />
