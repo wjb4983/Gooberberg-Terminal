@@ -5,9 +5,14 @@ on:
   push:
     branches:
       - main
+      - release/**
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
 
 jobs:
-  lint-test-build:
+  fast-pr-lane:
+    if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
     timeout-minutes: 45
 
@@ -41,8 +46,81 @@ jobs:
       - name: Lint
         run: timeout 15m scripts/lint-all.sh
 
-      - name: Test
-        run: timeout 20m scripts/test-all.sh
+      - name: Unit tests
+        run: timeout 15m scripts/test-all.sh
 
-      - name: Build checks
-        run: timeout 20m pnpm build
+      - name: Integration smoke (localhost + proxy contract)
+        run: timeout 15m pnpm --filter @gooberberg/desktop-tauri test:integration:smoke
+
+      - name: Upload failure artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fast-pr-failure-artifacts
+          retention-days: 7
+          if-no-files-found: ignore
+          path: |
+            artifacts/logs/**
+            artifacts/traces/**
+            artifacts/screenshots/**
+
+  nightly-matrix:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        topology: [localhost, tailscale, reverse-proxy]
+        auth_mode: [bearer-jwt, device-bound-token]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.18.3
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install JS deps
+        run: timeout 10m pnpm install --frozen-lockfile
+
+      - name: Install Python dev tooling
+        run: |
+          timeout 5m python -m pip install --upgrade pip
+          timeout 10m pip install ruff black mypy pytest
+
+      - name: Run full topology matrix
+        env:
+          TOPOLOGY: ${{ matrix.topology }}
+          AUTH_MODE: ${{ matrix.auth_mode }}
+        run: timeout 45m pnpm --filter @gooberberg/desktop-tauri test:connectivity:matrix --topology "$TOPOLOGY" --auth-mode "$AUTH_MODE"
+
+      - name: Run synthetic TLS/proxy fixture suite
+        env:
+          TOPOLOGY: ${{ matrix.topology }}
+          AUTH_MODE: ${{ matrix.auth_mode }}
+        run: timeout 25m pnpm --filter @gooberberg/desktop-tauri test:connectivity:faults --topology "$TOPOLOGY" --auth-mode "$AUTH_MODE"
+
+      - name: Upload failure artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nightly-failure-${{ matrix.topology }}-${{ matrix.auth_mode }}
+          retention-days: 14
+          if-no-files-found: ignore
+          path: |
+            artifacts/logs/**
+            artifacts/traces/**
+            artifacts/screenshots/**
