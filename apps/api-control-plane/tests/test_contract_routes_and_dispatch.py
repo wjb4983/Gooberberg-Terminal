@@ -158,6 +158,17 @@ def test_model_config_route_rejects_incompatible_task_or_data_type_for_new_famil
 
 
 def test_training_sweep_backtest_testing_routes_emit_queued_job_flow() -> None:
+    dataset = client.post(
+        "/api/v1/market-data/ingestions",
+        json={
+            "source": "test-fixture",
+            "symbols": ["AAPL"],
+            "timeframe": "1d",
+            "start_date": "2025-01-01",
+            "end_date": "2025-12-31",
+        },
+    ).json()
+
     model_config = client.post(
         "/api/v1/model-configs",
         json={
@@ -176,7 +187,7 @@ def test_training_sweep_backtest_testing_routes_emit_queued_job_flow() -> None:
         "/api/v1/training-runs",
         json={
             "model_config_id": model_config["id"],
-            "dataset_id": "dataset://bars/aapl/day",
+            "dataset_id": dataset["request_id"],
             "parameters": {"epochs": 2},
         },
     )
@@ -207,6 +218,7 @@ def test_training_sweep_backtest_testing_routes_emit_queued_job_flow() -> None:
                 "source_run_id": "bootstrap-run",
                 "source_model": "hmm_regime_switching",
                 "config_hash": "abc123",
+                "dataset_id": dataset["request_id"],
             },
         },
     )
@@ -222,7 +234,7 @@ def test_training_sweep_backtest_testing_routes_emit_queued_job_flow() -> None:
             "model_config_id": model_config["id"],
             "window_start": datetime(2025, 1, 1, tzinfo=UTC).isoformat(),
             "window_end": datetime(2025, 12, 31, tzinfo=UTC).isoformat(),
-            "parameters": {"rebalance": "1d"},
+            "parameters": {"rebalance": "1d", "dataset_id": dataset["request_id"]},
         },
     )
     assert backtest.status_code == 201

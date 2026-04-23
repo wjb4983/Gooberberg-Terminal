@@ -25,14 +25,24 @@ class TorchNnTimeseriesConfig(BaseModel):
     @model_validator(mode="after")
     def validate_architecture_constraints(self) -> "TorchNnTimeseriesConfig":
         if self.architecture != "transformer_encoder" and self.num_attention_heads != 1:
-            raise ValueError("num_attention_heads must be 1 unless architecture=transformer_encoder")
-        if self.architecture == "transformer_encoder" and self.hidden_size % self.num_attention_heads != 0:
-            raise ValueError("hidden_size must be divisible by num_attention_heads for transformer_encoder")
+            raise ValueError(
+                "num_attention_heads must be 1 unless architecture=transformer_encoder"
+            )
+        if (
+            self.architecture == "transformer_encoder"
+            and self.hidden_size % self.num_attention_heads != 0
+        ):
+            raise ValueError(
+                "hidden_size must be divisible by num_attention_heads for transformer_encoder"
+            )
         return self
 
 
 class TorchNnTimeseriesModelSpec(ModelSpec):
     model_family = "torch_nn_timeseries"
+    supported_data_kinds = ("time_series",)
+    required_index = "datetime"
+    target_type = "regression"
 
     def validate_config(self, config: Mapping[str, Any]) -> Mapping[str, Any]:
         parsed = TorchNnTimeseriesConfig.model_validate(config)
