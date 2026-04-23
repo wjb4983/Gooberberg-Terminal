@@ -209,12 +209,12 @@ export function GraphingPage({ baseUrl }: GraphingPageProps): JSX.Element {
             }))}
             layout={{
               autosize: true,
-              title: 'Graph telemetry tiles (server-downsampled by zoom/window)',
+              title: { text: 'Graph telemetry tiles (server-downsampled by zoom/window)' },
               paper_bgcolor: '#0d1117',
               plot_bgcolor: '#0d1117',
               font: { color: '#c9d1d9' },
-              xaxis: { title: 'Time' },
-              yaxis: { title: 'Value' },
+              xaxis: { title: { text: 'Time' } },
+              yaxis: { title: { text: 'Value' } },
             }}
             config={{ responsive: true, displaylogo: false }}
             style={{ width: '100%', height: '520px' }}
