@@ -55,7 +55,11 @@ def test_model_deployment_validates_fields() -> None:
     assert response.status_code == 422
 
 
-def test_model_families_exposes_hmm_spec() -> None:
+def test_model_families_exposes_all_registered_specs() -> None:
     response = client.get("/api/v1/models/deployments/families")
     assert response.status_code == 200
-    assert "hmm_regime_switching" in response.json()
+    payload = response.json()
+    assert "hmm_regime_switching" in payload
+    assert "torch_nn_timeseries" in payload
+    assert "kalman_filter" in payload
+    assert "arima" in payload
