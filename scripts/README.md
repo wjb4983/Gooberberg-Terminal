@@ -36,8 +36,83 @@ PULL_TIMEOUT='20m' COMPOSE_TIMEOUT='25m' \
 Notes:
 
 - Scripts are non-interactive (`--ansi never`) and include explicit timeouts for long-running commands.
-- Health polling targets `API_HEALTH_URL` (default `http://127.0.0.1:8000/healthz`) with bounded retries.
+- Scripts automatically load `config/env/.env` by default (`ENV_FILE` override) and pass it to Docker Compose via `--env-file`.
+- Health polling targets `API_HEALTH_URL` (default derived from `API_BIND_IP`/`API_BIND_PORT`, falling back to `http://127.0.0.1:8000/healthz`) with bounded retries.
 - Scripts print concise status and a brief Tailscale summary (if `tailscale` is installed).
+
+## Quick order of operations (beginner-friendly)
+
+Use this exact sequence on the **server**.
+
+### A) First-time setup (new machine)
+
+1. Set required secrets and run:
+
+   ```bash
+   GB_API_AUTH_TOKEN='replace-with-long-random-token' \
+   POSTGRES_PASSWORD='replace-with-strong-password' \
+   timeout 30m ./scripts/ops/first-time-build-run.sh
+   ```
+
+2. On the server, map HTTPS tailnet traffic to the API:
+
+   ```bash
+   timeout 20s tailscale serve --https=443 http://127.0.0.1:8000
+   timeout 20s tailscale status --self
+   ```
+   If you see `listener already exists for port 443`, run:
+   ```bash
+   timeout 20s tailscale serve status
+   ```
+   and confirm the existing mapping points to `http://127.0.0.1:8000`.
+
+3. On your **other machine** (same tailnet), open:
+   - `https://<server>.<tailnet>.ts.net/healthz`
+   - `https://<server>.<tailnet>.ts.net/api/v1/health` (not `/api/v1/healthz`)
+
+4. For authenticated API calls from the other machine:
+
+   ```bash
+   timeout 20s curl -kfsS "https://<server>.<tailnet>.ts.net/api/v1/models/deployments" \
+     -H "Authorization: Bearer <GB_API_AUTH_TOKEN>"
+   ```
+
+### B) After `git pull` (repo updates)
+
+1. Pull latest code on server:
+
+   ```bash
+   timeout 60s git pull --ff-only
+   ```
+
+2. Rebuild/restart services:
+
+   ```bash
+   timeout 30m ./scripts/ops/update-build-run.sh
+   ```
+
+3. Re-check from the other machine:
+   - `https://<server>.<tailnet>.ts.net/healthz`
+   - `https://<server>.<tailnet>.ts.net/api/v1/health` (not `/api/v1/healthz`)
+
+### C) Routine restart (no code updates)
+
+1. Start existing stack:
+
+   ```bash
+   timeout 20m ./scripts/ops/subsequent-run.sh
+   ```
+
+2. Re-check from the other machine:
+   - `https://<server>.<tailnet>.ts.net/healthz`
+   - `https://<server>.<tailnet>.ts.net/api/v1/health` (not `/api/v1/healthz`)
+
+If a script reports health check failure, inspect containers immediately:
+
+```bash
+timeout 30s docker compose --env-file config/env/.env -f infra/compose/docker-compose.prod.yml ps
+timeout 30s docker compose --env-file config/env/.env -f infra/compose/docker-compose.prod.yml logs --tail=200 api-control-plane postgres redis
+```
 
 Exit codes:
 

@@ -33,11 +33,13 @@ run_with_timeout() {
   local timeout_value="$1"
   shift
 
-  if timeout --preserve-status "$timeout_value" "$@"; then
+  local status=0
+  timeout "$timeout_value" "$@" || status=$?
+
+  if [[ "$status" -eq 0 ]]; then
     return 0
   fi
 
-  local status=$?
   if [[ "$status" -eq 124 ]]; then
     die "$EXIT_TIMEOUT" "timed out after $timeout_value: $*"
   fi
@@ -53,7 +55,7 @@ poll_until_success() {
 
   local attempt
   for ((attempt = 1; attempt <= max_retries; attempt++)); do
-    if timeout --preserve-status "$check_timeout" "$@" >/dev/null 2>&1; then
+    if timeout "$check_timeout" "$@" >/dev/null 2>&1; then
       return 0
     fi
     sleep "$sleep_seconds"
@@ -73,7 +75,8 @@ poll_http_health() {
     return 0
   fi
 
-  die "$EXIT_HEALTH" "health check failed after ${max_retries} attempts: $url"
+  err "health check failed after ${max_retries} attempts: $url"
+  return 1
 }
 
 print_tailscale_info() {

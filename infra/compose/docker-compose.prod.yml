@@ -20,6 +20,9 @@ x-default-resources: &default-resources
 services:
   api-control-plane:
     image: ghcr.io/gooberberg/api-control-plane:latest
+    build:
+      context: ../..
+      dockerfile: infra/docker/api.Dockerfile
     restart: unless-stopped
     init: true
     read_only: true
@@ -64,6 +67,9 @@ services:
   api-control-plane-loopback:
     profiles: ["loopback"]
     image: ghcr.io/gooberberg/api-control-plane:latest
+    build:
+      context: ../..
+      dockerfile: infra/docker/api.Dockerfile
     restart: unless-stopped
     init: true
     read_only: true
