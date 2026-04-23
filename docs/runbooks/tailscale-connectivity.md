@@ -59,6 +59,8 @@ Assume:
 - `TS_HOST=<machine>.<tailnet>.ts.net`
 - `TOKEN=<GB_API_AUTH_TOKEN>`
 
+If you are testing from a second laptop/desktop, that machine must be logged in to the same tailnet.
+
 ### 2.1 Exact health URLs
 
 Health endpoints are unauthenticated and should return `200` when reachable:
