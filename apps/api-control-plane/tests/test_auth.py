@@ -42,9 +42,11 @@ def test_non_health_endpoint_rejects_missing_token() -> None:
         _reset_settings()
 
 
-def test_non_health_endpoint_accepts_valid_token() -> None:
+def test_read_only_endpoint_accepts_read_scope() -> None:
     previous_token = os.environ.get(TOKEN_ENV)
+    previous_scope = os.environ.get(SCOPE_ENV)
     os.environ[TOKEN_ENV] = "private-token"
+    os.environ[SCOPE_ENV] = "control-plane:read"
     _reset_settings()
 
     try:
@@ -60,6 +62,45 @@ def test_non_health_endpoint_accepts_valid_token() -> None:
             os.environ.pop(TOKEN_ENV, None)
         else:
             os.environ[TOKEN_ENV] = previous_token
+
+        if previous_scope is None:
+            os.environ.pop(SCOPE_ENV, None)
+        else:
+            os.environ[SCOPE_ENV] = previous_scope
+
+        _reset_settings()
+
+
+def test_mutating_endpoint_rejects_read_only_scope() -> None:
+    previous_token = os.environ.get(TOKEN_ENV)
+    previous_scope = os.environ.get(SCOPE_ENV)
+    os.environ[TOKEN_ENV] = "private-token"
+    os.environ[SCOPE_ENV] = "control-plane:read"
+    _reset_settings()
+
+    try:
+        client = TestClient(create_app())
+        response = client.post(
+            "/api/v1/jobs",
+            headers={"Authorization": "Bearer private-token"},
+            json={"job_type": "training", "payload": {}},
+        )
+
+        assert response.status_code == 403
+        body = response.json()
+        assert body["required_scope"] == "control-plane:write"
+        assert body["granted_scope"] == "control-plane:read"
+    finally:
+        if previous_token is None:
+            os.environ.pop(TOKEN_ENV, None)
+        else:
+            os.environ[TOKEN_ENV] = previous_token
+
+        if previous_scope is None:
+            os.environ.pop(SCOPE_ENV, None)
+        else:
+            os.environ[SCOPE_ENV] = previous_scope
+
         _reset_settings()
 
 
