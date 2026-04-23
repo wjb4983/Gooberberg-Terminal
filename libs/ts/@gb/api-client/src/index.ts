@@ -56,9 +56,30 @@ export interface ApiClientOptions {
   websocketUrl?: string;
   fetchImpl?: typeof fetch;
   authHeaderProvider?: AuthHeaderProvider;
+  transportPolicy?: TransportPolicyOptions;
 }
 
 export type AuthHeaderProvider = (path: string, init: ApiRequestOptions) => string | null | undefined | Promise<string | null | undefined>;
+
+export type TransportRequestClass = 'interactive' | 'heavyRead';
+
+export interface RetryPolicyOptions {
+  maxRetries?: number;
+  baseDelayMs?: number;
+  maxDelayMs?: number;
+}
+
+export interface IdempotencyPolicyOptions {
+  retryablePostPaths?: string[];
+}
+
+export interface TransportPolicyOptions {
+  defaultTimeoutMs?: number;
+  interactiveTimeoutMs?: number;
+  heavyReadTimeoutMs?: number;
+  retry?: RetryPolicyOptions;
+  idempotency?: IdempotencyPolicyOptions;
+}
 
 export type ApiRequestQuery = Record<string, string | number | boolean | null | undefined>;
 
@@ -66,6 +87,8 @@ export interface ApiRequestOptions extends Omit<RequestInit, 'headers'> {
   headers?: HeadersInit;
   query?: ApiRequestQuery;
   includeAuth?: boolean;
+  requestClass?: TransportRequestClass;
+  retryOverride?: boolean;
 }
 
 export interface ConnectWebSocketOptions {
@@ -82,6 +105,7 @@ export interface ReconnectingSocketOptions {
   maxBackoffMs?: number;
   getResumeSeq?: () => number | undefined;
   onStatus?: (status: 'connecting' | 'connected' | 'reconnecting' | 'closed') => void;
+  onControlMessage?: (message: Record<string, unknown>) => void;
 }
 
 export class GbApiClient {
@@ -90,6 +114,10 @@ export class GbApiClient {
   private readonly apiPrefix: string;
   private readonly websocketUrl?: string;
   private readonly authHeaderProvider?: AuthHeaderProvider;
+  private readonly transportPolicy: Required<TransportPolicyOptions> & {
+    retry: Required<RetryPolicyOptions>;
+    idempotency: Required<IdempotencyPolicyOptions>;
+  };
 
   constructor(options: ApiClientOptions) {
     this.fetchImpl = options.fetchImpl ?? fetch;
@@ -97,6 +125,7 @@ export class GbApiClient {
     this.apiPrefix = options.apiPrefix ?? '/api/v1';
     this.websocketUrl = options.websocketUrl;
     this.authHeaderProvider = options.authHeaderProvider;
+    this.transportPolicy = resolveTransportPolicy(options.transportPolicy);
   }
 
   async getHealth(): Promise<HealthResponse> {
@@ -177,6 +206,7 @@ export class GbApiClient {
     const payload = await this.requestJson<unknown>(`${this.apiPrefix}/graph/layout-products?${query.toString()}`, {
       method: 'GET',
       headers: { Accept: 'application/json' },
+      requestClass: 'heavyRead',
     });
 
     return parseGraphLayoutProducts(payload);
@@ -190,6 +220,7 @@ export class GbApiClient {
     const payload = await this.requestJson<unknown>(`${this.apiPrefix}/graph/time-series-tiles?${query.toString()}`, {
       method: 'GET',
       headers: { Accept: 'application/json' },
+      requestClass: 'heavyRead',
     });
 
     return parseGraphTimeSeriesTiles(payload);
@@ -426,7 +457,15 @@ export class GbApiClient {
       socket.addEventListener('message', (event) => {
         if (typeof event.data !== 'string') return;
         const parsed = parseWebSocketEvent(event.data);
-        if (parsed) options.onEvent(parsed);
+        if (parsed) {
+          options.onEvent(parsed);
+          return;
+        }
+
+        const control = parseWebSocketControlMessage(event.data);
+        if (control) {
+          options.onControlMessage?.(control);
+        }
       });
 
       socket.addEventListener('close', () => {
@@ -450,10 +489,31 @@ export class GbApiClient {
 
   private async requestJson<T>(path: string, init: ApiRequestOptions): Promise<T> {
     const fullPath = this.resolveRequestPath(path, init.query);
-    const requestInit = await this.resolveRequestInit(path, init);
-    const response = await this.fetchImpl(`${this.baseHttpUrl}${fullPath}`, requestInit);
-    if (!response.ok) throw new Error(`Request failed for ${path} with status ${response.status}`);
-    return (await response.json()) as T;
+    const url = `${this.baseHttpUrl}${fullPath}`;
+    const maxRetries = this.resolveRetryLimit(path, init);
+
+    for (let attempt = 0; ; attempt += 1) {
+      const timeoutMs = this.resolveTimeoutMs(init.requestClass);
+      const requestInit = await this.resolveRequestInit(path, init, timeoutMs);
+
+      try {
+        const response = await this.fetchImpl(url, requestInit);
+        if (!response.ok) {
+          const error = new ApiRequestError(path, response.status);
+          if (attempt >= maxRetries || !shouldRetryStatus(response.status)) {
+            throw error;
+          }
+          await sleepWithJitter(attempt, this.transportPolicy.retry);
+          continue;
+        }
+        return (await response.json()) as T;
+      } catch (error) {
+        if (!isRetryableNetworkError(error) || attempt >= maxRetries) {
+          throw error;
+        }
+        await sleepWithJitter(attempt, this.transportPolicy.retry);
+      }
+    }
   }
 
   private resolveRequestPath(path: string, query?: ApiRequestQuery): string {
@@ -469,8 +529,36 @@ export class GbApiClient {
     return `${path}${separator}${serializedQuery}`;
   }
 
-  private async resolveRequestInit(path: string, init: ApiRequestOptions): Promise<RequestInit> {
-    const { includeAuth = true, query: _query, headers, ...requestInit } = init;
+
+  private resolveTimeoutMs(requestClass: TransportRequestClass | undefined): number {
+    if (requestClass === 'heavyRead') {
+      return this.transportPolicy.heavyReadTimeoutMs;
+    }
+    if (requestClass === 'interactive') {
+      return this.transportPolicy.interactiveTimeoutMs;
+    }
+    return this.transportPolicy.defaultTimeoutMs;
+  }
+
+  private resolveRetryLimit(path: string, init: ApiRequestOptions): number {
+    if (typeof init.retryOverride === 'boolean') {
+      return init.retryOverride ? this.transportPolicy.retry.maxRetries : 0;
+    }
+
+    const method = (init.method ?? 'GET').toUpperCase();
+    if (method === 'GET' || method === 'HEAD' || method === 'OPTIONS') {
+      return this.transportPolicy.retry.maxRetries;
+    }
+
+    if (method === 'POST' && this.transportPolicy.idempotency.retryablePostPaths.some((prefix) => path.startsWith(prefix))) {
+      return this.transportPolicy.retry.maxRetries;
+    }
+
+    return 0;
+  }
+
+  private async resolveRequestInit(path: string, init: ApiRequestOptions, timeoutMs: number): Promise<RequestInit> {
+    const { includeAuth = true, query: _query, requestClass: _requestClass, retryOverride: _retryOverride, headers, signal, ...requestInit } = init;
     const normalizedHeaders = new Headers(headers);
     const hasAuthorization = normalizedHeaders.has('Authorization');
     if (includeAuth && !hasAuthorization && this.authHeaderProvider) {
@@ -482,6 +570,7 @@ export class GbApiClient {
     return {
       ...requestInit,
       headers: normalizedHeaders,
+      signal: withTimeoutSignal(signal, timeoutMs),
     };
   }
 
@@ -495,6 +584,86 @@ export class GbApiClient {
     const separator = url.includes('?') ? '&' : '?';
     return `${url}${separator}last_seq=${encodeURIComponent(String(lastSeq))}`;
   }
+}
+
+class ApiRequestError extends Error {
+  constructor(path: string, readonly status: number) {
+    super(`Request failed for ${path} with status ${status}`);
+  }
+}
+
+function resolveTransportPolicy(options: TransportPolicyOptions | undefined): Required<TransportPolicyOptions> & {
+  retry: Required<RetryPolicyOptions>;
+  idempotency: Required<IdempotencyPolicyOptions>;
+} {
+  return {
+    defaultTimeoutMs: options?.defaultTimeoutMs ?? 10_000,
+    interactiveTimeoutMs: options?.interactiveTimeoutMs ?? 10_000,
+    heavyReadTimeoutMs: options?.heavyReadTimeoutMs ?? 30_000,
+    retry: {
+      maxRetries: options?.retry?.maxRetries ?? 2,
+      baseDelayMs: options?.retry?.baseDelayMs ?? 250,
+      maxDelayMs: options?.retry?.maxDelayMs ?? 2_000,
+    },
+    idempotency: {
+      retryablePostPaths: options?.idempotency?.retryablePostPaths ?? [
+        '/api/v1/jobs/',
+        '/api/v1/alerts/',
+        '/api/v1/strategies/instances/',
+      ],
+    },
+  };
+}
+
+function shouldRetryStatus(status: number): boolean {
+  if (status === 401 || status === 403 || status === 422) return false;
+  return status >= 500;
+}
+
+function isRetryableNetworkError(error: unknown): boolean {
+  if (error instanceof ApiRequestError) {
+    return shouldRetryStatus(error.status);
+  }
+  return error instanceof DOMException || error instanceof TypeError;
+}
+
+async function sleepWithJitter(attempt: number, policy: Required<RetryPolicyOptions>): Promise<void> {
+  const exponential = Math.min(policy.baseDelayMs * 2 ** attempt, policy.maxDelayMs);
+  const jitter = Math.floor(Math.random() * Math.max(1, Math.floor(exponential * 0.25)));
+  const delay = Math.min(exponential + jitter, policy.maxDelayMs);
+  await new Promise((resolve) => setTimeout(resolve, delay));
+}
+
+function withTimeoutSignal(signal: AbortSignal | null | undefined, timeoutMs: number): AbortSignal {
+  const controller = new AbortController();
+  const timeoutHandle = setTimeout(() => controller.abort(new DOMException('Request timeout exceeded', 'TimeoutError')), timeoutMs);
+
+  if (signal) {
+    if (signal.aborted) {
+      clearTimeout(timeoutHandle);
+      controller.abort(signal.reason);
+      return controller.signal;
+    }
+
+    signal.addEventListener('abort', () => {
+      clearTimeout(timeoutHandle);
+      controller.abort(signal.reason);
+    }, { once: true });
+  }
+
+  controller.signal.addEventListener('abort', () => {
+    clearTimeout(timeoutHandle);
+  }, { once: true });
+
+  return controller.signal;
+}
+
+export function parseWebSocketControlMessage(raw: string): Record<string, unknown> | null {
+  let payload: unknown;
+  try { payload = JSON.parse(raw); } catch { return null; }
+  if (!isRecord(payload)) return null;
+  if ('seq' in payload || 'event_id' in payload) return null;
+  return payload;
 }
 
 export function parseWebSocketEvent(raw: string): WebSocketEventEnvelope | null {

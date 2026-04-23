@@ -10,7 +10,8 @@ from app.ws.manager import ConnectionManager
 
 router = APIRouter(tags=["ws"])
 logger = logging.getLogger(__name__)
-manager = ConnectionManager()
+settings = get_settings()
+manager = ConnectionManager(replay_window=settings.ws_replay_window)
 VALID_TOPICS = {"jobs", "alerts", "logs", "portfolio", "risk", "strategy", "models", "backtests"}
 
 
@@ -22,9 +23,11 @@ async def _heartbeat(websocket: WebSocket, interval_seconds: float) -> None:
 
 @router.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket) -> None:
-    settings = get_settings()
     await manager.connect(websocket)
     logger.info("websocket connected; active=%s", manager.active_count)
+
+    last_seq_raw = websocket.query_params.get("last_seq")
+    last_seq = int(last_seq_raw) if last_seq_raw and last_seq_raw.isdigit() else None
 
     heartbeat_task = asyncio.create_task(
         _heartbeat(websocket, settings.heartbeat_interval_seconds)
@@ -54,6 +57,35 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                     websocket,
                     {"type": "subscribed", "topics": subscriptions},
                 )
+
+                if last_seq is not None:
+                    replay_result = await manager.replay_since(websocket, last_seq, subscriptions)
+                    if replay_result.status == "too_old":
+                        await manager.send_json(
+                            websocket,
+                            {
+                                "type": "replay_required",
+                                "detail": "last_seq outside replay window",
+                                "requested_last_seq": last_seq,
+                                "oldest_available_seq": replay_result.oldest_seq,
+                                "latest_available_seq": replay_result.latest_seq,
+                            },
+                        )
+                    elif replay_result.status == "ok":
+                        await manager.send_json(
+                            websocket,
+                            {
+                                "type": "replay_complete",
+                                "replayed_count": replay_result.replayed_count,
+                                "latest_available_seq": replay_result.latest_seq,
+                            },
+                        )
+                    else:
+                        await manager.send_json(
+                            websocket,
+                            {"type": "error", "detail": "invalid replay cursor"},
+                        )
+                    last_seq = None
             elif action == "unsubscribe":
                 subscriptions = manager.unsubscribe(websocket, topics)
                 await manager.send_json(

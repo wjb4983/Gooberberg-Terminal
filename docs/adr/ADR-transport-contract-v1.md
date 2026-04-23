@@ -35,7 +35,20 @@ All clients should normalize transport status into the following canonical state
 - **`ws_lagging`**
   - WS connection is established but event freshness/sequence continuity is behind acceptable threshold (gap/lag condition), requiring catch-up strategy.
 
-### 2) Canonical Endpoint + Auth Map
+### 2) HTTP transport policy contract
+
+- **Default timeout classes**
+  - `interactive`: 10s default (`GB_HTTP_DEFAULT_TIMEOUT_MS` in desktop env, overridable per request).
+  - `heavy_read`: 30s default for large/expensive reads.
+- **Retry policy**
+  - Never retry on `401`, `403`, `422`.
+  - Retry only bounded attempts with jitter on `5xx` and transient network errors.
+- **Idempotency guardrails**
+  - Automatic retries for `GET`/`HEAD`.
+  - Retries for `POST` only on approved idempotent endpoint list.
+  - Non-idempotent writes remain single-attempt unless explicitly opted in.
+
+### 3) Canonical Endpoint + Auth Map
 
 | Endpoint | Method(s) | Auth expectation | Purpose |
 |---|---|---|---|
@@ -46,13 +59,7 @@ All clients should normalize transport status into the following canonical state
 | `/api/v1/**` (non-health) | all | Bearer required | Control-plane application APIs. |
 | `/ws` | WebSocket | Align with backend policy (currently no explicit token validation in handler) | Realtime subscriptions (`subscribe`/`unsubscribe`) and event stream delivery. |
 
-**Auth contract v1:**
-
-- Backend validates static bearer token value from `GB_API_AUTH_TOKEN` for protected HTTP endpoints.
-- Health/liveness endpoints remain unauthenticated by explicit allowlist.
-- WS auth hardening (token validation, consistent scope checks) is a follow-up item and should not silently diverge from HTTP policy.
-
-### 3) Replay + Event Ordering Contract
+### 4) Replay + Event Ordering Contract
 
 #### Ordering
 
@@ -62,47 +69,51 @@ All clients should normalize transport status into the following canonical state
 #### Replay requirements
 
 - If client reconnects with `last_seq=N`, backend **must** either:
-  1. Replay all durable events with `seq > N` for subscribed topics in order, then continue live stream, **or**
-  2. Return an explicit non-replayable signal so client can initiate deterministic snapshot + resume flow.
+  1. Replay all retained events with `seq > N` for subscribed topics in order, then continue live stream, **or**
+  2. Return explicit replay-required metadata so client can initiate deterministic snapshot + resume flow.
 
-- Silent ignore of replay cursor is non-compliant once v1 transport contract is approved.
+#### Window contract
+
+- `GB_WS_REPLAY_WINDOW` controls max retained events for in-process replay.
+- If `last_seq` is older than the earliest retained event, backend sends `replay_required` with bounds (`oldest_available_seq`, `latest_available_seq`).
 
 #### Gap handling
 
 - Client detecting sequence discontinuity should transition to `ws_lagging`.
-- Recovery path: trigger snapshot/poll backfill for affected domain, then resume WS from new high-water mark.
+- Recovery path: trigger snapshot/poll backfill for affected domain, reset high-water mark, then resume WS.
 
-#### Durability assumptions
+## Operational toggles
 
-- Replay-capable implementations require bounded durable event retention (in-memory ring buffer or persistent store) and topic-aware filtering.
-- Replay window SLA should be documented (e.g., minimum event count or time retention).
+- `GB_WS_REPLAY_WINDOW` (backend) — replay buffer depth for WS resume.
+- `GB_HTTP_DEFAULT_TIMEOUT_MS` (desktop env via `VITE_GB_HTTP_DEFAULT_TIMEOUT_MS`) — default HTTP timeout baseline.
+- `VITE_GB_WS_RECONNECT_MIN_MS` / `VITE_GB_WS_RECONNECT_MAX_MS` — reconnect bounds.
 
-## Consequences
+## Risks
 
-### Positive
+- Replay buffer memory/cost tradeoffs.
+- Event ordering and replay consistency bugs under burst load.
 
-- Shared client UX semantics for network/auth/realtime states.
-- Predictable recovery from reconnect and event gaps.
-- Clear auth and endpoint expectations for operations and security reviews.
+## Dependencies
 
-### Trade-offs
+- Phase 1 ADR ratification.
+- Phase 2 diagnostic UX for operator visibility.
 
-- Requires implementation work for replay support and timeout standards.
-- Potential short-term freeze on transport-affecting changes until contract ratified.
+## Acceptance criteria
 
-## Implementation Plan (Initial)
+- Deterministic behavior under injected latency, disconnect, and packet loss simulation.
+- No duplicate side-effects for retried non-idempotent operations.
 
-1. Add standardized HTTP timeout + abort policy in shared API client.
-2. Define WS auth policy parity with HTTP endpoints.
-3. Implement replay-capable WS path honoring `last_seq`.
-4. Add explicit lag/gap detection and canonical state mapping in desktop transport hooks.
-5. Upgrade health dependency checks from placeholders to active probes where feasible.
+## Rollout strategy
+
+- Canary to internal operators first.
+- Enable replay + circuit logic per environment flag.
+
+## Rollback plan
+
+- Disable replay/circuit enforcement flags.
+- Revert to current reconnect + polling fallback behavior.
 
 ## Estimate and Ownership
 
-- **Estimated effort:** 2–3 engineering days.
-- **Recommended owner profile:** Staff full-stack engineer experienced with FastAPI and React/Tauri transport layers.
-
-## Status Notes
-
-- If architecture review blocks agreement, keep this ADR in draft/proposed state and proceed only with non-breaking instrumentation tasks.
+- **Estimated effort:** 6–8 engineering days.
+- **Recommended owner profile:** Senior backend engineer + frontend platform engineer.
