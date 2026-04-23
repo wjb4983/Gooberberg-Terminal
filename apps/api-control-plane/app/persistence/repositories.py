@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-from datetime import UTC, date
+from datetime import UTC, date, timedelta
+from hashlib import sha256
 from uuid import UUID, uuid4
 
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from app.jobs.models import JobLifecycleEvent, JobStatus
@@ -227,18 +228,130 @@ class RunArtifactSqlRepository:
     def __init__(self, session: Session) -> None:
         self._session = session
 
-    def add_summary(self, *, run_id: UUID, run_type: str, job_id: UUID, artifact_ref: str, metrics: dict[str, object], notes: str | None) -> None:
+    def add_summary(
+        self,
+        *,
+        run_id: UUID,
+        run_type: str,
+        job_id: UUID,
+        artifact_ref: str,
+        checksum: str | None,
+        size_bytes: int | None,
+        metrics: dict[str, object],
+        notes: str | None,
+        retention_class: str,
+    ) -> None:
+        timestamp = utc_now()
+        resolved_checksum = (checksum or "").strip() or sha256(artifact_ref.encode("utf-8")).hexdigest()
+        existing_for_run = (
+            self._session.execute(
+                select(RunArtifactRow).where(
+                    RunArtifactRow.run_id == str(run_id),
+                    RunArtifactRow.run_type == run_type,
+                    RunArtifactRow.checksum == resolved_checksum,
+                )
+            )
+            .scalars()
+            .first()
+        )
+        if existing_for_run is not None:
+            existing_for_run.last_accessed_at = timestamp
+            existing_for_run.metrics = metrics
+            existing_for_run.notes = notes
+            existing_for_run.size_bytes = size_bytes or existing_for_run.size_bytes
+            existing_for_run.retention_class = retention_class
+            self._session.add(existing_for_run)
+            self._session.commit()
+            return
+
+        dedup_source = (
+            self._session.execute(select(RunArtifactRow).where(RunArtifactRow.checksum == resolved_checksum).limit(1))
+            .scalars()
+            .first()
+        )
         row = RunArtifactRow(
             run_id=str(run_id),
             run_type=run_type,
             job_id=str(job_id),
-            artifact_ref=artifact_ref,
+            artifact_ref=dedup_source.artifact_ref if dedup_source else artifact_ref,
+            checksum=resolved_checksum,
+            size_bytes=size_bytes or 0,
             metrics=metrics,
             notes=notes,
-            created_at=utc_now(),
+            last_accessed_at=timestamp,
+            retention_class=retention_class,
+            created_at=timestamp,
         )
         self._session.add(row)
         self._session.commit()
+
+    def list_for_job(self, job_id: UUID) -> list[dict[str, object]]:
+        rows = (
+            self._session.execute(
+                select(RunArtifactRow)
+                .where(RunArtifactRow.job_id == str(job_id))
+                .order_by(RunArtifactRow.created_at.desc(), RunArtifactRow.id.desc())
+            )
+            .scalars()
+            .all()
+        )
+        return [self._to_summary(row) for row in rows]
+
+    def get_for_job(self, *, job_id: UUID, artifact_id: int) -> dict[str, object] | None:
+        row = (
+            self._session.execute(
+                select(RunArtifactRow).where(RunArtifactRow.job_id == str(job_id), RunArtifactRow.id == artifact_id)
+            )
+            .scalars()
+            .first()
+        )
+        if row is None:
+            return None
+        row.last_accessed_at = utc_now()
+        self._session.add(row)
+        self._session.commit()
+        self._session.refresh(row)
+        payload = self._to_summary(row)
+        payload["metrics"] = dict(row.metrics or {})
+        payload["notes"] = row.notes
+        return payload
+
+    def prune_old_intermediates(self, *, now_utc, retention_days: int) -> int:
+        cutoff = now_utc - timedelta(days=max(retention_days, 1))
+        result = self._session.execute(
+            delete(RunArtifactRow).where(
+                RunArtifactRow.retention_class == "intermediate",
+                RunArtifactRow.last_accessed_at < cutoff,
+            )
+        )
+        self._session.commit()
+        return int(result.rowcount or 0)
+
+    @staticmethod
+    def _best_metric(metrics: dict[str, object]) -> float | None:
+        explicit_best = metrics.get("best_metric")
+        if isinstance(explicit_best, (float, int)):
+            return float(explicit_best)
+        for key in ("score", "accuracy", "f1", "auc"):
+            value = metrics.get(key)
+            if isinstance(value, (float, int)):
+                return float(value)
+        return None
+
+    def _to_summary(self, row: RunArtifactRow) -> dict[str, object]:
+        return {
+            "id": row.id,
+            "run_id": row.run_id,
+            "run_type": row.run_type,
+            "job_id": row.job_id,
+            "artifact_ref": row.artifact_ref,
+            "checksum": row.checksum,
+            "size_bytes": row.size_bytes,
+            "best_metric": self._best_metric(dict(row.metrics or {})),
+            "created_at": row.created_at,
+            "last_accessed_at": row.last_accessed_at,
+            "retention_class": row.retention_class,
+        }
 
 
 class GraphSqlRepository:
