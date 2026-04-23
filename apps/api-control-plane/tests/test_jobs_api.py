@@ -102,3 +102,55 @@ def test_job_create_requires_registered_task_type() -> None:
         else:
             os.environ[TOKEN_ENV] = previous_token
         _reset_settings()
+
+
+def test_job_artifact_manifest_summary_and_detail_routes() -> None:
+    previous_token = os.environ.get(TOKEN_ENV)
+    os.environ.pop(TOKEN_ENV, None)
+    _reset_settings()
+
+    try:
+        with TestClient(create_app()) as client:
+            create_response = client.post(
+                "/api/v1/jobs",
+                json={"job_type": "training", "payload": {"dataset_id": "equities_daily_v1"}},
+            )
+            assert create_response.status_code == 202
+            created = create_response.json()
+
+            update_response = client.post(
+                f"/api/v1/jobs/{created['id']}/events",
+                json={
+                    "status": "success",
+                    "detail": "training run completed",
+                    "progress_pct": 100,
+                    "message": "done",
+                    "result_ref": "s3://gooberberg/runs/2026-04-23/model.tar.gz",
+                    "metrics": {"best_metric": 0.9132, "loss": 0.12},
+                    "artifact_checksum": "sha256:abcd1234efef5678",
+                    "artifact_size_bytes": 1048576,
+                    "artifact_retention_class": "intermediate",
+                },
+            )
+            assert update_response.status_code == 200
+
+            list_response = client.get(f"/api/v1/jobs/{created['id']}/artifacts")
+            assert list_response.status_code == 200
+            artifacts = list_response.json()
+            assert len(artifacts) == 1
+            assert artifacts[0]["artifact_ref"] == "s3://gooberberg/runs/2026-04-23/model.tar.gz"
+            assert artifacts[0]["checksum"] == "sha256:abcd1234efef5678"
+            assert artifacts[0]["size_bytes"] == 1048576
+            assert artifacts[0]["best_metric"] == 0.9132
+
+            detail_response = client.get(f"/api/v1/jobs/{created['id']}/artifacts/{artifacts[0]['id']}")
+            assert detail_response.status_code == 200
+            detail = detail_response.json()
+            assert detail["metrics"]["loss"] == 0.12
+            assert detail["retention_class"] == "intermediate"
+    finally:
+        if previous_token is None:
+            os.environ.pop(TOKEN_ENV, None)
+        else:
+            os.environ[TOKEN_ENV] = previous_token
+        _reset_settings()

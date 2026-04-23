@@ -19,6 +19,7 @@ class Settings(BaseSettings):
     worker_heartbeat_stale_after_seconds: float = Field(default=60.0)
     api_auth_token: str | None = Field(default=None)
     api_auth_scope: str = Field(default="control-plane:full")
+    artifact_intermediate_retention_days: int = Field(default=14, ge=1, le=3650)
 
     model_config = SettingsConfigDict(env_prefix="GB_", extra="ignore")
 

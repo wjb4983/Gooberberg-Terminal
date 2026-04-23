@@ -30,6 +30,7 @@ from app.schemas.graph import (
 )
 from app.schemas.health import DependencyStatus, HealthResponse, QueueHealthResponse
 from app.schemas.jobs import (
+    ArtifactDetailResponse,
     ArtifactSummaryResponse,
     JobCreateRequest,
     JobLifecycleUpdateRequest,
@@ -79,6 +80,7 @@ __all__ = [
     "AlertEvent",
     "AlertSeverity",
     "AlertStatus",
+    "ArtifactDetailResponse",
     "ArtifactSummaryResponse",
     "BacktestPagedResponse",
     "BacktestRunCreateRequest",

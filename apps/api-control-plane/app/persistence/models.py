@@ -114,8 +114,12 @@ class RunArtifactRow(Base):
     run_type: Mapped[str] = mapped_column(String(32), nullable=False)
     job_id: Mapped[str] = mapped_column(String(36), index=True, nullable=False)
     artifact_ref: Mapped[str] = mapped_column(String(1024), nullable=False)
+    checksum: Mapped[str] = mapped_column(String(128), index=True, nullable=False)
+    size_bytes: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     metrics: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False, default=dict)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    last_accessed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
+    retention_class: Mapped[str] = mapped_column(String(32), nullable=False, default="standard")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
 
 

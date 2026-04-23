@@ -87,6 +87,22 @@ interface JobCard {
   provenance?: { parentJobId: string };
 }
 
+interface ArtifactSummary {
+  id: number;
+  artifact_ref: string;
+  checksum: string;
+  size_bytes: number;
+  best_metric: number | null;
+  created_at: string;
+}
+
+interface ArtifactDetail extends ArtifactSummary {
+  last_accessed_at: string;
+  retention_class: string;
+  metrics: Record<string, unknown>;
+  notes: string | null;
+}
+
 interface FormErrors {
   [key: string]: string;
 }
@@ -305,8 +321,12 @@ export function BuildingModelsPage({ baseUrl }: BuildingModelsPageProps): JSX.El
   const [isCreatingConfig, setIsCreatingConfig] = useState(false);
   const [isLaunchingRun, setIsLaunchingRun] = useState(false);
   const [jobActionPendingId, setJobActionPendingId] = useState<string | null>(null);
+  const [artifactSummaries, setArtifactSummaries] = useState<ArtifactSummary[]>([]);
+  const [selectedArtifactId, setSelectedArtifactId] = useState<number | null>(null);
+  const [artifactDetailsById, setArtifactDetailsById] = useState<Record<number, ArtifactDetail>>({});
 
   const selectedJob = useMemo(() => jobs.find((item) => item.id === selectedJobId) ?? null, [jobs, selectedJobId]);
+  const selectedArtifact = selectedArtifactId ? artifactDetailsById[selectedArtifactId] : undefined;
 
   const load = useCallback(async (): Promise<void> => {
     setError(null);
@@ -399,6 +419,37 @@ export function BuildingModelsPage({ baseUrl }: BuildingModelsPageProps): JSX.El
         // intentionally ignore intermittent fetch errors for selected card hydration
       });
   }, [client, selectedJobId]);
+
+  useEffect(() => {
+    if (!selectedJob || selectedJob.status !== 'success') {
+      setArtifactSummaries([]);
+      setSelectedArtifactId(null);
+      return;
+    }
+    void requestJson<ArtifactSummary[]>(baseUrl, `/api/v1/jobs/${encodeURIComponent(selectedJob.id)}/artifacts`)
+      .then((items) => {
+        setArtifactSummaries(items);
+        setSelectedArtifactId((previous) => previous ?? (items[0]?.id ?? null));
+      })
+      .catch(() => {
+        setArtifactSummaries([]);
+        setSelectedArtifactId(null);
+      });
+  }, [baseUrl, selectedJob]);
+
+  const loadArtifactDetail = useCallback(async (artifactId: number): Promise<void> => {
+    if (!selectedJob) return;
+    if (artifactDetailsById[artifactId]) {
+      setSelectedArtifactId(artifactId);
+      return;
+    }
+    const detail = await requestJson<ArtifactDetail>(
+      baseUrl,
+      `/api/v1/jobs/${encodeURIComponent(selectedJob.id)}/artifacts/${artifactId}`,
+    );
+    setArtifactDetailsById((previous) => ({ ...previous, [artifactId]: detail }));
+    setSelectedArtifactId(artifactId);
+  }, [artifactDetailsById, baseUrl, selectedJob]);
 
   const submitConfig = async (): Promise<void> => {
     const validation = selectedFamily === 'hmm_regime_switching' ? validateModelConfig(configForm, sharedConfig) : {};
@@ -729,6 +780,24 @@ export function BuildingModelsPage({ baseUrl }: BuildingModelsPageProps): JSX.El
         {selectedJob && selectedJob.status === 'success' ? (
           <div style={{ display: 'grid', gap: '0.4rem' }}>
             <p style={{ margin: 0 }}><strong>result_ref:</strong> {selectedJob.resultRef ? <code>{selectedJob.resultRef}</code> : 'not yet provided'}</p>
+            {artifactSummaries.length === 0 ? <p className="muted" style={{ margin: 0 }}>No artifact summaries persisted yet.</p> : null}
+            {artifactSummaries.length > 0 ? (
+              <ul style={{ marginTop: 0 }}>
+                {artifactSummaries.map((summary) => (
+                  <li key={summary.id}>
+                    <button type="button" onClick={() => void loadArtifactDetail(summary.id)}>Load details</button>{' '}
+                    <code>{summary.artifact_ref}</code> · {(summary.size_bytes / 1024).toFixed(1)} KB · {new Date(summary.created_at).toLocaleString()} · best metric: {summary.best_metric ?? 'n/a'}
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+            {selectedArtifact ? (
+              <div className="card" style={{ marginTop: '0.25rem' }}>
+                <p style={{ margin: 0 }}><strong>Selected artifact checksum:</strong> <code>{selectedArtifact.checksum}</code></p>
+                <p style={{ margin: 0 }}><strong>Retention class:</strong> {selectedArtifact.retention_class}</p>
+                <p style={{ margin: 0 }}><strong>Last accessed:</strong> {new Date(selectedArtifact.last_accessed_at).toLocaleString()}</p>
+              </div>
+            ) : null}
             <p style={{ margin: 0 }}><strong>Metadata links:</strong></p>
             <ul>
               <li><a href={`${baseUrl}/api/v1/jobs/${encodeURIComponent(selectedJob.id)}`} target="_blank" rel="noreferrer">Job status payload</a></li>

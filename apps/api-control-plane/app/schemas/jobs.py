@@ -58,6 +58,9 @@ class JobLifecycleUpdateRequest(BaseModel):
     result_ref: str | None = None
     metrics: dict[str, Any] = Field(default_factory=dict)
     notes: str | None = None
+    artifact_checksum: str | None = Field(default=None, min_length=8, max_length=128)
+    artifact_size_bytes: int | None = Field(default=None, ge=0)
+    artifact_retention_class: str = Field(default="standard", min_length=1, max_length=32)
 
 
 class JobProgressEventPayload(BaseModel):
@@ -75,10 +78,19 @@ class JobLogEventPayload(JobProgressEventPayload):
 
 
 class ArtifactSummaryResponse(BaseModel):
+    id: int
     run_id: UUID
     run_type: RunType
     job_id: UUID
     artifact_ref: str
+    checksum: str
+    size_bytes: int = Field(ge=0)
+    best_metric: float | None = None
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    last_accessed_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    retention_class: str
+
+
+class ArtifactDetailResponse(ArtifactSummaryResponse):
     metrics: dict[str, Any] = Field(default_factory=dict)
     notes: str | None = None
-    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))

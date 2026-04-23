@@ -46,6 +46,7 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def app_lifespan(app: FastAPI) -> AsyncIterator[None]:
     async with AsyncExitStack() as stack:
+        settings = get_settings()
         model_registry = ModelRegistry()
         model_registry.register(HmmRegimeSwitchingModelSpec())
         model_registry.register(TorchNnTimeseriesModelSpec())
@@ -59,9 +60,10 @@ async def app_lifespan(app: FastAPI) -> AsyncIterator[None]:
         for task_type in ("training", "parameter_sweep", "backtest", "testing"):
             task_registry.register_runner(task_type, _noop_task_runner)
 
-        database = create_database(get_settings())
+        database = create_database(settings)
         Base.metadata.create_all(database.engine)
 
+        app.state.settings = settings
         app.state.database = database
         app.state.model_registry = model_registry
         app.state.task_registry = task_registry

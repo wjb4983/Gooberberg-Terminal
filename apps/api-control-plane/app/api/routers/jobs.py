@@ -14,6 +14,7 @@ from app.persistence.models import BacktestRunRow, ParameterSweepRunRow, Trainin
 from app.persistence.repositories import RunSqlRepository
 from app.schemas import JobCreateRequest, JobLifecycleUpdateRequest, JobResponse, JobStatusResponse
 from app.schemas.jobs import JOB_CANCELABLE_STATES, JOB_RETRYABLE_STATES
+from app.schemas import ArtifactDetailResponse, ArtifactSummaryResponse
 
 logger = logging.getLogger(__name__)
 
@@ -218,8 +219,14 @@ async def publish_job_event(
             run_type=event.run_type,
             job_id=job_id,
             artifact_ref=event.result_ref,
+            checksum=event_update.artifact_checksum,
+            size_bytes=event_update.artifact_size_bytes,
             metrics=event_update.metrics,
             notes=event_update.notes,
+            retention_class=event_update.artifact_retention_class,
+        )
+        request.app.state.job_event_repository.run_retention_jobs(
+            intermediate_retention_days=request.app.state.settings.artifact_intermediate_retention_days
         )
 
     return JobStatusResponse(
@@ -234,6 +241,20 @@ async def publish_job_event(
         result_ref=event.result_ref,
         updated_at=event.updated_at,
     )
+
+
+@router.get("/{job_id}/artifacts", response_model=list[ArtifactSummaryResponse])
+async def list_job_artifacts(job_id: UUID, request: Request) -> list[ArtifactSummaryResponse]:
+    summaries = request.app.state.job_event_repository.list_artifact_summaries(job_id)
+    return [ArtifactSummaryResponse.model_validate(item) for item in summaries]
+
+
+@router.get("/{job_id}/artifacts/{artifact_id}", response_model=ArtifactDetailResponse)
+async def get_job_artifact_detail(job_id: UUID, artifact_id: int, request: Request) -> ArtifactDetailResponse:
+    detail = request.app.state.job_event_repository.get_artifact_detail(job_id=job_id, artifact_id=artifact_id)
+    if detail is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="artifact not found")
+    return ArtifactDetailResponse.model_validate(detail)
 
 
 @router.post("/{job_id}/cancel", response_model=JobStatusResponse)
