@@ -5,6 +5,10 @@
 - `tailscale-connectivity.md`: Tailnet exposure, client validation, and connectivity troubleshooting.
 - `incident-response.md`: Incident severity, triage, mitigation, and recovery playbooks.
 - `release-process.md`: Versioning policy and scripted release flow.
+- `desktop-cannot-connect.md`: Triage and mitigation for desktop-to-backend reachability failures.
+- `auth-token-rejected.md`: Diagnose and fix auth token validation failures.
+- `ws-reconnect-storm.md`: Investigate and stabilize repeated WebSocket reconnect loops.
+- `queue-heartbeat-stale.md`: Recover queue heartbeat freshness and worker liveness.
 
 ## Start here: exact order for common operations
 
