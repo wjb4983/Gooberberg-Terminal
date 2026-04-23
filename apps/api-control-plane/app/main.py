@@ -29,7 +29,12 @@ from app.domain.job_runner import JobRunnerRepository, JobRunnerService
 from app.persistence import create_database
 from app.persistence.job_events import JobEventRepository
 from app.persistence.models import Base
-from app.domain.model_configs import HmmRegimeSwitchingModelSpec
+from app.domain.model_configs import (
+    ArimaModelSpec,
+    HmmRegimeSwitchingModelSpec,
+    KalmanFilterModelSpec,
+    TorchNnTimeseriesModelSpec,
+)
 from app.domain.model_registry import ModelRegistry
 from app.domain.task_registry import TaskRegistry
 from app.jobs.redis_queue import lifespan_redis
@@ -43,6 +48,9 @@ async def app_lifespan(app: FastAPI) -> AsyncIterator[None]:
     async with AsyncExitStack() as stack:
         model_registry = ModelRegistry()
         model_registry.register(HmmRegimeSwitchingModelSpec())
+        model_registry.register(TorchNnTimeseriesModelSpec())
+        model_registry.register(KalmanFilterModelSpec())
+        model_registry.register(ArimaModelSpec())
         task_registry = TaskRegistry()
 
         async def _noop_task_runner(payload: Mapping[str, object]) -> dict[str, object]:

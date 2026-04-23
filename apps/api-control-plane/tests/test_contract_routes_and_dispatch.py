@@ -46,6 +46,117 @@ def test_model_config_route_rejects_invalid_contract_payload() -> None:
     assert response.status_code == 422
 
 
+def test_model_config_route_accepts_new_model_families_with_strict_constraints() -> None:
+    torch_response = client.post(
+        "/api/v1/model-configs",
+        json={
+            "model_family": "torch_nn_timeseries",
+            "config": {
+                "task_type": "forecasting",
+                "data_type": "time_series",
+                "architecture": "transformer_encoder",
+                "lookback_window": 96,
+                "horizon_steps": 24,
+                "hidden_size": 128,
+                "num_layers": 2,
+                "num_attention_heads": 8,
+                "dropout": 0.2,
+                "learning_rate": 0.0005,
+                "batch_size": 64,
+                "loss_function": "mse",
+            },
+        },
+    )
+    assert torch_response.status_code == 201
+
+    kalman_response = client.post(
+        "/api/v1/model-configs",
+        json={
+            "model_family": "kalman_filter",
+            "config": {
+                "task_type": "filtering",
+                "data_type": "state_space_timeseries",
+                "transition_structure": "identity",
+                "state_dimension": 6,
+                "observation_dimension": 6,
+                "process_noise": 0.2,
+                "measurement_noise": 0.1,
+                "initial_covariance_scale": 1.5,
+            },
+        },
+    )
+    assert kalman_response.status_code == 201
+
+    arima_response = client.post(
+        "/api/v1/model-configs",
+        json={
+            "model_family": "arima",
+            "config": {
+                "task_type": "forecasting",
+                "data_type": "time_series_univariate",
+                "p": 2,
+                "d": 1,
+                "q": 1,
+                "seasonal_period": 12,
+                "seasonal_p": 1,
+                "seasonal_d": 0,
+                "seasonal_q": 1,
+                "trend": "constant",
+            },
+        },
+    )
+    assert arima_response.status_code == 201
+
+
+def test_model_config_route_rejects_incompatible_task_or_data_type_for_new_families() -> None:
+    torch_response = client.post(
+        "/api/v1/model-configs",
+        json={
+            "model_family": "torch_nn_timeseries",
+            "config": {
+                "task_type": "classification",
+                "data_type": "tabular",
+                "architecture": "lstm",
+                "lookback_window": 32,
+                "horizon_steps": 8,
+                "hidden_size": 64,
+            },
+        },
+    )
+    assert torch_response.status_code == 422
+
+    kalman_response = client.post(
+        "/api/v1/model-configs",
+        json={
+            "model_family": "kalman_filter",
+            "config": {
+                "task_type": "forecasting",
+                "data_type": "time_series",
+                "state_dimension": 4,
+                "observation_dimension": 2,
+                "process_noise": 0.3,
+                "measurement_noise": 0.1,
+            },
+        },
+    )
+    assert kalman_response.status_code == 422
+
+    arima_response = client.post(
+        "/api/v1/model-configs",
+        json={
+            "model_family": "arima",
+            "config": {
+                "task_type": "filtering",
+                "data_type": "time_series",
+                "p": 0,
+                "d": 0,
+                "q": 0,
+            },
+        },
+    )
+    assert arima_response.status_code == 422
+
+
 def test_training_sweep_backtest_testing_routes_emit_queued_job_flow() -> None:
     model_config = client.post(
         "/api/v1/model-configs",

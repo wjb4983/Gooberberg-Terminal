@@ -8,6 +8,9 @@ from pydantic import BaseModel, Field
 
 class ModelFamily(StrEnum):
     HMM_REGIME_SWITCHING = "hmm_regime_switching"
+    TORCH_NN_TIMESERIES = "torch_nn_timeseries"
+    KALMAN_FILTER = "kalman_filter"
+    ARIMA = "arima"
 
 
 class ModelConfigCreateRequest(BaseModel):
