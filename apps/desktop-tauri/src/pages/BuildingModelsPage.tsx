@@ -1,5 +1,5 @@
 import { GbApiClient } from '@gb/api-client';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
 interface BuildingModelsPageProps {
   baseUrl: string;
@@ -27,13 +27,36 @@ interface TrainingRunItem {
 }
 
 interface ModelConfigFormState {
-  name: string;
   numRegimes: string;
   lookbackWindow: string;
   covarianceType: CovarianceType;
-  transitionRegularization: string;
-  featureColumns: string;
-  targetColumn: string;
+  convergenceTol: string;
+  maxIterations: string;
+}
+
+interface SharedConfigFields {
+  name: string;
+  version: string;
+  taskType: string;
+  dataProfile: string;
+}
+
+interface TorchFormState {
+  lookbackWindow: string;
+  horizonSteps: string;
+  preset: 'fast' | 'balanced' | 'accurate';
+  mode: 'simple' | 'advanced';
+  architecture: 'lstm' | 'gru' | 'tcn' | 'transformer_encoder';
+  optionsJson: string;
+}
+
+interface KalmanFormState {
+  transitionStructure: 'identity' | 'constant_velocity' | 'custom';
+  stateDimension: string;
+  observationDimension: string;
+  processNoise: string;
+  measurementNoise: string;
+  initialCovarianceScale: string;
 }
 
 interface TrainingLaunchFormState {
@@ -69,13 +92,44 @@ interface FormErrors {
 }
 
 const defaultModelConfigForm: ModelConfigFormState = {
-  name: '',
   numRegimes: '3',
   lookbackWindow: '252',
   covarianceType: 'diag',
-  transitionRegularization: '0.01',
-  featureColumns: 'returns_1d,returns_5d,volatility_20d',
-  targetColumn: 'returns_1d',
+  convergenceTol: '0.001',
+  maxIterations: '200',
+};
+
+const defaultSharedConfigFields: SharedConfigFields = {
+  name: '',
+  version: 'v1',
+  taskType: 'forecasting',
+  dataProfile: 'time_series',
+};
+
+const defaultTorchFormState: TorchFormState = {
+  lookbackWindow: '96',
+  horizonSteps: '24',
+  preset: 'balanced',
+  mode: 'simple',
+  architecture: 'transformer_encoder',
+  optionsJson: JSON.stringify({
+    hidden_size: 128,
+    num_layers: 2,
+    num_attention_heads: 8,
+    dropout: 0.1,
+    learning_rate: 0.001,
+    batch_size: 64,
+    loss_function: 'mse',
+  }, null, 2),
+};
+
+const defaultKalmanFormState: KalmanFormState = {
+  transitionStructure: 'constant_velocity',
+  stateDimension: '6',
+  observationDimension: '6',
+  processNoise: '0.2',
+  measurementNoise: '0.1',
+  initialCovarianceScale: '1.0',
 };
 
 const defaultTrainingLaunchForm: TrainingLaunchFormState = {
@@ -102,21 +156,23 @@ async function requestJson<T>(baseUrl: string, path: string, init?: RequestInit)
   return (await response.json()) as T;
 }
 
-function buildModelConfigPayload(form: ModelConfigFormState): Record<string, unknown> {
+function buildHmmPayload(form: ModelConfigFormState, shared: SharedConfigFields): Record<string, unknown> {
   return {
-    name: form.name.trim(),
-    num_regimes: Number(form.numRegimes),
+    name: shared.name.trim(),
+    version: shared.version.trim(),
+    task_type: shared.taskType.trim(),
+    data_profile: shared.dataProfile.trim(),
+    n_states: Number(form.numRegimes),
     lookback_window: Number(form.lookbackWindow),
     covariance_type: form.covarianceType,
-    transition_regularization: Number(form.transitionRegularization),
-    feature_columns: form.featureColumns.split(',').map((item) => item.trim()).filter(Boolean),
-    target_column: form.targetColumn.trim(),
+    convergence_tol: Number(form.convergenceTol),
+    max_iterations: Number(form.maxIterations),
   };
 }
 
-function validateModelConfig(form: ModelConfigFormState): FormErrors {
+function validateModelConfig(form: ModelConfigFormState, shared: SharedConfigFields): FormErrors {
   const errors: FormErrors = {};
-  if (!form.name.trim()) {
+  if (!shared.name.trim()) {
     errors.name = 'Model name is required so it is easy to select for later training jobs.';
   }
   const regimes = Number(form.numRegimes);
@@ -127,15 +183,13 @@ function validateModelConfig(form: ModelConfigFormState): FormErrors {
   if (!Number.isFinite(lookback) || lookback < 10) {
     errors.lookbackWindow = 'Lookback window must be a number >= 10.';
   }
-  const regularization = Number(form.transitionRegularization);
-  if (!Number.isFinite(regularization) || regularization < 0 || regularization > 1) {
-    errors.transitionRegularization = 'Transition regularization must be between 0 and 1.';
+  const convergenceTol = Number(form.convergenceTol);
+  if (!Number.isFinite(convergenceTol) || convergenceTol <= 0 || convergenceTol > 1) {
+    errors.convergenceTol = 'Convergence tolerance must be > 0 and <= 1.';
   }
-  if (form.featureColumns.split(',').map((item) => item.trim()).filter(Boolean).length === 0) {
-    errors.featureColumns = 'Provide at least one feature column (comma-separated).';
-  }
-  if (!form.targetColumn.trim()) {
-    errors.targetColumn = 'Target column is required.';
+  const maxIterations = Number(form.maxIterations);
+  if (!Number.isFinite(maxIterations) || maxIterations < 10) {
+    errors.maxIterations = 'Max iterations must be a number >= 10.';
   }
   return errors;
 }
@@ -167,6 +221,45 @@ function validateLaunchForm(form: TrainingLaunchFormState): FormErrors {
   return errors;
 }
 
+function buildTorchPayload(form: TorchFormState, shared: SharedConfigFields): Record<string, unknown> {
+  const presets: Record<TorchFormState['preset'], Record<string, unknown>> = {
+    fast: { architecture: 'gru', hidden_size: 64, num_layers: 1, num_attention_heads: 1, dropout: 0.05, learning_rate: 0.001, batch_size: 128, loss_function: 'mse' },
+    balanced: { architecture: 'transformer_encoder', hidden_size: 128, num_layers: 2, num_attention_heads: 8, dropout: 0.1, learning_rate: 0.001, batch_size: 64, loss_function: 'mse' },
+    accurate: { architecture: 'transformer_encoder', hidden_size: 256, num_layers: 4, num_attention_heads: 8, dropout: 0.2, learning_rate: 0.0005, batch_size: 32, loss_function: 'huber' },
+  };
+  const advancedOptions = form.mode === 'advanced'
+    ? (JSON.parse(form.optionsJson) as Record<string, unknown>)
+    : {};
+  return {
+    name: shared.name.trim(),
+    version: shared.version.trim(),
+    task_type: shared.taskType.trim() || 'forecasting',
+    data_type: shared.dataProfile.trim() || 'time_series',
+    lookback_window: Number(form.lookbackWindow),
+    horizon_steps: Number(form.horizonSteps),
+    ...(form.mode === 'simple' ? presets[form.preset] : { architecture: form.architecture, ...advancedOptions }),
+  };
+}
+
+function buildKalmanPayload(form: KalmanFormState, shared: SharedConfigFields): Record<string, unknown> {
+  return {
+    name: shared.name.trim(),
+    version: shared.version.trim(),
+    task_type: shared.taskType.trim() || 'filtering',
+    data_type: shared.dataProfile.trim() || 'state_space_timeseries',
+    transition_structure: form.transitionStructure,
+    state_dimension: Number(form.stateDimension),
+    observation_dimension: Number(form.observationDimension),
+    process_noise: Number(form.processNoise),
+    measurement_noise: Number(form.measurementNoise),
+    initial_covariance_scale: Number(form.initialCovarianceScale),
+  };
+}
+
+function FamilyConfigSection({ children }: { children: ReactNode }): JSX.Element {
+  return <div style={{ display: 'grid', gap: '0.5rem' }}>{children}</div>;
+}
+
 function mapRunToCard(run: TrainingRunItem): JobCard {
   return {
     id: run.job_id,
@@ -194,9 +287,14 @@ export function BuildingModelsPage({ baseUrl }: BuildingModelsPageProps): JSX.El
   const lastSeqRef = useRef<number | undefined>(undefined);
 
   const [modelConfigs, setModelConfigs] = useState<ModelConfigItem[]>([]);
+  const [modelFamilies, setModelFamilies] = useState<string[]>([]);
+  const [selectedFamily, setSelectedFamily] = useState('hmm_regime_switching');
   const [jobs, setJobs] = useState<JobCard[]>([]);
 
+  const [sharedConfig, setSharedConfig] = useState<SharedConfigFields>(defaultSharedConfigFields);
   const [configForm, setConfigForm] = useState<ModelConfigFormState>(defaultModelConfigForm);
+  const [torchForm, setTorchForm] = useState<TorchFormState>(defaultTorchFormState);
+  const [kalmanForm, setKalmanForm] = useState<KalmanFormState>(defaultKalmanFormState);
   const [launchForm, setLaunchForm] = useState<TrainingLaunchFormState>(defaultTrainingLaunchForm);
 
   const [configErrors, setConfigErrors] = useState<FormErrors>({});
@@ -213,11 +311,14 @@ export function BuildingModelsPage({ baseUrl }: BuildingModelsPageProps): JSX.El
   const load = useCallback(async (): Promise<void> => {
     setError(null);
     try {
-      const [configs, runs] = await Promise.all([
+      const [configs, runs, families] = await Promise.all([
         requestJson<ModelConfigItem[]>(baseUrl, '/api/v1/model-configs'),
         requestJson<TrainingRunItem[]>(baseUrl, '/api/v1/training-runs'),
+        requestJson<string[]>(baseUrl, '/api/v1/models/deployments/families'),
       ]);
       setModelConfigs(configs);
+      setModelFamilies(families);
+      setSelectedFamily((previous) => (families.includes(previous) ? previous : (families[0] ?? 'hmm_regime_switching')));
       setJobs((previous) => {
         const hydrated = runs.map(mapRunToCard);
         const optimistic = previous.filter((item) => item.isOptimistic);
@@ -300,7 +401,17 @@ export function BuildingModelsPage({ baseUrl }: BuildingModelsPageProps): JSX.El
   }, [client, selectedJobId]);
 
   const submitConfig = async (): Promise<void> => {
-    const validation = validateModelConfig(configForm);
+    const validation = selectedFamily === 'hmm_regime_switching' ? validateModelConfig(configForm, sharedConfig) : {};
+    if (!sharedConfig.name.trim()) {
+      validation.name = 'Model name is required so it is easy to select for later training jobs.';
+    }
+    if (selectedFamily === 'torch_nn_timeseries' && torchForm.mode === 'advanced') {
+      try {
+        JSON.parse(torchForm.optionsJson);
+      } catch {
+        validation.optionsJson = 'Advanced options must be valid JSON.';
+      }
+    }
     setConfigErrors(validation);
     if (Object.keys(validation).length > 0) {
       return;
@@ -312,13 +423,20 @@ export function BuildingModelsPage({ baseUrl }: BuildingModelsPageProps): JSX.El
       const created = await requestJson<ModelConfigItem>(baseUrl, '/api/v1/model-configs', {
         method: 'POST',
         body: JSON.stringify({
-          model_family: 'hmm_regime_switching',
-          config: buildModelConfigPayload(configForm),
+          model_family: selectedFamily,
+          config: selectedFamily === 'hmm_regime_switching'
+            ? buildHmmPayload(configForm, sharedConfig)
+            : selectedFamily === 'torch_nn_timeseries'
+              ? buildTorchPayload(torchForm, sharedConfig)
+              : buildKalmanPayload(kalmanForm, sharedConfig),
         }),
       });
       setModelConfigs((previous) => [created, ...previous]);
       setLaunchForm((previous) => ({ ...previous, modelConfigId: created.id }));
       setConfigForm(defaultModelConfigForm);
+      setSharedConfig(defaultSharedConfigFields);
+      setTorchForm(defaultTorchFormState);
+      setKalmanForm(defaultKalmanFormState);
       setConfigErrors({});
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : 'Failed to create model config.');
@@ -460,29 +578,75 @@ export function BuildingModelsPage({ baseUrl }: BuildingModelsPageProps): JSX.El
 
       <div className="card" style={{ marginBottom: '1rem' }}>
         <h3>1) Create model config</h3>
-        <div style={{ display: 'grid', gap: '0.5rem' }}>
-          <input value={configForm.name} onChange={(event) => setConfigForm((prev) => ({ ...prev, name: event.target.value }))} placeholder="Config name" />
-          {configErrors.name ? <small className="muted">{configErrors.name}</small> : null}
-          <input value={configForm.numRegimes} onChange={(event) => setConfigForm((prev) => ({ ...prev, numRegimes: event.target.value }))} placeholder="Num regimes" />
-          {configErrors.numRegimes ? <small className="muted">{configErrors.numRegimes}</small> : null}
-          <input value={configForm.lookbackWindow} onChange={(event) => setConfigForm((prev) => ({ ...prev, lookbackWindow: event.target.value }))} placeholder="Lookback window" />
-          {configErrors.lookbackWindow ? <small className="muted">{configErrors.lookbackWindow}</small> : null}
-          <select value={configForm.covarianceType} onChange={(event) => setConfigForm((prev) => ({ ...prev, covarianceType: event.target.value as CovarianceType }))}>
-            <option value="diag">diag</option>
-            <option value="full">full</option>
+        <FamilyConfigSection>
+          <select value={selectedFamily} onChange={(event) => setSelectedFamily(event.target.value)}>
+            {[...new Set(modelFamilies.length > 0 ? modelFamilies : ['hmm_regime_switching', 'torch_nn_timeseries', 'kalman_filter'])].map((family) => (
+              <option key={family} value={family}>{family}</option>
+            ))}
           </select>
-          <input
-            value={configForm.transitionRegularization}
-            onChange={(event) => setConfigForm((prev) => ({ ...prev, transitionRegularization: event.target.value }))}
-            placeholder="Transition regularization"
-          />
-          {configErrors.transitionRegularization ? <small className="muted">{configErrors.transitionRegularization}</small> : null}
-          <input value={configForm.featureColumns} onChange={(event) => setConfigForm((prev) => ({ ...prev, featureColumns: event.target.value }))} placeholder="Feature columns (comma-separated)" />
-          {configErrors.featureColumns ? <small className="muted">{configErrors.featureColumns}</small> : null}
-          <input value={configForm.targetColumn} onChange={(event) => setConfigForm((prev) => ({ ...prev, targetColumn: event.target.value }))} placeholder="Target column" />
-          {configErrors.targetColumn ? <small className="muted">{configErrors.targetColumn}</small> : null}
+          <input value={sharedConfig.name} onChange={(event) => setSharedConfig((prev) => ({ ...prev, name: event.target.value }))} placeholder="Model name" />
+          {configErrors.name ? <small className="muted">{configErrors.name}</small> : null}
+          <input value={sharedConfig.version} onChange={(event) => setSharedConfig((prev) => ({ ...prev, version: event.target.value }))} placeholder="Version" />
+          <input value={sharedConfig.taskType} onChange={(event) => setSharedConfig((prev) => ({ ...prev, taskType: event.target.value }))} placeholder="Task type" />
+          <input value={sharedConfig.dataProfile} onChange={(event) => setSharedConfig((prev) => ({ ...prev, dataProfile: event.target.value }))} placeholder="Data profile" />
+
+          {selectedFamily === 'hmm_regime_switching' ? (
+            <>
+              <input value={configForm.numRegimes} onChange={(event) => setConfigForm((prev) => ({ ...prev, numRegimes: event.target.value }))} placeholder="Num regimes" />
+              {configErrors.numRegimes ? <small className="muted">{configErrors.numRegimes}</small> : null}
+              <input value={configForm.lookbackWindow} onChange={(event) => setConfigForm((prev) => ({ ...prev, lookbackWindow: event.target.value }))} placeholder="Lookback window" />
+              {configErrors.lookbackWindow ? <small className="muted">{configErrors.lookbackWindow}</small> : null}
+              <select value={configForm.covarianceType} onChange={(event) => setConfigForm((prev) => ({ ...prev, covarianceType: event.target.value as CovarianceType }))}>
+                <option value="diag">diag</option>
+                <option value="full">full</option>
+              </select>
+              <input value={configForm.convergenceTol} onChange={(event) => setConfigForm((prev) => ({ ...prev, convergenceTol: event.target.value }))} placeholder="Convergence tolerance" />
+              {configErrors.convergenceTol ? <small className="muted">{configErrors.convergenceTol}</small> : null}
+              <input value={configForm.maxIterations} onChange={(event) => setConfigForm((prev) => ({ ...prev, maxIterations: event.target.value }))} placeholder="Max iterations" />
+              {configErrors.maxIterations ? <small className="muted">{configErrors.maxIterations}</small> : null}
+            </>
+          ) : null}
+
+          {selectedFamily === 'torch_nn_timeseries' ? (
+            <>
+              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                <button type="button" onClick={() => setTorchForm((prev) => ({ ...prev, mode: 'simple' }))} disabled={torchForm.mode === 'simple'}>Simple mode</button>
+                <button type="button" onClick={() => setTorchForm((prev) => ({ ...prev, mode: 'advanced' }))} disabled={torchForm.mode === 'advanced'}>Advanced mode</button>
+              </div>
+              <input value={torchForm.lookbackWindow} onChange={(event) => setTorchForm((prev) => ({ ...prev, lookbackWindow: event.target.value }))} placeholder="Lookback window" />
+              <input value={torchForm.horizonSteps} onChange={(event) => setTorchForm((prev) => ({ ...prev, horizonSteps: event.target.value }))} placeholder="Horizon steps" />
+              {torchForm.mode === 'simple' ? (
+                <select value={torchForm.preset} onChange={(event) => setTorchForm((prev) => ({ ...prev, preset: event.target.value as TorchFormState['preset'] }))}>
+                  <option value="fast">fast</option>
+                  <option value="balanced">balanced</option>
+                  <option value="accurate">accurate</option>
+                </select>
+              ) : (
+                <>
+                  <select value={torchForm.architecture} onChange={(event) => setTorchForm((prev) => ({ ...prev, architecture: event.target.value as TorchFormState['architecture'] }))}>
+                    <option value="lstm">lstm</option><option value="gru">gru</option><option value="tcn">tcn</option><option value="transformer_encoder">transformer_encoder</option>
+                  </select>
+                  <textarea value={torchForm.optionsJson} onChange={(event) => setTorchForm((prev) => ({ ...prev, optionsJson: event.target.value }))} rows={8} />
+                  {configErrors.optionsJson ? <small className="muted">{configErrors.optionsJson}</small> : null}
+                </>
+              )}
+            </>
+          ) : null}
+
+          {selectedFamily === 'kalman_filter' ? (
+            <>
+              <select value={kalmanForm.transitionStructure} onChange={(event) => setKalmanForm((prev) => ({ ...prev, transitionStructure: event.target.value as KalmanFormState['transitionStructure'] }))}>
+                <option value="identity">identity</option><option value="constant_velocity">constant_velocity</option><option value="custom">custom</option>
+              </select>
+              <input value={kalmanForm.stateDimension} onChange={(event) => setKalmanForm((prev) => ({ ...prev, stateDimension: event.target.value }))} placeholder="State dimension" />
+              <input value={kalmanForm.observationDimension} onChange={(event) => setKalmanForm((prev) => ({ ...prev, observationDimension: event.target.value }))} placeholder="Observation dimension" />
+              <input value={kalmanForm.processNoise} onChange={(event) => setKalmanForm((prev) => ({ ...prev, processNoise: event.target.value }))} placeholder="Process noise" />
+              <input value={kalmanForm.measurementNoise} onChange={(event) => setKalmanForm((prev) => ({ ...prev, measurementNoise: event.target.value }))} placeholder="Measurement noise" />
+              <input value={kalmanForm.initialCovarianceScale} onChange={(event) => setKalmanForm((prev) => ({ ...prev, initialCovarianceScale: event.target.value }))} placeholder="Initial covariance scale" />
+            </>
+          ) : null}
           <button type="button" disabled={isCreatingConfig} onClick={() => void submitConfig()}>{isCreatingConfig ? 'Creating…' : 'Create config'}</button>
-        </div>
+        </FamilyConfigSection>
       </div>
 
       <div className="card" style={{ marginBottom: '1rem' }}>
