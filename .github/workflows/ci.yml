@@ -49,8 +49,8 @@ jobs:
       - name: Unit tests
         run: timeout 15m scripts/test-all.sh
 
-      - name: Integration smoke (localhost + proxy contract)
-        run: timeout 15m pnpm --filter @gooberberg/desktop-tauri test:integration:smoke
+      - name: Connectivity layered smoke
+        run: timeout 15m scripts/test-connectivity-layered.sh
 
       - name: Upload failure artifacts
         if: failure()
@@ -63,6 +63,30 @@ jobs:
             artifacts/logs/**
             artifacts/traces/**
             artifacts/screenshots/**
+
+  release-connectivity-smoke:
+    if: github.event_name != 'schedule' && (startsWith(github.ref, 'refs/heads/release/') || startsWith(github.base_ref, 'release/'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    continue-on-error: true # advisory now; make mandatory next release
+
+    strategy:
+      fail-fast: false
+      matrix:
+        topology: [localhost, tailscale, reverse-proxy]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run synthetic connectivity smoke
+        env:
+          TOPOLOGY: ${{ matrix.topology }}
+          LOCALHOST_BASE_URL: ${{ vars.LOCALHOST_BASE_URL }}
+          TAILSCALE_BASE_URL: ${{ vars.TAILSCALE_BASE_URL }}
+          REVERSE_PROXY_BASE_URL: ${{ vars.REVERSE_PROXY_BASE_URL }}
+        run: |
+          timeout 90s scripts/ops/run-connectivity-smoke-matrix.sh
 
   nightly-matrix:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
@@ -101,17 +125,16 @@ jobs:
           timeout 5m python -m pip install --upgrade pip
           timeout 10m pip install ruff black mypy pytest
 
-      - name: Run full topology matrix
-        env:
-          TOPOLOGY: ${{ matrix.topology }}
-          AUTH_MODE: ${{ matrix.auth_mode }}
-        run: timeout 45m pnpm --filter @gooberberg/desktop-tauri test:connectivity:matrix --topology "$TOPOLOGY" --auth-mode "$AUTH_MODE"
+      - name: Connectivity layered full suite
+        run: timeout 25m scripts/test-connectivity-layered.sh
 
-      - name: Run synthetic TLS/proxy fixture suite
+      - name: Run synthetic connectivity checks
         env:
           TOPOLOGY: ${{ matrix.topology }}
-          AUTH_MODE: ${{ matrix.auth_mode }}
-        run: timeout 25m pnpm --filter @gooberberg/desktop-tauri test:connectivity:faults --topology "$TOPOLOGY" --auth-mode "$AUTH_MODE"
+          LOCALHOST_BASE_URL: ${{ vars.LOCALHOST_BASE_URL }}
+          TAILSCALE_BASE_URL: ${{ vars.TAILSCALE_BASE_URL }}
+          REVERSE_PROXY_BASE_URL: ${{ vars.REVERSE_PROXY_BASE_URL }}
+        run: timeout 10m scripts/ops/run-connectivity-smoke-matrix.sh
 
       - name: Upload failure artifacts
         if: failure()
