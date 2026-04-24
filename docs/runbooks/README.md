@@ -9,6 +9,7 @@
 - `auth-token-rejected.md`: Diagnose and fix auth token validation failures.
 - `ws-reconnect-storm.md`: Investigate and stabilize repeated WebSocket reconnect loops.
 - `queue-heartbeat-stale.md`: Recover queue heartbeat freshness and worker liveness.
+- `connectivity-operator-playbooks.md`: Quick incident playbooks for all offline, WS stuck connecting, auth rejected, and queue stale scenarios.
 
 ## Start here: exact order for common operations
 

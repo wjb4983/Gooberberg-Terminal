@@ -6,6 +6,7 @@ Automation entry points.
 
 - `scripts/lint-all.sh`: Python lint/format/type checks.
 - `scripts/test-all.sh`: Python test suite entry point.
+- `scripts/test-connectivity-layered.sh`: Layered connectivity verification (unit/integration/e2e contract smoke).
 
 ## Ops workflows
 
@@ -18,6 +19,8 @@ Entry points:
 - `scripts/ops/first-time-build-run.sh`: first deployment (`docker compose up -d --build` + health polling).
 - `scripts/ops/subsequent-run.sh`: idempotent routine start (`docker compose up -d` + health polling).
 - `scripts/ops/update-build-run.sh`: pull updates, rebuild, and restart (`docker compose pull` + `up -d --build`).
+- `scripts/ops/connectivity-synthetic-check.sh`: single-topology synthetic health/auth/backend-down/queue/ws checks.
+- `scripts/ops/run-connectivity-smoke-matrix.sh`: run connectivity synthetic smoke across localhost, tailscale, and reverse-proxy base URLs.
 
 Usage examples:
 
