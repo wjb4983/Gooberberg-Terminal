@@ -113,6 +113,27 @@ def test_health_endpoint_stays_public() -> None:
         client = TestClient(create_app())
         response = client.get("/api/v1/health")
         assert response.status_code == 200
+        queue_response = client.get("/api/v1/health/queue")
+        assert queue_response.status_code == 200
+        liveness_response = client.get("/healthz")
+        assert liveness_response.status_code == 200
+    finally:
+        if previous_token is None:
+            os.environ.pop(TOKEN_ENV, None)
+        else:
+            os.environ[TOKEN_ENV] = previous_token
+        _reset_settings()
+
+
+def test_non_health_root_endpoint_requires_token_when_enabled() -> None:
+    previous_token = os.environ.get(TOKEN_ENV)
+    os.environ[TOKEN_ENV] = "private-token"
+    _reset_settings()
+
+    try:
+        client = TestClient(create_app())
+        response = client.get("/")
+        assert response.status_code == 401
     finally:
         if previous_token is None:
             os.environ.pop(TOKEN_ENV, None)

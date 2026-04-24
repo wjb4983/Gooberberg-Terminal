@@ -24,10 +24,40 @@ async def _heartbeat(websocket: WebSocket, interval_seconds: float) -> None:
 @router.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket) -> None:
     await manager.connect(websocket)
-    logger.info("websocket connected; active=%s", manager.active_count)
+    connection_id = manager.connection_id(websocket)
+    client = f"{websocket.client.host}:{websocket.client.port}" if websocket.client else "unknown"
+    logger.info(
+        "websocket connected",
+        extra={
+            "event": "ws_connect",
+            "connection_id": connection_id,
+            "client": client,
+        },
+    )
 
     last_seq_raw = websocket.query_params.get("last_seq")
-    last_seq = int(last_seq_raw) if last_seq_raw and last_seq_raw.isdigit() else None
+    last_seq: int | None = None
+    if last_seq_raw is not None:
+        if last_seq_raw.isdigit():
+            last_seq = int(last_seq_raw)
+        else:
+            logger.info(
+                "websocket replay rejected invalid cursor",
+                extra={
+                    "event": "ws_replay",
+                    "connection_id": connection_id,
+                    "client": client,
+                    "last_seq": last_seq_raw,
+                    "replay_status": "invalid",
+                },
+            )
+            await manager.send_json(
+                websocket,
+                {
+                    "type": "replay_cursor_invalid",
+                    "detail": "last_seq must be a non-negative integer",
+                },
+            )
 
     heartbeat_task = asyncio.create_task(
         _heartbeat(websocket, settings.heartbeat_interval_seconds)
@@ -53,13 +83,35 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
 
             if action == "subscribe":
                 subscriptions = manager.subscribe(websocket, topics)
+                logger.info(
+                    "websocket subscribed",
+                    extra={
+                        "event": "ws_subscribe",
+                        "connection_id": connection_id,
+                        "client": client,
+                        "topics": subscriptions,
+                    },
+                )
                 await manager.send_json(
                     websocket,
                     {"type": "subscribed", "topics": subscriptions},
                 )
 
-                if last_seq is not None:
+                if settings.ws_replay_enabled and last_seq is not None:
                     replay_result = await manager.replay_since(websocket, last_seq, subscriptions)
+                    logger.info(
+                        "websocket replay outcome",
+                        extra={
+                            "event": "ws_replay",
+                            "connection_id": connection_id,
+                            "client": client,
+                            "last_seq": last_seq,
+                            "replay_status": replay_result.status,
+                            "replayed_count": replay_result.replayed_count,
+                            "oldest_seq": replay_result.oldest_seq,
+                            "latest_seq": replay_result.latest_seq,
+                        },
+                    )
                     if replay_result.status == "too_old":
                         await manager.send_json(
                             websocket,
@@ -83,11 +135,39 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                     else:
                         await manager.send_json(
                             websocket,
-                            {"type": "error", "detail": "invalid replay cursor"},
+                            {"type": "replay_cursor_invalid", "detail": "invalid replay cursor"},
                         )
+                    last_seq = None
+                elif not settings.ws_replay_enabled and last_seq is not None:
+                    logger.info(
+                        "websocket replay disabled",
+                        extra={
+                            "event": "ws_replay",
+                            "connection_id": connection_id,
+                            "client": client,
+                            "last_seq": last_seq,
+                            "replay_status": "disabled",
+                        },
+                    )
+                    await manager.send_json(
+                        websocket,
+                        {
+                            "type": "replay_disabled",
+                            "detail": "replay is disabled by server feature flag",
+                        },
+                    )
                     last_seq = None
             elif action == "unsubscribe":
                 subscriptions = manager.unsubscribe(websocket, topics)
+                logger.info(
+                    "websocket unsubscribed",
+                    extra={
+                        "event": "ws_unsubscribe",
+                        "connection_id": connection_id,
+                        "client": client,
+                        "topics": subscriptions,
+                    },
+                )
                 await manager.send_json(
                     websocket,
                     {"type": "unsubscribed", "topics": subscriptions},
@@ -98,7 +178,14 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                     {"type": "error", "detail": "unsupported action"},
                 )
     except WebSocketDisconnect:
-        logger.info("websocket disconnected")
+        logger.info(
+            "websocket disconnected",
+            extra={
+                "event": "ws_disconnect",
+                "connection_id": connection_id,
+                "client": client,
+            },
+        )
     finally:
         heartbeat_task.cancel()
         with contextlib.suppress(asyncio.CancelledError):
