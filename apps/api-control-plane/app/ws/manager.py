@@ -50,15 +50,18 @@ class ConnectionManager:
         self._lock = asyncio.Lock()
         self._replay_window = max(1, replay_window)
         self._event_buffer: deque[BroadcastEvent] = deque(maxlen=self._replay_window)
+        self._connection_ids: dict[WebSocket, str] = {}
 
     async def connect(self, websocket: WebSocket) -> None:
         await websocket.accept()
         self._connections.add(websocket)
         self._subscriptions[websocket] = set()
+        self._connection_ids[websocket] = str(uuid4())
 
     def disconnect(self, websocket: WebSocket) -> None:
         self._connections.discard(websocket)
         self._subscriptions.pop(websocket, None)
+        self._connection_ids.pop(websocket, None)
 
     def subscribe(self, websocket: WebSocket, topics: Iterable[str]) -> list[str]:
         subscriptions = self._subscriptions.setdefault(websocket, set())
@@ -133,6 +136,9 @@ class ConnectionManager:
 
     def all_connections(self) -> Iterable[WebSocket]:
         return self._connections
+
+    def connection_id(self, websocket: WebSocket) -> str | None:
+        return self._connection_ids.get(websocket)
 
     async def _send_many(self, sockets: Iterable[WebSocket], payload: dict) -> None:
         socket_list = list(sockets)

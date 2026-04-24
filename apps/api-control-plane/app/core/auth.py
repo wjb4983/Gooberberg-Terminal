@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
+import logging
 
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
@@ -18,6 +19,7 @@ _READ_SCOPES = frozenset(
     }
 )
 _MUTATING_SCOPES = frozenset({"control-plane:write", "control-plane:full", "control-plane:admin"})
+logger = logging.getLogger(__name__)
 
 
 class BearerTokenAuthMiddleware(BaseHTTPMiddleware):
@@ -44,6 +46,10 @@ class BearerTokenAuthMiddleware(BaseHTTPMiddleware):
         auth_header = request.headers.get("Authorization", "")
         expected = f"Bearer {settings.api_auth_token}"
         if auth_header != expected:
+            logger.warning(
+                "auth failed: bearer token mismatch",
+                extra={"event": "auth_failure", "path": request.url.path},
+            )
             return JSONResponse(
                 status_code=401,
                 content={
@@ -55,6 +61,10 @@ class BearerTokenAuthMiddleware(BaseHTTPMiddleware):
 
         required_scope, allowed_scopes = _required_scope_for_request(request)
         if not granted_scopes.intersection(allowed_scopes):
+            logger.warning(
+                "auth failed: insufficient scope",
+                extra={"event": "auth_failure", "path": request.url.path},
+            )
             return JSONResponse(
                 status_code=403,
                 content={

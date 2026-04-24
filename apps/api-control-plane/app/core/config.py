@@ -17,6 +17,7 @@ class Settings(BaseSettings):
 
     heartbeat_interval_seconds: float = Field(default=15.0)
     ws_replay_window: int = Field(default=512, ge=32, le=20000)
+    ws_replay_enabled: bool = Field(default=True)
     worker_heartbeat_stale_after_seconds: float = Field(default=60.0)
     api_auth_token: str | None = Field(default=None)
     api_auth_scope: str = Field(default="control-plane:full")
