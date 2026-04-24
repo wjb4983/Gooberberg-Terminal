@@ -39,6 +39,11 @@ class JsonFormatter(logging.Formatter):
             "oldest_seq",
             "latest_seq",
             "path",
+            "method",
+            "auth_result",
+            "required_scope",
+            "granted_scopes",
+            "token_id",
         ):
             value = getattr(record, field, None)
             if value is not None:

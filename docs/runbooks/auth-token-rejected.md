@@ -37,11 +37,13 @@ Expected output: structured auth log entries with `auth_result` and `request_id`
 1. Verify configured token source (secret store/env var) matches expected active value.
 2. Confirm no whitespace/encoding issues in injected `Authorization` header.
 3. Validate auth classification (`missing_header` vs `invalid_token` vs `expired_token`).
-4. Correlate desktop `event_id` with backend `request_id` to isolate mismatch path.
+4. Check revocation set alignment (`GB_API_AUTH_REVOKED_TOKEN_IDS`) when a previously valid token suddenly fails.
+5. Correlate desktop `event_id` with backend `request_id` to isolate mismatch path.
 
 ## Mitigation
 
 - Rotate/redeploy correct token secret.
+- If rotating, run dual-accept window by adding new `GB_API_AUTH_TOKENS` record before removing old token.
 - Patch client header injection bug if token not attached.
 - If classification bug exists, keep 401 behavior and hotfix only error-class mapping/observability.
 
