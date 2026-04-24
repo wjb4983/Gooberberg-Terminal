@@ -101,6 +101,7 @@ export function App(): JSX.Element {
                   onSaveBaseUrl={saveBaseUrl}
                   onSaveUiPreferences={saveUiPreferences}
                   onSaveToken={(token) => tokenStorage.save({ token })}
+                  onClearToken={() => tokenStorage.clear()}
                 />
               </ErrorBoundary>
             }

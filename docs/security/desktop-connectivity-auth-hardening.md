@@ -1,7 +1,7 @@
 # Desktop Connectivity Auth Hardening Design
 
 ## Status
-- **Proposed** (for Security review)
+- **In progress** (Phase 2 baseline implemented; pending Security sign-off)
 - **Estimate:** 5-7 engineering days + dedicated Security review
 - **Owner profile:** Security engineer with API auth and desktop keychain experience
 
@@ -54,6 +54,12 @@ Move from one static shared token to either:
 - **Dual-mode window:** support legacy static token + new scoped session auth in parallel.
 - Emit deprecation warning/audit event on legacy token usage.
 - Define strict deprecation date before removal.
+
+### Implemented baseline (April 24, 2026)
+- Structured static credentials now support `token_id`, `scope`, and `expires_at`.
+- Dual-accept mode supported with multiple configured token records.
+- Revocation by token ID supported for emergency response.
+- Legacy `GB_API_AUTH_TOKEN` path remains as temporary rollback/fallback mode.
 
 ### Rollback plan
 - Temporarily re-enable legacy static token validation while keeping:

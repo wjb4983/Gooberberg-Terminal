@@ -9,6 +9,7 @@ interface SettingsPageProps {
   onSaveBaseUrl: (nextBaseUrl: string) => void;
   onSaveUiPreferences: (theme: ThemePreference, compactLayout: boolean, defaultSeverity: 'all' | 'info' | 'warning' | 'critical') => void;
   onSaveToken: (token: string) => Promise<void>;
+  onClearToken: () => Promise<void>;
 }
 
 export function SettingsPage({
@@ -19,6 +20,7 @@ export function SettingsPage({
   onSaveBaseUrl,
   onSaveUiPreferences,
   onSaveToken,
+  onClearToken,
 }: SettingsPageProps): JSX.Element {
   const [baseUrlInput, setBaseUrlInput] = useState(baseUrl);
   const [tokenInput, setTokenInput] = useState('');
@@ -35,6 +37,12 @@ export function SettingsPage({
     await onSaveToken(tokenInput);
     setTokenInput('');
     setStatus('Settings saved. API token stored in OS secure credential storage.');
+  };
+
+  const handleClearToken = async (): Promise<void> => {
+    await onClearToken();
+    setTokenInput('');
+    setStatus('Stored API token cleared. Re-authentication is required before protected API calls can succeed.');
   };
 
   return (
@@ -83,10 +91,12 @@ export function SettingsPage({
         />
 
         <button type="submit">Save Settings</button>
+        <button type="button" onClick={() => void handleClearToken()}>Clear Stored Token</button>
       </form>
 
       {status && <p>{status}</p>}
-      <p>Non-sensitive preferences are persisted locally. Sensitive credentials are not persisted in localStorage.</p>
+      <p>Non-sensitive preferences are persisted locally. Sensitive credentials are never persisted in plaintext localStorage files.</p>
+      <p>If a token expires or is revoked, the API returns 401 and you must set a new token here to re-authenticate.</p>
     </section>
   );
 }

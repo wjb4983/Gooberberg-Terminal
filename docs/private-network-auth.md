@@ -11,13 +11,20 @@ This repository supports a pragmatic private deployment model for a single trust
 
 `apps/api-control-plane` now reads:
 
-- `GB_API_AUTH_TOKEN` (required in production): static bearer token for v1 validation.
-- `GB_API_AUTH_SCOPE` (optional): scope placeholder (`control-plane:full` default) returned in auth responses and available for future policy checks.
+- `GB_API_AUTH_TOKEN`: legacy static bearer token (fallback path).
+- `GB_API_AUTH_SCOPE`: legacy fallback scopes for `GB_API_AUTH_TOKEN`.
+- `GB_API_AUTH_TOKENS`: structured token records for rotation + scoped enforcement in format:
+  - `token_id|token_secret|scope_csv|expires_at_iso8601;token_id|...`
+  - Example: `primary|token-a|control-plane:read,control-plane:write|2026-05-01T00:00:00Z`
+- `GB_API_AUTH_REVOKED_TOKEN_IDS`: comma-separated token IDs to revoke immediately.
+- `GB_API_AUTH_ROTATION_INTERVAL_DAYS`: policy interval for scheduled rotation (default `30` days).
 
 Behavior:
 
 - `GET /api/v1/health` and `/healthz` stay unauthenticated for liveness checks.
-- All other API routes require `Authorization: Bearer <GB_API_AUTH_TOKEN>` when `GB_API_AUTH_TOKEN` is set.
+- All other API routes require `Authorization: Bearer <token>` when any auth token config is set.
+- Backend supports dual-accept mode during migration by setting two records in `GB_API_AUTH_TOKENS`.
+- Expired/revoked tokens return `401` with `auth_result` classification for expiry/re-auth UX.
 
 ## 2) Production compose posture
 
@@ -62,6 +69,31 @@ This avoids opening inbound API ports publicly while preserving operator access.
 
 ## 5) Rotation / maintenance checklist
 
-- Rotate `GB_API_AUTH_TOKEN` periodically and after any workstation compromise.
+- Rotation interval: rotate active tokens every **30 days** (or faster per incident response).
+- Use dual-accept migration window:
+  1. Add new token record in `GB_API_AUTH_TOKENS` (old + new both present).
+  2. Update desktop keychain token to new value.
+  3. Confirm no legacy token usage in audit logs.
+  4. Remove old token and optionally add old `token_id` to `GB_API_AUTH_REVOKED_TOKEN_IDS`.
+- Revocation procedure:
+  1. Add compromised `token_id` to `GB_API_AUTH_REVOKED_TOKEN_IDS`.
+  2. Roll/replace credential for affected clients.
+  3. Monitor `auth_result=revoked_token` and `auth_result=invalid_token` during cleanup.
+- Desktop expiry/re-auth UX:
+  - On `expired_token` or `revoked_token`, operator clears token (if needed) and saves replacement in Settings.
+  - Token is stored in OS keychain only; non-Tauri mode remains in-memory only.
 - Rotate `POSTGRES_PASSWORD` with planned maintenance.
 - Keep this document and `docker-compose.prod.yml` in sync when auth model evolves (e.g., moving from static token to scoped/JWT auth).
+
+## 6) TLS trust assumptions by deployment mode
+
+- **Localhost (`http://127.0.0.1` / loopback only):**
+  - HTTP allowed for local dev and SSH local-forwarded sessions.
+  - Never expose loopback-only API socket directly to public interfaces.
+- **Tailscale HTTPS:**
+  - Prefer HTTPS endpoint with trusted cert chain even on Tailnet.
+  - Application auth stays mandatory; Tailnet transport is not an auth substitute.
+- **Reverse proxy TLS termination:**
+  - TLS terminates at edge proxy with TLS 1.2+ (TLS 1.3 preferred).
+  - Enforce sanitized forwarding headers and trusted-hop rules.
+  - Upstream app auth checks stay enabled behind the proxy.
