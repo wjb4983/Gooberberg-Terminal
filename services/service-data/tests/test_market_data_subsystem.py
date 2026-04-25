@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -53,5 +54,46 @@ def test_cache_repository_writes_partitioned_parquet(tmp_path: Path) -> None:
     refs = repo.write_bars(bars)
 
     assert len(refs) == 1
+    assert "provider=massive" in refs[0].uri
+    assert "asset_class=stocks" in refs[0].uri
     assert "symbol=AAPL" in refs[0].uri
-    assert (tmp_path / "symbol=AAPL" / "date=2026-03-31" / "resolution=minute").exists()
+    assert "resolution=minute" in refs[0].uri
+    assert (tmp_path / "manifest.json").exists()
+    manifest = json.loads((tmp_path / "manifest.json").read_text(encoding="utf-8"))
+    assert manifest["index_fields"] == ["symbol", "resolution", "ts", "year", "month"]
+
+
+def test_cache_repository_writes_option_partition_keys(tmp_path: Path) -> None:
+    repo = CacheRepository(base_path=tmp_path)
+    bars = [
+        CanonicalBar(
+            symbol="AAPL240621C00190000",
+            ts=datetime(2026, 3, 31, 13, 30, tzinfo=UTC),
+            open=1.2,
+            high=1.3,
+            low=1.1,
+            close=1.25,
+            volume=500,
+            source="massive",
+            resolution="minute",
+            asset_class="options",
+            underlying="aapl",
+            expiry=datetime(2026, 6, 21, tzinfo=UTC).date(),
+            strike=190,
+            right="call",
+        )
+    ]
+
+    refs = repo.write_bars(bars)
+
+    assert len(refs) == 1
+    assert (
+        tmp_path
+        / "provider=massive"
+        / "asset_class=options"
+        / "underlying=AAPL"
+        / "expiry=2026-06-21"
+        / "strike=190.0"
+        / "right=call"
+        / "resolution=minute"
+    ).exists()

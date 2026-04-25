@@ -6,9 +6,11 @@ from datetime import UTC, date, datetime
 from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 Resolution = Literal["minute", "hour", "day"]
+AssetClass = Literal["stocks", "options"]
+OptionRight = Literal["call", "put"]
 
 
 class CanonicalBar(BaseModel):
@@ -25,6 +27,11 @@ class CanonicalBar(BaseModel):
     trades: int | None = Field(default=None, ge=0)
     source: str = Field(min_length=1)
     resolution: Resolution
+    asset_class: AssetClass = "stocks"
+    underlying: str | None = None
+    expiry: date | None = None
+    strike: float | None = None
+    right: OptionRight | None = None
 
     @field_validator("symbol")
     @classmethod
@@ -37,6 +44,21 @@ class CanonicalBar(BaseModel):
         if value.tzinfo is None:
             return value.replace(tzinfo=UTC)
         return value.astimezone(UTC)
+
+    @field_validator("underlying")
+    @classmethod
+    def _normalize_underlying(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        return value.strip().upper()
+
+    @model_validator(mode="after")
+    def _validate_asset_key(self) -> "CanonicalBar":
+        if self.asset_class == "stocks":
+            return self
+        if not self.underlying or self.expiry is None or self.strike is None or self.right is None:
+            raise ValueError("options bars require underlying, expiry, strike, and right")
+        return self
 
 
 class TimeRange(BaseModel):

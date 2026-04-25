@@ -123,7 +123,46 @@ def test_cache_repository_dedupes_partition_refs_for_same_symbol_day_resolution(
 
     assert len(refs) == 1
     assert "symbol=AAPL" in refs[0].uri
-    assert (tmp_path / "bars.parquet").exists()
+    assert (tmp_path / "manifest.json").exists()
+
+
+def test_cache_repository_load_bars_uses_partition_predicates(tmp_path) -> None:
+    repo = CacheRepository(base_path=tmp_path)
+    bars = [
+        CanonicalBar(
+            symbol="AAPL",
+            ts=datetime(2026, 4, 1, 13, 30, tzinfo=UTC),
+            open=100,
+            high=101,
+            low=99,
+            close=100.5,
+            volume=1_000,
+            source="massive",
+            resolution="minute",
+        ),
+        CanonicalBar(
+            symbol="MSFT",
+            ts=datetime(2026, 4, 1, 13, 30, tzinfo=UTC),
+            open=200,
+            high=202,
+            low=199,
+            close=201,
+            volume=2_000,
+            source="massive",
+            resolution="minute",
+        ),
+    ]
+    repo.write_bars(bars)
+
+    loaded = repo.load_bars(
+        symbol="aapl",
+        resolution="minute",
+        start=datetime(2026, 4, 1, 0, 0, tzinfo=UTC),
+        end=datetime(2026, 4, 2, 0, 0, tzinfo=UTC),
+    )
+
+    assert loaded.height == 1
+    assert loaded["symbol"].to_list() == ["AAPL"]
 
 
 def test_query_service_normalizes_symbol_and_returns_coverage_contract() -> None:
