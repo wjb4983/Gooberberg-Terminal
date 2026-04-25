@@ -10,6 +10,7 @@ from app.domain.testing_runs import Service as TestingRunService
 from app.jobs.models import JobEnvelope, JobLifecycleEvent, JobStatus
 from app.jobs.store import job_state_store, job_submission_store
 from app.schemas import TestingRunCreateRequest, TestingRunResponse
+from app.schemas.run_constraints import attach_constraints_to_parameters
 
 router = APIRouter(prefix="/testing-runs", tags=["testing-runs"])
 
@@ -31,7 +32,10 @@ async def create_testing_run(
             "job_id": str(job_id),
             "mode": payload.mode.value,
             "target_refs": [ref.model_dump(mode="json") for ref in payload.target_refs],
-            "parameters": payload.parameters,
+            "parameters": attach_constraints_to_parameters(
+                parameters=payload.parameters,
+                constraints=payload.constraints,
+            ),
             "result_summary": None,
             "status": "queued",
             "created_at": accepted_at,

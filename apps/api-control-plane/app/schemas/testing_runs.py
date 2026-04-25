@@ -3,8 +3,9 @@ from enum import StrEnum
 from typing import Any
 from uuid import UUID, uuid4
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
+from app.schemas.run_constraints import RunConstraints, extract_constraints_from_parameters
 from app.schemas.training_runs import RunStatus
 
 
@@ -36,6 +37,7 @@ class TestingRunCreateRequest(BaseModel):
     mode: TestingRunMode
     target_refs: list[TestingTargetReference] = Field(default_factory=list)
     parameters: dict[str, Any] = Field(default_factory=dict)
+    constraints: RunConstraints | None = None
 
 
 class TestingRunResponse(BaseModel):
@@ -45,5 +47,12 @@ class TestingRunResponse(BaseModel):
     target_refs: list[TestingTargetReference] = Field(default_factory=list)
     status: RunStatus = RunStatus.QUEUED
     parameters: dict[str, Any] = Field(default_factory=dict)
+    constraints: RunConstraints | None = None
     result_summary: TestingResultSummary | None = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+    @model_validator(mode="after")
+    def hydrate_constraints_from_parameters(self) -> "TestingRunResponse":
+        if self.constraints is None:
+            self.constraints = extract_constraints_from_parameters(self.parameters)
+        return self
