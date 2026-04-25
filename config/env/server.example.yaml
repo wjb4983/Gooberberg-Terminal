@@ -32,6 +32,28 @@ env:
   NGINX_HTTP_PORT: 80
   NGINX_HTTPS_PORT: 443
 
+  # Market-data provider policy (ingestion layer)
+  GB_MD_POLICY_HIST_WINDOW_STOCKS_YEARS: 5
+  GB_MD_POLICY_HIST_WINDOW_OPTIONS_YEARS: 2
+  # Optional deeper-history overrides if provider/API account allows it.
+  GB_MD_POLICY_API_HISTORY_OVERRIDE_STOCKS_YEARS: ""
+  GB_MD_POLICY_API_HISTORY_OVERRIDE_OPTIONS_YEARS: ""
+
+  # Chunk sizing by endpoint/resolution to stay within provider limits.
+  GB_MD_POLICY_CHUNK_MINUTE_DAYS: 30
+  GB_MD_POLICY_CHUNK_HOUR_DAYS: 120
+  GB_MD_POLICY_CHUNK_DAY_DAYS: 3650
+
+  # Retry/backoff and rate-limit handling.
+  GB_MD_POLICY_RETRY_MAX_RETRIES: 4
+  GB_MD_POLICY_RETRY_BASE_BACKOFF_SECONDS: 0.5
+  GB_MD_POLICY_RETRY_MAX_BACKOFF_SECONDS: 30.0
+  GB_MD_POLICY_RETRY_RATE_LIMIT_BACKOFF_SECONDS: 5.0
+
+  # Finest available resolution by asset class.
+  GB_MD_POLICY_FINEST_RESOLUTION_STOCKS: minute
+  GB_MD_POLICY_FINEST_RESOLUTION_OPTIONS: minute
+
 tls:
   mode: manual
   certificate_file: /etc/nginx/certs/fullchain.pem
