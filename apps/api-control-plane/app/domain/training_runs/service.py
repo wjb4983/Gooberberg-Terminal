@@ -15,3 +15,6 @@ class Service:
 
     def get(self, item_id: UUID) -> dict[str, object] | None:
         return self._repository.get(item_id)
+
+    def update_status(self, item_id: UUID, status: str) -> None:
+        self._repository.update_status(item_id, status)

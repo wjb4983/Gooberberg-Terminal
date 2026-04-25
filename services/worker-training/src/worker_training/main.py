@@ -6,6 +6,7 @@ import asyncio
 import json
 import logging
 import os
+from datetime import date
 import urllib.request
 import uuid
 from dataclasses import dataclass
@@ -37,6 +38,7 @@ except Exception:  # pragma: no cover
 
 class JobStatus(str):
     QUEUED = "queued"
+    WAITING_FOR_DATA = "waiting_for_data"
     RUNNING = "running"
     SUCCESS = "success"
     FAILED = "failed"
@@ -53,10 +55,27 @@ class JobEnvelope(BaseModel):
 
 
 class TrainingRunRequest(BaseModel):
+    dataset_id: str | None = None
     model_name: str = "placeholder-model"
     dataset_ref: str = "dataset://placeholder"
     epochs: int = 1
     learning_rate: float = 0.001
+
+
+class DatasetLookupResponse(BaseModel):
+    dataset_id: str
+    source: str
+    symbol: str
+    timeframe: str
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class CacheCoverageResponse(BaseModel):
+    symbol: str
+    timeframe: str
+    available_start: date | None = None
+    available_end: date | None = None
+    coverage_pct: float = 0.0
 
 
 @dataclass(slots=True)
@@ -113,6 +132,7 @@ async def handle_with_timeout(client: Redis, envelope: JobEnvelope) -> None:
 
 
 async def process_job(client: Redis, envelope: JobEnvelope) -> None:
+    await ensure_data_ready(client, envelope)
     await persist_event(client, envelope, JobStatus.RUNNING, 10.0, "training worker accepted job", None)
     training_request = TrainingRunRequest.model_validate(envelope.payload)
     await asyncio.sleep(0.1)
@@ -122,6 +142,73 @@ async def process_job(client: Redis, envelope: JobEnvelope) -> None:
     await persist_event(client, envelope, JobStatus.RUNNING, 90.0, "finalizing metadata", None)
     await asyncio.sleep(0.1)
     await persist_event(client, envelope, JobStatus.SUCCESS, 100.0, "training run completed", artifact.ref)
+
+
+async def ensure_data_ready(client: Redis, envelope: JobEnvelope) -> None:
+    request = TrainingRunRequest.model_validate(envelope.payload)
+    if not request.dataset_id:
+        return
+
+    dataset_lookup = await control_plane_get_json(f"/market-data/datasets/{request.dataset_id}")
+    if not dataset_lookup:
+        return
+    dataset = DatasetLookupResponse.model_validate(dataset_lookup)
+    required_start = dataset.metadata.get("start_date")
+    required_end = dataset.metadata.get("end_date")
+    if not isinstance(required_start, str) or not isinstance(required_end, str):
+        return
+    try:
+        start_date = date.fromisoformat(required_start)
+        end_date = date.fromisoformat(required_end)
+    except ValueError:
+        return
+
+    symbols_raw = dataset.metadata.get("symbols")
+    resolutions_raw = dataset.metadata.get("resolutions")
+    symbols = [item for item in symbols_raw if isinstance(item, str)] if isinstance(symbols_raw, list) else [dataset.symbol]
+    resolutions = (
+        [item for item in resolutions_raw if isinstance(item, str)] if isinstance(resolutions_raw, list) else [dataset.timeframe]
+    )
+
+    missing: list[tuple[str, str]] = []
+    for symbol in symbols:
+        for resolution in resolutions:
+            coverage_raw = await control_plane_get_json(f"/market-data/cache-coverage?symbol={symbol}&timeframe={resolution}")
+            if not coverage_raw:
+                missing.append((symbol, resolution))
+                continue
+            coverage = CacheCoverageResponse.model_validate(coverage_raw)
+            if (
+                coverage.available_start is None
+                or coverage.available_end is None
+                or coverage.available_start > start_date
+                or coverage.available_end < end_date
+            ):
+                missing.append((symbol, resolution))
+
+    if not missing:
+        return
+
+    await persist_event(client, envelope, JobStatus.WAITING_FOR_DATA, 1.0, "waiting for data ingestion", None)
+    by_resolution: dict[str, set[str]] = {}
+    for symbol, resolution in missing:
+        by_resolution.setdefault(resolution, set()).add(symbol)
+    for resolution, symbols_for_resolution in by_resolution.items():
+        await control_plane_post_json(
+            "/market-data/ingestions",
+            {
+                "provider": dataset.metadata.get("provider", "massive"),
+                "asset_class": dataset.metadata.get("asset_class", "stocks"),
+                "universe_members": sorted(symbols_for_resolution),
+                "resolutions": [resolution],
+                "feature_recipe_version": dataset.metadata.get("feature_recipe_version", "v1"),
+                "label_recipe_version": dataset.metadata.get("label_recipe_version", "v1"),
+                "start_date": start_date.isoformat(),
+                "end_date": end_date.isoformat(),
+            },
+        )
+
+    await persist_event(client, envelope, JobStatus.RUNNING, 5.0, "data ingestion completed, resuming training", None)
 
 
 def write_mock_artifacts(envelope: JobEnvelope, request: TrainingRunRequest) -> ArtifactResult:
@@ -195,6 +282,35 @@ async def post_event(envelope: JobEnvelope, mapping: dict[str, Any]) -> None:
         await asyncio.to_thread(_send)
     except Exception:
         logger.debug("event post failed", extra={"job_id": str(envelope.job_id)})
+
+
+async def control_plane_get_json(path: str) -> dict[str, Any] | None:
+    url = f"{CONTROL_PLANE_EVENTS_URL}{path}"
+
+    def _send() -> dict[str, Any] | None:
+        req = urllib.request.Request(url, method="GET")
+        with urllib.request.urlopen(req, timeout=3) as response:
+            return json.loads(response.read().decode("utf-8"))
+
+    try:
+        return await asyncio.to_thread(_send)
+    except Exception:
+        return None
+
+
+async def control_plane_post_json(path: str, payload: dict[str, Any]) -> dict[str, Any] | None:
+    url = f"{CONTROL_PLANE_EVENTS_URL}{path}"
+    body = json.dumps(payload).encode("utf-8")
+
+    def _send() -> dict[str, Any] | None:
+        req = urllib.request.Request(url, data=body, headers={"Content-Type": "application/json"}, method="POST")
+        with urllib.request.urlopen(req, timeout=3) as response:
+            return json.loads(response.read().decode("utf-8"))
+
+    try:
+        return await asyncio.to_thread(_send)
+    except Exception:
+        return None
 
 
 def main() -> None:
