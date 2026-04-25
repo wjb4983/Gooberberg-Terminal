@@ -1,6 +1,7 @@
-import { GbApiClient } from '@gb/api-client';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
+import { createDesktopApiClient } from '../api/client';
+import { requestJson } from '../api/requestJson';
 import { JobLifecyclePanel } from '../components/JobLifecyclePanel';
 
 interface TrainingRunsPageProps {
@@ -156,21 +157,8 @@ function formatMetricValue(value: unknown): string {
   return String(value);
 }
 
-async function requestJson<T>(baseUrl: string, path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${baseUrl}${path}`, {
-    ...init,
-    headers: {
-      Accept: 'application/json',
-      ...(init?.body ? { 'Content-Type': 'application/json' } : {}),
-      ...(init?.headers ?? {}),
-    },
-  });
-  if (!response.ok) throw new Error(`Request failed (${response.status}) for ${path}`);
-  return (await response.json()) as T;
-}
-
 export function TrainingRunsPage({ baseUrl }: TrainingRunsPageProps): JSX.Element {
-  const client = useMemo(() => new GbApiClient({ baseHttpUrl: baseUrl }), [baseUrl]);
+  const client = useMemo(() => createDesktopApiClient({ baseHttpUrl: baseUrl }), [baseUrl]);
   const [searchParams, setSearchParams] = useSearchParams();
   const [runs, setRuns] = useState<TrainingRunItem[]>([]);
   const [configs, setConfigs] = useState<ModelConfigItem[]>([]);

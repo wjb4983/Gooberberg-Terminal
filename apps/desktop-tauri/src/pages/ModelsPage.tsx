@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { requestJson } from '../api/requestJson';
 
 interface ModelsPageProps {
   baseUrl: string;
@@ -74,23 +75,6 @@ const defaultFormState: HmmConfigFormState = {
   convergenceTol: '0.001',
   maxIterations: '200',
 };
-
-async function requestJson<T>(baseUrl: string, path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${baseUrl}${path}`, {
-    ...init,
-    headers: {
-      Accept: 'application/json',
-      ...(init?.body ? { 'Content-Type': 'application/json' } : {}),
-      ...(init?.headers ?? {}),
-    },
-  });
-
-  if (!response.ok) {
-    throw new Error(`Request failed (${response.status}) for ${path}`);
-  }
-
-  return (await response.json()) as T;
-}
 
 function buildHmmConfig(state: HmmConfigFormState, shared: SharedConfigFields): Record<string, unknown> {
   return {

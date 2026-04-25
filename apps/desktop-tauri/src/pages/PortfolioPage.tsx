@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 
-import { GbApiClient } from '@gb/api-client';
 import type { PortfolioSnapshot } from '@gb/schemas';
+import { createDesktopApiClient } from '../api/client';
 import { ApiErrorCallout } from '../components/ApiErrorCallout';
 import { useOperatorConsole } from '../context/OperatorConsoleContext';
 
@@ -14,7 +14,7 @@ export function PortfolioPage({ baseUrl }: PortfolioPageProps): JSX.Element {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const client = useMemo(() => new GbApiClient({ baseHttpUrl: baseUrl }), [baseUrl]);
+  const client = useMemo(() => createDesktopApiClient({ baseHttpUrl: baseUrl }), [baseUrl]);
   const { reportApiStatus } = useOperatorConsole();
 
   useEffect(() => {

@@ -1,13 +1,14 @@
-import { GbApiClient, parseModelDeploymentPayload } from '@gb/api-client';
+import { parseModelDeploymentPayload } from '@gb/api-client';
 import type { ModelDeployment, ModelDeploymentEventPayload } from '@gb/schemas';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createDesktopApiClient } from '../api/client';
 
 interface ModelDeploymentsPageProps {
   baseUrl: string;
 }
 
 export function ModelDeploymentsPage({ baseUrl }: ModelDeploymentsPageProps): JSX.Element {
-  const client = useMemo(() => new GbApiClient({ baseHttpUrl: baseUrl }), [baseUrl]);
+  const client = useMemo(() => createDesktopApiClient({ baseHttpUrl: baseUrl }), [baseUrl]);
   const [deployments, setDeployments] = useState<ModelDeployment[]>([]);
   const [modelName, setModelName] = useState('');
   const [modelVersion, setModelVersion] = useState('');

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { requestJson } from '../api/requestJson';
 import { SUBTASK_TYPES, TASK_TYPES, type SubtaskType, type TaskType } from '../types/api';
 
 interface ParameterizationPageProps {
@@ -55,21 +56,6 @@ interface DatasetFormErrors {
   startDate?: string;
   endDate?: string;
   finestResolution?: string;
-}
-
-async function requestJson<T>(baseUrl: string, path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${baseUrl}${path}`, {
-    ...init,
-    headers: {
-      Accept: 'application/json',
-      ...(init?.body ? { 'Content-Type': 'application/json' } : {}),
-      ...(init?.headers ?? {}),
-    },
-  });
-  if (!response.ok) {
-    throw new Error(`Request failed (${response.status}) for ${path}`);
-  }
-  return (await response.json()) as T;
 }
 
 function isModelCompatible(config: ModelConfigItem, taskType: TaskType): boolean {

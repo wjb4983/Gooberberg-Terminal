@@ -1,8 +1,6 @@
 import { GbApiClient, type ApiClientOptions } from '@gb/api-client';
 
-import { createTokenStorage } from '../settings/tokenStorage';
-
-const tokenStorage = createTokenStorage();
+import { resolveAuthorizationHeader } from './authHeaders';
 
 const runtimeTransportSettings = {
   httpDefaultTimeoutMs: Number(import.meta.env.VITE_GB_HTTP_DEFAULT_TIMEOUT_MS ?? 10_000),
@@ -13,23 +11,6 @@ const runtimeTransportSettings = {
   wsMaxReconnectsPerWindow: Number(import.meta.env.VITE_GB_WS_MAX_RECONNECTS_PER_WINDOW ?? 8),
   wsReconnectWindowMs: Number(import.meta.env.VITE_GB_WS_RECONNECT_WINDOW_MS ?? 30_000),
 };
-
-function shouldAttachAuthHeader(path: string): boolean {
-  return !path.includes('/health');
-}
-
-async function resolveAuthorizationHeader(path: string): Promise<string | undefined> {
-  if (!shouldAttachAuthHeader(path)) {
-    return undefined;
-  }
-
-  const token = (await tokenStorage.getToken()).trim();
-  if (!token) {
-    return undefined;
-  }
-
-  return `Bearer ${token}`;
-}
 
 export function createDesktopApiClient(
   options: Omit<ApiClientOptions, 'authHeaderProvider'>,

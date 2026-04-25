@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { requestJson } from '../api/requestJson';
 
 interface DataCachePageProps { baseUrl: string; }
 interface CoverageRow {
@@ -14,19 +15,6 @@ interface IngestionResponse {
   source: string;
   symbols: string[];
   timeframe: string;
-}
-
-async function requestJson<T>(baseUrl: string, path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${baseUrl}${path}`, {
-    ...init,
-    headers: {
-      Accept: 'application/json',
-      ...(init?.body ? { 'Content-Type': 'application/json' } : {}),
-      ...(init?.headers ?? {}),
-    },
-  });
-  if (!response.ok) throw new Error(`Request failed (${response.status}) for ${path}`);
-  return (await response.json()) as T;
 }
 
 export function DataCachePage({ baseUrl }: DataCachePageProps): JSX.Element {

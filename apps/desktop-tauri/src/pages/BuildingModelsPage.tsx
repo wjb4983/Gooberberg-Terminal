@@ -1,5 +1,6 @@
-import { GbApiClient } from '@gb/api-client';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { createDesktopApiClient } from '../api/client';
+import { requestJson } from '../api/requestJson';
 import { SUBTASK_TYPES, TASK_TYPES, type SubtaskType, type TaskType } from '../types/api';
 
 interface BuildingModelsPageProps {
@@ -166,21 +167,6 @@ const defaultTrainingLaunchForm: TrainingLaunchFormState = {
   batchSize: '64',
 };
 
-async function requestJson<T>(baseUrl: string, path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${baseUrl}${path}`, {
-    ...init,
-    headers: {
-      Accept: 'application/json',
-      ...(init?.body ? { 'Content-Type': 'application/json' } : {}),
-      ...(init?.headers ?? {}),
-    },
-  });
-  if (!response.ok) {
-    throw new Error(`Request failed (${response.status}) for ${path}`);
-  }
-  return (await response.json()) as T;
-}
-
 function buildHmmPayload(form: ModelConfigFormState, shared: SharedConfigFields): Record<string, unknown> {
   return {
     name: shared.name.trim(),
@@ -316,7 +302,7 @@ function mapRunToCard(run: TrainingRunItem): JobCard {
 }
 
 export function BuildingModelsPage({ baseUrl }: BuildingModelsPageProps): JSX.Element {
-  const client = useMemo(() => new GbApiClient({ baseHttpUrl: baseUrl }), [baseUrl]);
+  const client = useMemo(() => createDesktopApiClient({ baseHttpUrl: baseUrl }), [baseUrl]);
   const lastSeqRef = useRef<number | undefined>(undefined);
 
   const [modelConfigs, setModelConfigs] = useState<ModelConfigItem[]>([]);

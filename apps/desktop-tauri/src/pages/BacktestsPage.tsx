@@ -1,6 +1,7 @@
-import { GbApiClient } from '@gb/api-client';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
+import { createDesktopApiClient } from '../api/client';
+import { requestJson } from '../api/requestJson';
 import { JobLifecyclePanel } from '../components/JobLifecyclePanel';
 
 interface BacktestsPageProps { baseUrl: string; }
@@ -30,12 +31,6 @@ interface PagedRows { items: Array<Record<string, unknown>>; next_offset: number
 
 type DetailTab = 'status' | 'events' | 'metrics' | 'trades' | 'equity';
 
-async function requestJson<T>(baseUrl: string, path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${baseUrl}${path}`, { ...init, headers: { Accept: 'application/json', ...(init?.body ? { 'Content-Type': 'application/json' } : {}), ...(init?.headers ?? {}) } });
-  if (!response.ok) throw new Error(`Request failed (${response.status}) for ${path}`);
-  return (await response.json()) as T;
-}
-
 function VirtualizedRows({ rows }: { rows: Array<Record<string, unknown>> }): JSX.Element {
   const rowHeight = 28;
   const viewportHeight = 260;
@@ -61,7 +56,7 @@ function VirtualizedRows({ rows }: { rows: Array<Record<string, unknown>> }): JS
 }
 
 export function BacktestsPage({ baseUrl }: BacktestsPageProps): JSX.Element {
-  const client = useMemo(() => new GbApiClient({ baseHttpUrl: baseUrl }), [baseUrl]);
+  const client = useMemo(() => createDesktopApiClient({ baseHttpUrl: baseUrl }), [baseUrl]);
   const [searchParams, setSearchParams] = useSearchParams();
   const [runs, setRuns] = useState<BacktestRunItem[]>([]);
   const [configs, setConfigs] = useState<ModelConfigItem[]>([]);

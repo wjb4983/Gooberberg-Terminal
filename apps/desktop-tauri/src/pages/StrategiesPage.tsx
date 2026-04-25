@@ -1,13 +1,13 @@
-import { GbApiClient } from '@gb/api-client';
 import type { StrategyInstance, StrategyMode, WebSocketEventEnvelope } from '@gb/schemas';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createDesktopApiClient } from '../api/client';
 
 interface StrategiesPageProps {
   baseUrl: string;
 }
 
 export function StrategiesPage({ baseUrl }: StrategiesPageProps): JSX.Element {
-  const client = useMemo(() => new GbApiClient({ baseHttpUrl: baseUrl }), [baseUrl]);
+  const client = useMemo(() => createDesktopApiClient({ baseHttpUrl: baseUrl }), [baseUrl]);
   const [instances, setInstances] = useState<StrategyInstance[]>([]);
   const [strategyKey, setStrategyKey] = useState('');
   const [mode, setMode] = useState<StrategyMode>('paper');

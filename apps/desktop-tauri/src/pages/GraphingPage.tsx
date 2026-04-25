@@ -1,8 +1,8 @@
-import { GbApiClient } from '@gb/api-client';
 import type { GraphEdge, GraphNode } from '@gb/schemas';
 import { useEffect, useMemo, useState } from 'react';
 import CytoscapeComponent from 'react-cytoscapejs';
 import Plot from 'react-plotly.js';
+import { createDesktopApiClient } from '../api/client';
 
 interface GraphingPageProps {
   baseUrl: string;
@@ -27,7 +27,7 @@ const DEFAULT_VIEWPORT: ViewportState = {
 };
 
 export function GraphingPage({ baseUrl }: GraphingPageProps): JSX.Element {
-  const client = useMemo(() => new GbApiClient({ baseHttpUrl: baseUrl }), [baseUrl]);
+  const client = useMemo(() => createDesktopApiClient({ baseHttpUrl: baseUrl }), [baseUrl]);
   const [activeTab, setActiveTab] = useState<GraphTab>('relationship');
   const [nodes, setNodes] = useState<GraphNode[]>([]);
   const [edges, setEdges] = useState<GraphEdge[]>([]);

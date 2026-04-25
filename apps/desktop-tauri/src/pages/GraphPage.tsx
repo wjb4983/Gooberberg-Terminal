@@ -1,8 +1,8 @@
-import { GbApiClient } from '@gb/api-client';
 import type { GraphNodeType } from '@gb/schemas';
 import { useEffect, useMemo, useState } from 'react';
 import ReactFlow, { Background, Controls, MiniMap, type Edge, type Node } from 'reactflow';
 import 'reactflow/dist/style.css';
+import { createDesktopApiClient } from '../api/client';
 
 interface GraphPageProps {
   baseUrl: string;
@@ -18,7 +18,7 @@ interface GraphFlowNodeData {
 const NODE_TYPES: GraphNodeType[] = ['strategy', 'model', 'data_source', 'risk_rule', 'execution_adapter', 'job'];
 
 export function GraphPage({ baseUrl }: GraphPageProps): JSX.Element {
-  const client = useMemo(() => new GbApiClient({ baseHttpUrl: baseUrl }), [baseUrl]);
+  const client = useMemo(() => createDesktopApiClient({ baseHttpUrl: baseUrl }), [baseUrl]);
   const [nodes, setNodes] = useState<Array<Node<GraphFlowNodeData>>>([]);
   const [edges, setEdges] = useState<Array<Edge>>([]);
   const [loading, setLoading] = useState(true);

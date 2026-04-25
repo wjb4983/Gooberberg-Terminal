@@ -1,6 +1,7 @@
-import { GbApiClient, parseAlertPayload, parseLogPayload } from '@gb/api-client';
+import { parseAlertPayload, parseLogPayload } from '@gb/api-client';
 import type { AlertEvent, AlertSeverity, LogEvent } from '@gb/schemas';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { createDesktopApiClient } from '../api/client';
 import { DataTable } from '../components/DataTable';
 import { ApiErrorCallout } from '../components/ApiErrorCallout';
 import { useOperatorConsole } from '../context/OperatorConsoleContext';
@@ -11,7 +12,7 @@ interface AlertsHealthPageProps {
 }
 
 export function AlertsHealthPage({ baseUrl, defaultSeverity }: AlertsHealthPageProps): JSX.Element {
-  const client = useMemo(() => new GbApiClient({ baseHttpUrl: baseUrl }), [baseUrl]);
+  const client = useMemo(() => createDesktopApiClient({ baseHttpUrl: baseUrl }), [baseUrl]);
   const [alerts, setAlerts] = useState<AlertEvent[]>([]);
   const [logs, setLogs] = useState<LogEvent[]>([]);
   const [severityFilter, setSeverityFilter] = useState<'all' | AlertSeverity>(defaultSeverity);
