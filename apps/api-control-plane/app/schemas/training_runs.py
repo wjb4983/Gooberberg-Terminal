@@ -5,6 +5,8 @@ from uuid import UUID, uuid4
 
 from pydantic import BaseModel, Field, model_validator
 
+from app.schemas.run_constraints import RunConstraints, extract_constraints_from_parameters
+
 
 class RunStatus(StrEnum):
     QUEUED = "queued"
@@ -45,6 +47,7 @@ class TrainingRunCreateRequest(TaskSubtypeValidatedModel):
     model_config_id: UUID
     dataset_id: str = Field(min_length=1)
     parameters: dict[str, Any] = Field(default_factory=dict)
+    constraints: RunConstraints | None = None
 
 
 class TrainingRunResponse(TaskSubtypeValidatedModel):
@@ -54,4 +57,11 @@ class TrainingRunResponse(TaskSubtypeValidatedModel):
     job_id: UUID
     status: RunStatus = RunStatus.QUEUED
     parameters: dict[str, Any] = Field(default_factory=dict)
+    constraints: RunConstraints | None = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+    @model_validator(mode="after")
+    def hydrate_constraints_from_parameters(self) -> "TrainingRunResponse":
+        if self.constraints is None:
+            self.constraints = extract_constraints_from_parameters(self.parameters)
+        return self

@@ -8,17 +8,35 @@ from app.api.dependencies import get_job_runner_service
 from app.api.routers.ws import manager as ws_manager
 from app.core.logging import request_id_ctx_var
 from app.domain.job_runner import JobRunnerService
+from app.domain.training_runs.constraints import apply_constraints_to_metrics
 from app.jobs.models import JobEnvelope, JobLifecycleEvent, JobStatus
 from app.jobs.store import job_state_store, job_submission_store
-from app.persistence.models import BacktestRunRow, ParameterSweepRunRow, TrainingRunRow
+from app.persistence.models import BacktestRunRow, ParameterSweepRunRow, TestingRunRow, TrainingRunRow
 from app.persistence.repositories import RunSqlRepository
 from app.schemas import JobCreateRequest, JobLifecycleUpdateRequest, JobResponse, JobStatusResponse
 from app.schemas.jobs import JOB_CANCELABLE_STATES, JOB_RETRYABLE_STATES
 from app.schemas import ArtifactDetailResponse, ArtifactSummaryResponse
+from app.schemas.run_constraints import extract_constraints_from_parameters
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])
+
+
+def _resolve_run_constraints(request: Request, *, run_id: UUID, run_type: str):
+    with request.app.state.database.session_factory() as session:
+        mapping = {
+            "training": TrainingRunRow,
+            "backtest": BacktestRunRow,
+            "testing": TestingRunRow,
+        }
+        model = mapping.get(run_type)
+        if model is None:
+            return None
+        row = session.get(model, str(run_id))
+        if row is None:
+            return None
+        return extract_constraints_from_parameters(dict(row.parameters or {}))
 
 
 async def _broadcast_job_event(event: JobLifecycleEvent) -> None:
@@ -214,6 +232,7 @@ async def publish_job_event(
                 RunSqlRepository(session, model).update_status(run_id, event.status.value)
 
     if event.status in {JobStatus.SUCCESS, JobStatus.FAILED} and event.run_id and event.run_type and event.result_ref:
+        constraints = _resolve_run_constraints(request, run_id=event.run_id, run_type=event.run_type)
         request.app.state.job_event_repository.persist_artifact_summary(
             run_id=event.run_id,
             run_type=event.run_type,
@@ -221,7 +240,7 @@ async def publish_job_event(
             artifact_ref=event.result_ref,
             checksum=event_update.artifact_checksum,
             size_bytes=event_update.artifact_size_bytes,
-            metrics=event_update.metrics,
+            metrics=apply_constraints_to_metrics(metrics=event_update.metrics, constraints=constraints),
             notes=event_update.notes,
             retention_class=event_update.artifact_retention_class,
         )

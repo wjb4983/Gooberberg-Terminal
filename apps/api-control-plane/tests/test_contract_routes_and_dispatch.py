@@ -189,10 +189,24 @@ def test_training_sweep_backtest_testing_routes_emit_queued_job_flow() -> None:
             "model_config_id": model_config["id"],
             "dataset_id": dataset["request_id"],
             "parameters": {"epochs": 2},
+            "constraints": {
+                "transaction_cost": {"bps": 3.5, "per_contract_fee": 0.15},
+                "slippage_buckets": [
+                    {
+                        "liquidity_bucket": "high",
+                        "volatility_bucket": "low",
+                        "slippage_bps": 1.2,
+                    }
+                ],
+                "execution_delay": {"signal_to_fill_lag_steps": 1},
+                "limits": {"max_turnover": 0.8, "max_position_abs": 0.2, "leverage_cap": 1.5},
+            },
         },
     )
     assert training.status_code == 201
     training_payload = training.json()
+    assert training_payload["constraints"]["transaction_cost"]["bps"] == 3.5
+    assert training_payload["parameters"]["run_metadata"]["constraints"]["limits"]["leverage_cap"] == 1.5
 
     parameter_set = client.post(
         "/api/v1/parameter-sets",

@@ -57,6 +57,13 @@ from app.schemas.models import (
 from app.schemas.parameter_sets import ParameterSetCloneRequest, ParameterSetCreateRequest, ParameterSetResponse
 from app.schemas.parameter_sweeps import ParameterSweepCreateRequest, ParameterSweepResponse
 from app.schemas.portfolio import PortfolioSnapshot, Position
+from app.schemas.run_constraints import (
+    ExecutionDelayModel,
+    PositionLimitModel,
+    RunConstraints,
+    SlippageBucketModel,
+    TransactionCostModel,
+)
 from app.schemas.strategies import (
     StrategyInstance,
     StrategyInstanceActionResponse,
@@ -127,9 +134,12 @@ __all__ = [
     "ParameterSweepResponse",
     "PortfolioSnapshot",
     "Position",
+    "PositionLimitModel",
     "QueueHealthResponse",
     "RunStatus",
+    "RunConstraints",
     "SubtaskType",
+    "SlippageBucketModel",
     "TaskType",
     "RunType",
     "StrategyInstance",
@@ -148,5 +158,7 @@ __all__ = [
     "TimeSeriesTile",
     "TrainingRunCreateRequest",
     "TrainingRunResponse",
+    "TransactionCostModel",
+    "ExecutionDelayModel",
     "WebSocketContractEnvelope",
 ]

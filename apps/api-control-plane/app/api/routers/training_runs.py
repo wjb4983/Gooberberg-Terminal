@@ -20,6 +20,7 @@ from app.domain.training_runs import Service as TrainingRunService
 from app.jobs.models import JobEnvelope, JobLifecycleEvent, JobStatus
 from app.jobs.store import job_state_store, job_submission_store
 from app.schemas import MarketDataIngestionRequest, TrainingRunCreateRequest, TrainingRunResponse
+from app.schemas.run_constraints import attach_constraints_to_parameters
 
 router = APIRouter(prefix="/training-runs", tags=["training-runs"])
 
@@ -127,7 +128,10 @@ async def create_training_run(
             "dataset_id": payload.dataset_id,
             "task_type": payload.task_type.value,
             "subtask_type": payload.subtask_type.value,
-            "parameters": payload.parameters,
+            "parameters": attach_constraints_to_parameters(
+                parameters=payload.parameters,
+                constraints=payload.constraints,
+            ),
             "status": "queued",
             "created_at": accepted_at,
         }

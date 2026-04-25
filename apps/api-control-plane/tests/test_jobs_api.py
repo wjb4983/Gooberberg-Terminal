@@ -154,3 +154,94 @@ def test_job_artifact_manifest_summary_and_detail_routes() -> None:
         else:
             os.environ[TOKEN_ENV] = previous_token
         _reset_settings()
+
+
+def test_training_run_constraints_are_applied_to_artifact_metrics() -> None:
+    previous_token = os.environ.get(TOKEN_ENV)
+    os.environ.pop(TOKEN_ENV, None)
+    _reset_settings()
+
+    try:
+        with TestClient(create_app()) as client:
+            dataset = client.post(
+                "/api/v1/market-data/ingestions",
+                json={
+                    "source": "test-fixture",
+                    "symbols": ["AAPL"],
+                    "timeframe": "1d",
+                    "start_date": "2025-01-01",
+                    "end_date": "2025-12-31",
+                },
+            ).json()
+
+            model_config = client.post(
+                "/api/v1/model-configs",
+                json={
+                    "model_family": "arima",
+                    "config": {
+                        "task_type": "forecasting",
+                        "data_type": "time_series_univariate",
+                        "p": 1,
+                        "d": 1,
+                        "q": 1,
+                    },
+                },
+            ).json()
+
+            training = client.post(
+                "/api/v1/training-runs",
+                json={
+                    "model_config_id": model_config["id"],
+                    "dataset_id": dataset["request_id"],
+                    "parameters": {"epochs": 1},
+                    "constraints": {
+                        "transaction_cost": {"bps": 4.0, "per_contract_fee": 0.0},
+                        "slippage_buckets": [
+                            {
+                                "liquidity_bucket": "high",
+                                "volatility_bucket": "low",
+                                "slippage_bps": 2.0,
+                            }
+                        ],
+                        "execution_delay": {"signal_to_fill_lag_steps": 2},
+                        "limits": {"max_turnover": 1.0, "max_position_abs": 0.3, "leverage_cap": 1.5},
+                    },
+                },
+            )
+            assert training.status_code == 201
+            run = training.json()
+
+            update_response = client.post(
+                f"/api/v1/jobs/{run['job_id']}/events",
+                json={
+                    "status": "success",
+                    "detail": "training run completed",
+                    "progress_pct": 100,
+                    "message": "done",
+                    "result_ref": "s3://gooberberg/runs/2026-04-24/model-with-constraints.tar.gz",
+                    "metrics": {
+                        "objective_raw": 1.0,
+                        "validation_metrics": {"sharpe": 1.2},
+                        "liquidity_bucket": "high",
+                        "volatility_bucket": "low",
+                        "turnover": 0.9,
+                    },
+                    "artifact_checksum": "sha256:cccc1234efef5678",
+                    "artifact_size_bytes": 1024,
+                    "artifact_retention_class": "intermediate",
+                },
+            )
+            assert update_response.status_code == 200
+
+            artifacts = client.get(f"/api/v1/jobs/{run['job_id']}/artifacts").json()
+            detail = client.get(f"/api/v1/jobs/{run['job_id']}/artifacts/{artifacts[0]['id']}").json()
+            assert detail["metrics"]["constraints"]["transaction_cost"]["bps"] == 4.0
+            assert detail["metrics"]["constraint_penalties"]["total_bps"] == 8.0
+            assert detail["metrics"]["objective_constrained"] == 0.9992
+            assert detail["metrics"]["constraint_penalties"]["limit_breaches"]["max_turnover"] is False
+    finally:
+        if previous_token is None:
+            os.environ.pop(TOKEN_ENV, None)
+        else:
+            os.environ[TOKEN_ENV] = previous_token
+        _reset_settings()
