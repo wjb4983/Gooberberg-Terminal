@@ -5,6 +5,7 @@ from collections.abc import Mapping
 from contextlib import AsyncExitStack, asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.routers.alerts import router as alerts_router
 from app.api.routers.backtest_runs import router as backtest_runs_router
@@ -41,6 +42,10 @@ from app.jobs.redis_queue import lifespan_redis
 from app.portfolio import lifespan_portfolio_cache
 
 logger = logging.getLogger(__name__)
+
+
+def _parse_cors_allowed_origins(raw_origins: str) -> list[str]:
+    return [origin.strip() for origin in raw_origins.split(",") if origin.strip()]
 
 
 @asynccontextmanager
@@ -94,6 +99,14 @@ def create_app() -> FastAPI:
             "/healthz",
         },
     )
+    cors_allowed_origins = _parse_cors_allowed_origins(settings.cors_allowed_origins)
+    if cors_allowed_origins:
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=cors_allowed_origins,
+            allow_methods=["*"],
+            allow_headers=["*"],
+        )
 
     app.include_router(health_router, prefix=settings.api_prefix)
     app.include_router(alerts_router, prefix=settings.api_prefix)
