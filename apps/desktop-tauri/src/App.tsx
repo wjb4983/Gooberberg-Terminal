@@ -10,7 +10,7 @@ import { PortfolioPage } from './pages/PortfolioPage';
 import { DataCachePage } from './pages/DataCachePage';
 import { loadPreferences, savePreferences } from './settings/preferences';
 import { createTokenStorage } from './settings/tokenStorage';
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { OperatorConsoleProvider } from './context/OperatorConsoleContext';
 import type { ThemePreference } from './types/api';
 import { ErrorBoundary } from './components/ErrorBoundary';
@@ -37,22 +37,29 @@ export function App(): JSX.Element {
   const tokenStorage = useMemo(() => createTokenStorage(), []);
   const [wsStatus, setWsStatus] = useState('connecting');
   const [toasts, setToasts] = useState<ToastItem[]>([]);
+  const saveToken = useCallback((token: string) => tokenStorage.save({ token }), [tokenStorage]);
+  const loadToken = useCallback(() => tokenStorage.getToken(), [tokenStorage]);
+  const clearToken = useCallback(() => tokenStorage.clear(), [tokenStorage]);
 
   const saveBaseUrl = (nextBaseUrl: string): void => {
-    const next = { ...preferences, baseUrl: nextBaseUrl };
-    setPreferences(next);
-    savePreferences(next);
+    setPreferences((previous) => {
+      const next = { ...previous, baseUrl: nextBaseUrl };
+      savePreferences(next);
+      return next;
+    });
   };
 
   const saveUiPreferences = (nextTheme: ThemePreference, compactLayout: boolean, defaultSeverity: 'all' | 'info' | 'warning' | 'critical'): void => {
-    const next = {
-      ...preferences,
-      theme: nextTheme,
-      compactLayout,
-      filterDefaults: { severity: defaultSeverity },
-    };
-    setPreferences(next);
-    savePreferences(next);
+    setPreferences((previous) => {
+      const next = {
+        ...previous,
+        theme: nextTheme,
+        compactLayout,
+        filterDefaults: { severity: defaultSeverity },
+      };
+      savePreferences(next);
+      return next;
+    });
   };
 
   const pushToast = (toast: { message: string; tone: 'warning' | 'critical' }): void => {
@@ -100,8 +107,9 @@ export function App(): JSX.Element {
                   defaultSeverity={preferences.filterDefaults.severity}
                   onSaveBaseUrl={saveBaseUrl}
                   onSaveUiPreferences={saveUiPreferences}
-                  onSaveToken={(token) => tokenStorage.save({ token })}
-                  onClearToken={() => tokenStorage.clear()}
+                  onSaveToken={saveToken}
+                  onLoadToken={loadToken}
+                  onClearToken={clearToken}
                 />
               </ErrorBoundary>
             }
