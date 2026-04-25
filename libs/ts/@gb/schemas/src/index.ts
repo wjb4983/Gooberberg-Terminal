@@ -254,7 +254,15 @@ export interface TrainingRun {
   id: string;
   modelConfigId: string;
   datasetId: string;
+  datasetSpecHash: string;
+  datasetManifestVersion: string;
+  resolvedSymbolCount: number;
+  resolvedMemberCount: number;
+  modelConfigVersionTag: string;
   jobId: string;
+  taskType: string;
+  subtaskType: string;
+  constraintProfileVersion: string;
   status: RunStatus;
   parameters: Record<string, unknown>;
   createdAtIso: string;
@@ -473,7 +481,25 @@ export function parseTrainingRun(payload: unknown): TrainingRun {
   if (typeof payload.id !== 'string') throw new Error('Training run id is malformed.');
   if (typeof payload.model_config_id !== 'string') throw new Error('Training run model_config_id is malformed.');
   if (typeof payload.dataset_id !== 'string') throw new Error('Training run dataset_id is malformed.');
+  if (typeof payload.dataset_spec_hash !== 'string') throw new Error('Training run dataset_spec_hash is malformed.');
+  if (typeof payload.dataset_manifest_version !== 'string') {
+    throw new Error('Training run dataset_manifest_version is malformed.');
+  }
+  if (typeof payload.resolved_symbol_count !== 'number') {
+    throw new Error('Training run resolved_symbol_count is malformed.');
+  }
+  if (typeof payload.resolved_member_count !== 'number') {
+    throw new Error('Training run resolved_member_count is malformed.');
+  }
+  if (typeof payload.model_config_version_tag !== 'string') {
+    throw new Error('Training run model_config_version_tag is malformed.');
+  }
   if (typeof payload.job_id !== 'string') throw new Error('Training run job_id is malformed.');
+  if (typeof payload.task_type !== 'string') throw new Error('Training run task_type is malformed.');
+  if (typeof payload.subtask_type !== 'string') throw new Error('Training run subtask_type is malformed.');
+  if (typeof payload.constraint_profile_version !== 'string') {
+    throw new Error('Training run constraint_profile_version is malformed.');
+  }
   if (typeof payload.status !== 'string' || !runStatuses.has(payload.status as RunStatus)) throw new Error('Training run status is malformed.');
   if (!isRecord(payload.parameters)) throw new Error('Training run parameters is malformed.');
   if (typeof payload.created_at !== 'string') throw new Error('Training run created_at is malformed.');
@@ -481,7 +507,15 @@ export function parseTrainingRun(payload: unknown): TrainingRun {
     id: payload.id,
     modelConfigId: payload.model_config_id,
     datasetId: payload.dataset_id,
+    datasetSpecHash: payload.dataset_spec_hash,
+    datasetManifestVersion: payload.dataset_manifest_version,
+    resolvedSymbolCount: payload.resolved_symbol_count,
+    resolvedMemberCount: payload.resolved_member_count,
+    modelConfigVersionTag: payload.model_config_version_tag,
     jobId: payload.job_id,
+    taskType: payload.task_type,
+    subtaskType: payload.subtask_type,
+    constraintProfileVersion: payload.constraint_profile_version,
     status: payload.status as RunStatus,
     parameters: payload.parameters,
     createdAtIso: payload.created_at,

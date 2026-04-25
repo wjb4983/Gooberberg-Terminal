@@ -127,8 +127,14 @@ class RunSqlRepository:
                 {
                     "model_config_id": row.model_config_id,
                     "dataset_id": row.dataset_id,
+                    "dataset_spec_hash": row.dataset_spec_hash,
+                    "dataset_manifest_version": row.dataset_manifest_version,
+                    "resolved_symbol_count": row.resolved_symbol_count,
+                    "resolved_member_count": row.resolved_member_count,
+                    "model_config_version_tag": row.model_config_version_tag,
                     "task_type": row.task_type,
                     "subtask_type": row.subtask_type,
+                    "constraint_profile_version": row.constraint_profile_version,
                     "parameters": dict(row.parameters or {}),
                 }
             )
