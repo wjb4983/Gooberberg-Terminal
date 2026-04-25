@@ -73,7 +73,7 @@ from app.schemas.testing_runs import (
     TestingRunResponse,
     TestingTargetReference,
 )
-from app.schemas.training_runs import RunStatus, TrainingRunCreateRequest, TrainingRunResponse
+from app.schemas.training_runs import RunStatus, SubtaskType, TaskType, TrainingRunCreateRequest, TrainingRunResponse
 
 __all__ = [
     "AlertAcknowledgeResponse",
@@ -129,6 +129,8 @@ __all__ = [
     "Position",
     "QueueHealthResponse",
     "RunStatus",
+    "SubtaskType",
+    "TaskType",
     "RunType",
     "StrategyInstance",
     "StrategyInstanceActionResponse",

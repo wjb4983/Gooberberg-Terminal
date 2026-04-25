@@ -126,6 +126,8 @@ class RunSqlRepository:
                 {
                     "model_config_id": row.model_config_id,
                     "dataset_id": row.dataset_id,
+                    "task_type": row.task_type,
+                    "subtask_type": row.subtask_type,
                     "parameters": dict(row.parameters or {}),
                 }
             )
@@ -134,6 +136,8 @@ class RunSqlRepository:
                 {
                     "model_config_id": row.model_config_id,
                     "parameter_set_id": row.parameter_set_id,
+                    "task_type": row.task_type,
+                    "subtask_type": row.subtask_type,
                     "objective": row.objective,
                     "search_space": dict(row.search_space or {}),
                     "provenance_snapshot": dict(row.provenance_snapshot or {}),

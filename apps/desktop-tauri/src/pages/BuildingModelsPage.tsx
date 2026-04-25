@@ -1,5 +1,6 @@
 import { GbApiClient } from '@gb/api-client';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { SUBTASK_TYPES, TASK_TYPES, type SubtaskType, type TaskType } from '../types/api';
 
 interface BuildingModelsPageProps {
   baseUrl: string;
@@ -20,6 +21,8 @@ interface TrainingRunItem {
   id: string;
   model_config_id: string;
   dataset_id: string;
+  task_type: TaskType;
+  subtask_type: SubtaskType;
   job_id: string;
   status: string;
   parameters: Record<string, unknown>;
@@ -37,7 +40,8 @@ interface ModelConfigFormState {
 interface SharedConfigFields {
   name: string;
   version: string;
-  taskType: string;
+  taskType: TaskType;
+  subtaskType: SubtaskType;
   dataProfile: string;
 }
 
@@ -62,6 +66,8 @@ interface KalmanFormState {
 interface TrainingLaunchFormState {
   modelConfigId: string;
   datasetId: string;
+  taskType: TaskType;
+  subtaskType: SubtaskType;
   epochs: string;
   seed: string;
   learningRate: string;
@@ -118,7 +124,8 @@ const defaultModelConfigForm: ModelConfigFormState = {
 const defaultSharedConfigFields: SharedConfigFields = {
   name: '',
   version: 'v1',
-  taskType: 'forecasting',
+  taskType: 'time_series_momentum',
+  subtaskType: 'ranking',
   dataProfile: 'time_series',
 };
 
@@ -151,6 +158,8 @@ const defaultKalmanFormState: KalmanFormState = {
 const defaultTrainingLaunchForm: TrainingLaunchFormState = {
   modelConfigId: '',
   datasetId: 'equities_daily_v1',
+  taskType: 'time_series_momentum',
+  subtaskType: 'ranking',
   epochs: '20',
   seed: '42',
   learningRate: '0.001',
@@ -176,7 +185,8 @@ function buildHmmPayload(form: ModelConfigFormState, shared: SharedConfigFields)
   return {
     name: shared.name.trim(),
     version: shared.version.trim(),
-    task_type: shared.taskType.trim(),
+    task_type: shared.taskType,
+    subtask_type: shared.subtaskType,
     data_profile: shared.dataProfile.trim(),
     n_states: Number(form.numRegimes),
     lookback_window: Number(form.lookbackWindow),
@@ -218,6 +228,9 @@ function validateLaunchForm(form: TrainingLaunchFormState): FormErrors {
   if (!form.datasetId.trim()) {
     errors.datasetId = 'Dataset ID is required, e.g. equities_daily_v1.';
   }
+  if (form.subtaskType === 'regime_state' && form.taskType !== 'regime_switching') {
+    errors.subtaskType = 'Subtask regime_state is only valid with task type regime_switching.';
+  }
   const epochs = Number(form.epochs);
   if (!Number.isFinite(epochs) || epochs < 1) {
     errors.epochs = 'Epochs must be a positive integer.';
@@ -249,7 +262,8 @@ function buildTorchPayload(form: TorchFormState, shared: SharedConfigFields): Re
   return {
     name: shared.name.trim(),
     version: shared.version.trim(),
-    task_type: shared.taskType.trim() || 'forecasting',
+    task_type: shared.taskType,
+    subtask_type: shared.subtaskType,
     data_type: shared.dataProfile.trim() || 'time_series',
     lookback_window: Number(form.lookbackWindow),
     horizon_steps: Number(form.horizonSteps),
@@ -261,7 +275,8 @@ function buildKalmanPayload(form: KalmanFormState, shared: SharedConfigFields): 
   return {
     name: shared.name.trim(),
     version: shared.version.trim(),
-    task_type: shared.taskType.trim() || 'filtering',
+    task_type: shared.taskType,
+    subtask_type: shared.subtaskType,
     data_type: shared.dataProfile.trim() || 'state_space_timeseries',
     transition_structure: form.transitionStructure,
     state_dimension: Number(form.stateDimension),
@@ -292,6 +307,8 @@ function mapRunToCard(run: TrainingRunItem): JobCard {
     payload: {
       model_config_id: run.model_config_id,
       dataset_id: run.dataset_id,
+      task_type: run.task_type,
+      subtask_type: run.subtask_type,
       parameters: run.parameters,
     },
     source: 'training-run',
@@ -508,6 +525,8 @@ export function BuildingModelsPage({ baseUrl }: BuildingModelsPageProps): JSX.El
     const payload = {
       model_config_id: launchForm.modelConfigId,
       dataset_id: launchForm.datasetId.trim(),
+      task_type: launchForm.taskType,
+      subtask_type: launchForm.subtaskType,
       parameters: {
         epochs: Number(launchForm.epochs),
         seed: Number(launchForm.seed),
@@ -638,7 +657,12 @@ export function BuildingModelsPage({ baseUrl }: BuildingModelsPageProps): JSX.El
           <input value={sharedConfig.name} onChange={(event) => setSharedConfig((prev) => ({ ...prev, name: event.target.value }))} placeholder="Model name" />
           {configErrors.name ? <small className="muted">{configErrors.name}</small> : null}
           <input value={sharedConfig.version} onChange={(event) => setSharedConfig((prev) => ({ ...prev, version: event.target.value }))} placeholder="Version" />
-          <input value={sharedConfig.taskType} onChange={(event) => setSharedConfig((prev) => ({ ...prev, taskType: event.target.value }))} placeholder="Task type" />
+          <select value={sharedConfig.taskType} onChange={(event) => setSharedConfig((prev) => ({ ...prev, taskType: event.target.value as TaskType }))}>
+            {TASK_TYPES.map((taskType) => <option key={taskType} value={taskType}>{taskType}</option>)}
+          </select>
+          <select value={sharedConfig.subtaskType} onChange={(event) => setSharedConfig((prev) => ({ ...prev, subtaskType: event.target.value as SubtaskType }))}>
+            {SUBTASK_TYPES.map((subtaskType) => <option key={subtaskType} value={subtaskType}>{subtaskType}</option>)}
+          </select>
           <input value={sharedConfig.dataProfile} onChange={(event) => setSharedConfig((prev) => ({ ...prev, dataProfile: event.target.value }))} placeholder="Data profile" />
 
           {selectedFamily === 'hmm_regime_switching' ? (
@@ -712,6 +736,15 @@ export function BuildingModelsPage({ baseUrl }: BuildingModelsPageProps): JSX.El
           {launchErrors.modelConfigId ? <small className="muted">{launchErrors.modelConfigId}</small> : null}
           <input value={launchForm.datasetId} onChange={(event) => setLaunchForm((prev) => ({ ...prev, datasetId: event.target.value }))} placeholder="Dataset ID" />
           {launchErrors.datasetId ? <small className="muted">{launchErrors.datasetId}</small> : null}
+          <div style={{ display: 'grid', gap: '0.5rem', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' }}>
+            <select value={launchForm.taskType} onChange={(event) => setLaunchForm((prev) => ({ ...prev, taskType: event.target.value as TaskType }))}>
+              {TASK_TYPES.map((taskType) => <option key={taskType} value={taskType}>{taskType}</option>)}
+            </select>
+            <select value={launchForm.subtaskType} onChange={(event) => setLaunchForm((prev) => ({ ...prev, subtaskType: event.target.value as SubtaskType }))}>
+              {SUBTASK_TYPES.map((subtaskType) => <option key={subtaskType} value={subtaskType}>{subtaskType}</option>)}
+            </select>
+          </div>
+          {launchErrors.subtaskType ? <small className="muted">{launchErrors.subtaskType}</small> : null}
           <div style={{ display: 'grid', gap: '0.5rem', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' }}>
             <div>
               <input value={launchForm.epochs} onChange={(event) => setLaunchForm((prev) => ({ ...prev, epochs: event.target.value }))} placeholder="Epochs" />
