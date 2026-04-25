@@ -68,6 +68,8 @@ async def create_training_run(
             "job_id": str(job_id),
             "model_config_id": str(payload.model_config_id),
             "dataset_id": payload.dataset_id,
+            "task_type": payload.task_type.value,
+            "subtask_type": payload.subtask_type.value,
             "parameters": payload.parameters,
             "status": "queued",
             "created_at": accepted_at,

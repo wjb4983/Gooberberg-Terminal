@@ -2,12 +2,12 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID, uuid4
 
-from pydantic import BaseModel, Field
+from pydantic import Field
 
-from app.schemas.training_runs import RunStatus
+from app.schemas.training_runs import RunStatus, TaskSubtypeValidatedModel
 
 
-class ParameterSweepCreateRequest(BaseModel):
+class ParameterSweepCreateRequest(TaskSubtypeValidatedModel):
     model_config_id: UUID
     parameter_set_id: UUID | None = None
     objective: str = Field(min_length=1)
@@ -15,7 +15,7 @@ class ParameterSweepCreateRequest(BaseModel):
     provenance_snapshot: dict[str, Any] = Field(default_factory=dict)
 
 
-class ParameterSweepResponse(BaseModel):
+class ParameterSweepResponse(TaskSubtypeValidatedModel):
     id: UUID = Field(default_factory=uuid4)
     model_config_id: UUID
     parameter_set_id: UUID | None = None

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { SUBTASK_TYPES, TASK_TYPES, type SubtaskType, type TaskType } from '../types/api';
 
 interface ParameterizationPageProps {
   baseUrl: string;
@@ -19,6 +20,8 @@ interface ParameterSweepItem {
   id: string;
   model_config_id: string;
   parameter_set_id: string | null;
+  task_type: TaskType;
+  subtask_type: SubtaskType;
   objective: string;
   search_space: Record<string, unknown>;
   provenance_snapshot: Record<string, unknown>;
@@ -60,6 +63,8 @@ export function ParameterizationPage({ baseUrl }: ParameterizationPageProps): JS
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
   const [history, setHistory] = useState<ParameterSetItem[]>([]);
   const [objective, setObjective] = useState('maximize_sharpe');
+  const [taskType, setTaskType] = useState<TaskType>('time_series_momentum');
+  const [subtaskType, setSubtaskType] = useState<SubtaskType>('ranking');
   const [searchSpaceJson, setSearchSpaceJson] = useState('{"learning_rate": [0.0005, 0.001, 0.01], "hidden_size": [32, 64]}');
   const [batchCount, setBatchCount] = useState(3);
   const [batchTag, setBatchTag] = useState('sweep-batch');
@@ -147,12 +152,18 @@ export function ParameterizationPage({ baseUrl }: ParameterizationPageProps): JS
 
     try {
       setError(null);
+      if (subtaskType === 'regime_state' && taskType !== 'regime_switching') {
+        setError('Subtask regime_state is only valid with task type regime_switching.');
+        return;
+      }
       const launchJobs = Array.from({ length: batchCount }, (_, index) =>
         requestJson<ParameterSweepItem>(baseUrl, '/api/v1/parameter-sweeps', {
           method: 'POST',
           body: JSON.stringify({
             model_config_id: selectedTemplate.model_config_id,
             parameter_set_id: selectedTemplate.id,
+            task_type: taskType,
+            subtask_type: subtaskType,
             objective,
             search_space: { ...parsedSearchSpace, batch_index: index, batch_tag: batchTag },
             provenance_snapshot: {
@@ -253,6 +264,14 @@ export function ParameterizationPage({ baseUrl }: ParameterizationPageProps): JS
       <div className="card" style={{ maxWidth: '100%' }}>
         <h3>Batch sweep submit</h3>
         <div style={{ display: 'grid', gap: '0.5rem', maxWidth: 720 }}>
+          <div style={{ display: 'grid', gap: '0.5rem', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' }}>
+            <select value={taskType} onChange={(event) => setTaskType(event.target.value as TaskType)}>
+              {TASK_TYPES.map((item) => <option key={item} value={item}>{item}</option>)}
+            </select>
+            <select value={subtaskType} onChange={(event) => setSubtaskType(event.target.value as SubtaskType)}>
+              {SUBTASK_TYPES.map((item) => <option key={item} value={item}>{item}</option>)}
+            </select>
+          </div>
           <input value={objective} onChange={(event) => setObjective(event.target.value)} placeholder="Objective" />
           <textarea rows={5} value={searchSpaceJson} onChange={(event) => setSearchSpaceJson(event.target.value)} />
           <input type="number" min={1} max={25} value={batchCount} onChange={(event) => setBatchCount(Number(event.target.value) || 1)} />
