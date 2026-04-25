@@ -5,29 +5,56 @@ interface ParameterizationPageProps {
   baseUrl: string;
 }
 
-interface ParameterSetItem {
+interface ModelConfigItem {
   id: string;
-  model_config_id: string;
-  name: string;
-  parameters: Record<string, unknown>;
-  version_tag: string;
-  parent_set_id: string | null;
-  provenance_metadata: Record<string, unknown>;
-  created_at: string;
+  model_family: string;
+  config: Record<string, unknown>;
 }
 
-interface ParameterSweepItem {
+interface TrainingRunItem {
   id: string;
   model_config_id: string;
-  parameter_set_id: string | null;
-  task_type: TaskType;
-  subtask_type: SubtaskType;
-  objective: string;
-  search_space: Record<string, unknown>;
-  provenance_snapshot: Record<string, unknown>;
+  dataset_id: string;
   job_id: string;
   status: string;
   created_at: string;
+}
+
+interface IngestionItem {
+  request_id?: string;
+  dataset_id?: string;
+  status?: string;
+  symbols?: string[];
+  timeframe?: string;
+  start_date?: string;
+  end_date?: string;
+  coverage_pct?: number;
+}
+
+interface LaunchErrors {
+  taskType?: string;
+  subtaskType?: string;
+  datasetId?: string;
+  modelConfigId?: string;
+  parametersJson?: string;
+}
+
+interface DatasetCreateForm {
+  universeType: 'stocks' | 'options';
+  symbolsCsv: string;
+  savedUniverseId: string;
+  startDate: string;
+  endDate: string;
+  finestResolution: string;
+  featurePackEnabled: boolean;
+}
+
+interface DatasetFormErrors {
+  symbolsCsv?: string;
+  savedUniverseId?: string;
+  startDate?: string;
+  endDate?: string;
+  finestResolution?: string;
 }
 
 async function requestJson<T>(baseUrl: string, path: string, init?: RequestInit): Promise<T> {
@@ -45,253 +72,345 @@ async function requestJson<T>(baseUrl: string, path: string, init?: RequestInit)
   return (await response.json()) as T;
 }
 
-function flattenRecord(input: Record<string, unknown>, prefix = ''): Record<string, string> {
-  const output: Record<string, string> = {};
-  Object.entries(input).forEach(([key, value]) => {
-    const nextKey = prefix ? `${prefix}.${key}` : key;
-    if (value && typeof value === 'object' && !Array.isArray(value)) {
-      Object.assign(output, flattenRecord(value as Record<string, unknown>, nextKey));
-      return;
-    }
-    output[nextKey] = JSON.stringify(value);
-  });
-  return output;
+function isModelCompatible(config: ModelConfigItem, taskType: TaskType): boolean {
+  const configTaskType = typeof config.config.task_type === 'string' ? config.config.task_type : null;
+  if (!configTaskType) {
+    return true;
+  }
+  return configTaskType === taskType;
+}
+
+function normalizeDate(value: string): string {
+  return value.trim();
 }
 
 export function ParameterizationPage({ baseUrl }: ParameterizationPageProps): JSX.Element {
-  const [templates, setTemplates] = useState<ParameterSetItem[]>([]);
-  const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
-  const [history, setHistory] = useState<ParameterSetItem[]>([]);
-  const [objective, setObjective] = useState('maximize_sharpe');
   const [taskType, setTaskType] = useState<TaskType>('time_series_momentum');
   const [subtaskType, setSubtaskType] = useState<SubtaskType>('ranking');
-  const [searchSpaceJson, setSearchSpaceJson] = useState('{"learning_rate": [0.0005, 0.001, 0.01], "hidden_size": [32, 64]}');
-  const [batchCount, setBatchCount] = useState(3);
-  const [batchTag, setBatchTag] = useState('sweep-batch');
-  const [createdSweeps, setCreatedSweeps] = useState<ParameterSweepItem[]>([]);
-  const [error, setError] = useState<string | null>(null);
-  const [tableScrollTop, setTableScrollTop] = useState(0);
+  const [datasetId, setDatasetId] = useState('');
+  const [modelConfigId, setModelConfigId] = useState('');
+  const [parametersJson, setParametersJson] = useState('{"epochs": 20, "seed": 42}');
 
-  const rowHeight = 42;
-  const tableHeight = 320;
+  const [modelConfigs, setModelConfigs] = useState<ModelConfigItem[]>([]);
+  const [trainingRuns, setTrainingRuns] = useState<TrainingRunItem[]>([]);
+  const [ingestions, setIngestions] = useState<IngestionItem[]>([]);
 
-  const selectedTemplate = useMemo(
-    () => templates.find((template) => template.id === selectedTemplateId) ?? null,
-    [templates, selectedTemplateId],
-  );
-  const parentTemplate = useMemo(
-    () => templates.find((template) => template.id === selectedTemplate?.parent_set_id) ?? null,
-    [templates, selectedTemplate],
-  );
+  const [launchErrors, setLaunchErrors] = useState<LaunchErrors>({});
+  const [datasetFormErrors, setDatasetFormErrors] = useState<DatasetFormErrors>({});
+  const [pageError, setPageError] = useState<string | null>(null);
+  const [launchNotice, setLaunchNotice] = useState<string | null>(null);
 
-  const visibleWindow = useMemo(() => {
-    const startIndex = Math.max(0, Math.floor(tableScrollTop / rowHeight) - 4);
-    const visibleCount = Math.ceil(tableHeight / rowHeight) + 8;
-    return {
-      startIndex,
-      endIndex: Math.min(templates.length, startIndex + visibleCount),
-    };
-  }, [tableScrollTop, templates.length]);
+  const [showCreateDataset, setShowCreateDataset] = useState(false);
+  const [datasetCreateForm, setDatasetCreateForm] = useState<DatasetCreateForm>({
+    universeType: 'stocks',
+    symbolsCsv: 'AAPL,MSFT,SPY',
+    savedUniverseId: '',
+    startDate: '2024-01-01',
+    endDate: '2024-12-31',
+    finestResolution: '1d',
+    featurePackEnabled: true,
+  });
+  const [datasetCreateNotice, setDatasetCreateNotice] = useState<string | null>(null);
 
-  const refreshTemplates = useCallback(async (): Promise<void> => {
-    const payload = await requestJson<ParameterSetItem[]>(baseUrl, '/api/v1/parameter-sets');
-    setTemplates(payload);
-    if (!selectedTemplateId && payload.length > 0) {
-      setSelectedTemplateId(payload[0].id);
+  const load = useCallback(async (): Promise<void> => {
+    setPageError(null);
+    try {
+      const [configsPayload, runsPayload] = await Promise.all([
+        requestJson<ModelConfigItem[]>(baseUrl, '/api/v1/model-configs'),
+        requestJson<TrainingRunItem[]>(baseUrl, '/api/v1/training-runs'),
+      ]);
+      setModelConfigs(configsPayload);
+      setTrainingRuns(runsPayload);
+      if (!modelConfigId && configsPayload.length > 0) {
+        setModelConfigId(configsPayload[0].id);
+      }
+
+      try {
+        const ingestionPayload = await requestJson<IngestionItem[]>(baseUrl, '/api/v1/market-data/ingestions');
+        setIngestions(ingestionPayload);
+      } catch {
+        setIngestions([]);
+      }
+    } catch (loadError) {
+      setPageError(loadError instanceof Error ? loadError.message : 'Failed loading parameterization dependencies.');
     }
-  }, [baseUrl, selectedTemplateId]);
+  }, [baseUrl, modelConfigId]);
 
   useEffect(() => {
-    void refreshTemplates().catch((loadError: unknown) => {
-      setError(loadError instanceof Error ? loadError.message : 'Failed loading template library.');
-    });
-  }, [refreshTemplates]);
+    void load();
+  }, [load]);
 
-  useEffect(() => {
-    if (!selectedTemplateId) {
-      setHistory([]);
-      return;
-    }
-    void requestJson<ParameterSetItem[]>(baseUrl, `/api/v1/parameter-sets/${encodeURIComponent(selectedTemplateId)}/versions`)
-      .then(setHistory)
-      .catch(() => setHistory([]));
-  }, [baseUrl, selectedTemplateId]);
+  const existingDatasetRows = useMemo(() => {
+    const byId = new Map<string, { id: string; coveragePct: number | null }>();
 
-  const cloneSelected = async (): Promise<void> => {
-    if (!selectedTemplateId || !selectedTemplate) {
-      setError('Select a template before cloning.');
-      return;
-    }
-    try {
-      setError(null);
-      await requestJson<ParameterSetItem>(baseUrl, `/api/v1/parameter-sets/${encodeURIComponent(selectedTemplateId)}/clone`, {
-        method: 'POST',
-        body: JSON.stringify({
-          name: `${selectedTemplate.name} clone`,
-          version_tag: `${selectedTemplate.version_tag}.clone`,
-        }),
-      });
-      await refreshTemplates();
-    } catch (cloneError) {
-      setError(cloneError instanceof Error ? cloneError.message : 'Failed cloning template.');
-    }
-  };
-
-  const submitSweepBatch = async (): Promise<void> => {
-    if (!selectedTemplate) {
-      setError('Template selection is required before launching sweeps.');
-      return;
-    }
-    let parsedSearchSpace: Record<string, unknown>;
-    try {
-      parsedSearchSpace = JSON.parse(searchSpaceJson) as Record<string, unknown>;
-    } catch {
-      setError('Search space JSON is invalid.');
-      return;
-    }
-
-    try {
-      setError(null);
-      if (subtaskType === 'regime_state' && taskType !== 'regime_switching') {
-        setError('Subtask regime_state is only valid with task type regime_switching.');
+    trainingRuns.forEach((run) => {
+      if (!run.dataset_id || byId.has(run.dataset_id)) {
         return;
       }
-      const launchJobs = Array.from({ length: batchCount }, (_, index) =>
-        requestJson<ParameterSweepItem>(baseUrl, '/api/v1/parameter-sweeps', {
-          method: 'POST',
-          body: JSON.stringify({
-            model_config_id: selectedTemplate.model_config_id,
-            parameter_set_id: selectedTemplate.id,
-            task_type: taskType,
-            subtask_type: subtaskType,
-            objective,
-            search_space: { ...parsedSearchSpace, batch_index: index, batch_tag: batchTag },
-            provenance_snapshot: {
-              ...selectedTemplate.provenance_metadata,
-              parameter_set_version_tag: selectedTemplate.version_tag,
-              immutable_template_id: selectedTemplate.id,
-            },
-          }),
+      byId.set(run.dataset_id, { id: run.dataset_id, coveragePct: null });
+    });
+
+    ingestions.forEach((ingestion) => {
+      const candidateId = (typeof ingestion.dataset_id === 'string' && ingestion.dataset_id) || (typeof ingestion.request_id === 'string' ? `ingestion:${ingestion.request_id}` : '');
+      if (!candidateId) {
+        return;
+      }
+      const current = byId.get(candidateId);
+      const coveragePct = typeof ingestion.coverage_pct === 'number' ? ingestion.coverage_pct : (current?.coveragePct ?? null);
+      byId.set(candidateId, { id: candidateId, coveragePct });
+    });
+
+    return Array.from(byId.values()).sort((a, b) => a.id.localeCompare(b.id));
+  }, [ingestions, trainingRuns]);
+
+  const compatibleModelConfigs = useMemo(
+    () => modelConfigs.filter((item) => isModelCompatible(item, taskType)),
+    [modelConfigs, taskType],
+  );
+
+  useEffect(() => {
+    if (!compatibleModelConfigs.some((item) => item.id === modelConfigId)) {
+      setModelConfigId(compatibleModelConfigs[0]?.id ?? '');
+    }
+  }, [compatibleModelConfigs, modelConfigId]);
+
+  const selectedDatasetCoverage = useMemo(
+    () => existingDatasetRows.find((item) => item.id === datasetId)?.coveragePct ?? null,
+    [datasetId, existingDatasetRows],
+  );
+
+  const validateLaunchForm = (): LaunchErrors => {
+    const errors: LaunchErrors = {};
+    if (subtaskType === 'regime_state' && taskType !== 'regime_switching') {
+      errors.subtaskType = 'Subtask regime_state can only be used with task regime_switching.';
+    }
+    if (!datasetId.trim()) {
+      errors.datasetId = 'Select an existing dataset or create one first.';
+    }
+    if (!modelConfigId.trim()) {
+      errors.modelConfigId = 'Select a compatible model config.';
+    }
+    try {
+      JSON.parse(parametersJson);
+    } catch {
+      errors.parametersJson = 'Training parameters must be valid JSON.';
+    }
+    return errors;
+  };
+
+  const launchTrainingRun = async (): Promise<void> => {
+    const errors = validateLaunchForm();
+    setLaunchErrors(errors);
+    setLaunchNotice(null);
+    if (Object.keys(errors).length > 0) {
+      return;
+    }
+
+    try {
+      const created = await requestJson<TrainingRunItem>(baseUrl, '/api/v1/training-runs', {
+        method: 'POST',
+        body: JSON.stringify({
+          model_config_id: modelConfigId,
+          dataset_id: datasetId.trim(),
+          parameters: JSON.parse(parametersJson) as Record<string, unknown>,
         }),
-      );
-      const created = await Promise.all(launchJobs);
-      setCreatedSweeps((previous) => [...created, ...previous].slice(0, 20));
-    } catch (batchError) {
-      setError(batchError instanceof Error ? batchError.message : 'Failed submitting sweep batch.');
+      });
+      setLaunchNotice(`Training run queued: ${created.id} (job ${created.job_id}).`);
+      setTrainingRuns((previous) => [created, ...previous]);
+    } catch (submitError) {
+      setPageError(submitError instanceof Error ? submitError.message : 'Failed launching training run.');
     }
   };
 
-  const leftFlat = flattenRecord(parentTemplate?.parameters ?? {});
-  const rightFlat = flattenRecord(selectedTemplate?.parameters ?? {});
-  const diffKeys = Array.from(new Set([...Object.keys(leftFlat), ...Object.keys(rightFlat)])).sort();
+  const validateDatasetForm = (): DatasetFormErrors => {
+    const errors: DatasetFormErrors = {};
+    const symbols = datasetCreateForm.symbolsCsv.split(',').map((item) => item.trim()).filter(Boolean);
+    if (!datasetCreateForm.savedUniverseId.trim() && symbols.length === 0) {
+      errors.symbolsCsv = 'Provide symbols list or a saved universe ID.';
+      errors.savedUniverseId = 'Provide symbols list or a saved universe ID.';
+    }
+    if (!normalizeDate(datasetCreateForm.startDate)) {
+      errors.startDate = 'Start date is required.';
+    }
+    if (!normalizeDate(datasetCreateForm.endDate)) {
+      errors.endDate = 'End date is required.';
+    }
+    if (normalizeDate(datasetCreateForm.startDate) && normalizeDate(datasetCreateForm.endDate) && datasetCreateForm.startDate > datasetCreateForm.endDate) {
+      errors.endDate = 'End date must be on or after start date.';
+    }
+    if (!datasetCreateForm.finestResolution.trim()) {
+      errors.finestResolution = 'Finest resolution target is required.';
+    }
+    return errors;
+  };
+
+  const createDataset = async (): Promise<void> => {
+    const errors = validateDatasetForm();
+    setDatasetFormErrors(errors);
+    setDatasetCreateNotice(null);
+    if (Object.keys(errors).length > 0) {
+      return;
+    }
+
+    try {
+      const symbols = datasetCreateForm.symbolsCsv.split(',').map((item) => item.trim()).filter(Boolean);
+      const payload = await requestJson<IngestionItem>(baseUrl, '/api/v1/market-data/ingestions', {
+        method: 'POST',
+        body: JSON.stringify({
+          source: 'polygon',
+          universe_type: datasetCreateForm.universeType,
+          symbols,
+          universe_id: datasetCreateForm.savedUniverseId.trim() || undefined,
+          timeframe: datasetCreateForm.finestResolution.trim(),
+          start_date: datasetCreateForm.startDate,
+          end_date: datasetCreateForm.endDate,
+          feature_pack_enabled: datasetCreateForm.featurePackEnabled,
+        }),
+      });
+
+      const createdDatasetId = (typeof payload.dataset_id === 'string' && payload.dataset_id)
+        || (typeof payload.request_id === 'string' && payload.request_id ? `ingestion:${payload.request_id}` : '');
+
+      if (createdDatasetId) {
+        setDatasetId(createdDatasetId);
+      }
+
+      setDatasetCreateNotice(`Dataset creation submitted${createdDatasetId ? `: ${createdDatasetId}` : ''}.`);
+      setShowCreateDataset(false);
+      await load();
+    } catch (submitError) {
+      setPageError(submitError instanceof Error ? submitError.message : 'Failed creating dataset ingestion request.');
+    }
+  };
 
   return (
     <section>
       <h2>Parameterization</h2>
-      <p className="muted">Manage reusable parameter templates, review version lineage, and launch provenance-linked sweep batches.</p>
-      {error ? <p className="error">{error}</p> : null}
+      <p className="muted">Guide training launches through a 4-step flow: tasking, dataset, compatible model config, then run submission.</p>
+      {pageError ? <p className="error">{pageError}</p> : null}
 
-      <div className="card" style={{ maxWidth: '100%', marginBottom: '1rem' }}>
-        <h3>Template library (virtualized)</h3>
-        <div style={{ border: '1px solid #2b3558', borderRadius: 6, overflow: 'auto', height: tableHeight }} onScroll={(event) => setTableScrollTop((event.target as HTMLDivElement).scrollTop)}>
-          <div style={{ position: 'relative', height: templates.length * rowHeight }}>
-            {templates.slice(visibleWindow.startIndex, visibleWindow.endIndex).map((template, visibleIndex) => {
-              const realIndex = visibleWindow.startIndex + visibleIndex;
-              return (
-                <button
-                  key={template.id}
-                  type="button"
-                  onClick={() => setSelectedTemplateId(template.id)}
-                  style={{
-                    position: 'absolute',
-                    top: realIndex * rowHeight,
-                    height: rowHeight - 2,
-                    left: 0,
-                    right: 0,
-                    border: 0,
-                    borderBottom: '1px solid #2b3558',
-                    background: selectedTemplateId === template.id ? 'rgba(127,127,127,0.2)' : 'transparent',
-                    color: 'inherit',
-                    textAlign: 'left',
-                    display: 'grid',
-                    gridTemplateColumns: '1.2fr 1fr 1fr',
-                    padding: '0 0.75rem',
-                    cursor: 'pointer',
-                  }}
-                >
-                  <span>{template.name}</span>
-                  <span>{template.version_tag}</span>
-                  <span>{new Date(template.created_at).toLocaleDateString()}</span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-        <div style={{ marginTop: '0.75rem', display: 'flex', gap: '0.5rem' }}>
-          <button type="button" onClick={() => void cloneSelected()} disabled={!selectedTemplateId}>Clone selected</button>
-        </div>
-      </div>
-
-      <div className="card" style={{ maxWidth: '100%', marginBottom: '1rem' }}>
-        <h3>Side-by-side JSON diff</h3>
-        <p className="muted">Comparing selected template against parent version.</p>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-          <div>
-            <h4>Parent</h4>
-            <pre>{JSON.stringify(parentTemplate?.parameters ?? {}, null, 2)}</pre>
-          </div>
-          <div>
-            <h4>Selected</h4>
-            <pre>{JSON.stringify(selectedTemplate?.parameters ?? {}, null, 2)}</pre>
-          </div>
-        </div>
-        <table className="jobs-table" style={{ marginTop: '0.5rem' }}>
-          <thead><tr><th>Path</th><th>Parent</th><th>Selected</th></tr></thead>
-          <tbody>
-            {diffKeys.length === 0 ? <tr><td colSpan={3}>No comparable keys.</td></tr> : null}
-            {diffKeys.map((key) => (
-              <tr key={key} style={{ background: leftFlat[key] === rightFlat[key] ? 'transparent' : 'rgba(245, 158, 11, 0.12)' }}>
-                <td>{key}</td>
-                <td>{leftFlat[key] ?? '—'}</td>
-                <td>{rightFlat[key] ?? '—'}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        <p className="muted">Version history: {history.map((item) => item.version_tag).join(' → ') || 'No lineage selected.'}</p>
-      </div>
-
-      <div className="card" style={{ maxWidth: '100%' }}>
-        <h3>Batch sweep submit</h3>
-        <div style={{ display: 'grid', gap: '0.5rem', maxWidth: 720 }}>
-          <div style={{ display: 'grid', gap: '0.5rem', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' }}>
+      <div className="card" style={{ marginBottom: '1rem' }}>
+        <h3>1) Select task + subtask</h3>
+        <div style={{ display: 'grid', gap: '0.5rem', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' }}>
+          <label>
+            Task
             <select value={taskType} onChange={(event) => setTaskType(event.target.value as TaskType)}>
               {TASK_TYPES.map((item) => <option key={item} value={item}>{item}</option>)}
             </select>
+          </label>
+          <label>
+            Subtask
             <select value={subtaskType} onChange={(event) => setSubtaskType(event.target.value as SubtaskType)}>
               {SUBTASK_TYPES.map((item) => <option key={item} value={item}>{item}</option>)}
             </select>
-          </div>
-          <input value={objective} onChange={(event) => setObjective(event.target.value)} placeholder="Objective" />
-          <textarea rows={5} value={searchSpaceJson} onChange={(event) => setSearchSpaceJson(event.target.value)} />
-          <input type="number" min={1} max={25} value={batchCount} onChange={(event) => setBatchCount(Number(event.target.value) || 1)} />
-          <input value={batchTag} onChange={(event) => setBatchTag(event.target.value)} placeholder="Batch tag" />
-          <button type="button" onClick={() => void submitSweepBatch()} disabled={!selectedTemplate}>Submit sweep batch</button>
+          </label>
         </div>
-        <table className="jobs-table" style={{ marginTop: '1rem' }}>
-          <thead><tr><th>Job</th><th>Template</th><th>Status</th><th>Provenance hash</th></tr></thead>
-          <tbody>
-            {createdSweeps.length === 0 ? <tr><td colSpan={4}>No sweeps launched in this session.</td></tr> : null}
-            {createdSweeps.map((item) => (
-              <tr key={item.id}>
-                <td>{item.job_id.slice(0, 8)}</td>
-                <td>{item.parameter_set_id?.slice(0, 8) ?? '—'}</td>
-                <td>{item.status}</td>
-                <td>{String(item.provenance_snapshot.config_hash ?? 'n/a')}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        {launchErrors.taskType ? <small className="error">{launchErrors.taskType}</small> : null}
+        {launchErrors.subtaskType ? <small className="error">{launchErrors.subtaskType}</small> : null}
+      </div>
+
+      <div className="card" style={{ marginBottom: '1rem' }}>
+        <h3>2) Select dataset</h3>
+        <div style={{ display: 'grid', gap: '0.5rem' }}>
+          <label>
+            Existing datasets
+            <select value={datasetId} onChange={(event) => setDatasetId(event.target.value)}>
+              <option value="">Select dataset</option>
+              {existingDatasetRows.map((dataset) => (
+                <option key={dataset.id} value={dataset.id}>{dataset.id}</option>
+              ))}
+            </select>
+          </label>
+          <p className="muted" style={{ margin: 0 }}>
+            Coverage badge:{' '}
+            <strong style={{ color: selectedDatasetCoverage === null ? 'inherit' : selectedDatasetCoverage >= 99 ? '#34d399' : '#fbbf24' }}>
+              {selectedDatasetCoverage === null ? 'Unknown' : `${selectedDatasetCoverage.toFixed(1)}%`}
+            </strong>
+          </p>
+          <div>
+            <button type="button" onClick={() => setShowCreateDataset((prev) => !prev)}>
+              {showCreateDataset ? 'Close create dataset' : 'Create dataset'}
+            </button>
+          </div>
+          {launchErrors.datasetId ? <small className="error">{launchErrors.datasetId}</small> : null}
+        </div>
+
+        {showCreateDataset ? (
+          <div style={{ marginTop: '0.75rem', border: '1px solid #2b3558', borderRadius: 8, padding: '0.75rem', display: 'grid', gap: '0.5rem' }}>
+            <h4 style={{ margin: 0 }}>Create dataset</h4>
+            <label>
+              Universe type
+              <select value={datasetCreateForm.universeType} onChange={(event) => setDatasetCreateForm((prev) => ({ ...prev, universeType: event.target.value as DatasetCreateForm['universeType'] }))}>
+                <option value="stocks">stocks</option>
+                <option value="options">options</option>
+              </select>
+            </label>
+            <label>
+              Symbols list (comma separated)
+              <input value={datasetCreateForm.symbolsCsv} onChange={(event) => setDatasetCreateForm((prev) => ({ ...prev, symbolsCsv: event.target.value }))} placeholder="AAPL,MSFT,SPY" />
+            </label>
+            {datasetFormErrors.symbolsCsv ? <small className="error">{datasetFormErrors.symbolsCsv}</small> : null}
+            <label>
+              Saved universe ID
+              <input value={datasetCreateForm.savedUniverseId} onChange={(event) => setDatasetCreateForm((prev) => ({ ...prev, savedUniverseId: event.target.value }))} placeholder="optional_universe_id" />
+            </label>
+            {datasetFormErrors.savedUniverseId ? <small className="error">{datasetFormErrors.savedUniverseId}</small> : null}
+            <div style={{ display: 'grid', gap: '0.5rem', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' }}>
+              <label>
+                Start date
+                <input type="date" value={datasetCreateForm.startDate} onChange={(event) => setDatasetCreateForm((prev) => ({ ...prev, startDate: event.target.value }))} />
+              </label>
+              <label>
+                End date
+                <input type="date" value={datasetCreateForm.endDate} onChange={(event) => setDatasetCreateForm((prev) => ({ ...prev, endDate: event.target.value }))} />
+              </label>
+            </div>
+            {datasetFormErrors.startDate ? <small className="error">{datasetFormErrors.startDate}</small> : null}
+            {datasetFormErrors.endDate ? <small className="error">{datasetFormErrors.endDate}</small> : null}
+            <label>
+              Finest resolution target
+              <input value={datasetCreateForm.finestResolution} onChange={(event) => setDatasetCreateForm((prev) => ({ ...prev, finestResolution: event.target.value }))} placeholder="1m, 5m, 1h, 1d" />
+            </label>
+            {datasetFormErrors.finestResolution ? <small className="error">{datasetFormErrors.finestResolution}</small> : null}
+            <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <input type="checkbox" checked={datasetCreateForm.featurePackEnabled} onChange={(event) => setDatasetCreateForm((prev) => ({ ...prev, featurePackEnabled: event.target.checked }))} />
+              Feature pack enabled
+            </label>
+            <button type="button" onClick={() => void createDataset()}>Submit dataset creation</button>
+          </div>
+        ) : null}
+        {datasetCreateNotice ? <p className="muted" style={{ marginTop: '0.75rem' }}>{datasetCreateNotice}</p> : null}
+      </div>
+
+      <div className="card" style={{ marginBottom: '1rem' }}>
+        <h3>3) Select model config</h3>
+        <p className="muted">Filtered by task compatibility ({taskType}).</p>
+        <label>
+          Compatible model configs
+          <select value={modelConfigId} onChange={(event) => setModelConfigId(event.target.value)}>
+            <option value="">Select compatible model config</option>
+            {compatibleModelConfigs.map((item) => {
+              const modelName = typeof item.config.name === 'string' ? item.config.name : item.id;
+              return (
+                <option key={item.id} value={item.id}>{modelName} ({item.model_family})</option>
+              );
+            })}
+          </select>
+        </label>
+        {launchErrors.modelConfigId ? <small className="error">{launchErrors.modelConfigId}</small> : null}
+      </div>
+
+      <div className="card" style={{ marginBottom: '1rem' }}>
+        <h3>4) Launch training run</h3>
+        <label>
+          Parameters JSON
+          <textarea rows={5} value={parametersJson} onChange={(event) => setParametersJson(event.target.value)} />
+        </label>
+        {launchErrors.parametersJson ? <small className="error">{launchErrors.parametersJson}</small> : null}
+        <div style={{ marginTop: '0.75rem' }}>
+          <button type="button" onClick={() => void launchTrainingRun()}>Launch training run</button>
+        </div>
+        {launchNotice ? <p className="muted" style={{ marginTop: '0.75rem' }}>{launchNotice}</p> : null}
       </div>
     </section>
   );
