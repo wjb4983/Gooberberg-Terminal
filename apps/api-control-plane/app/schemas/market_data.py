@@ -1,20 +1,38 @@
 from datetime import date
-from typing import Any
-from uuid import UUID, uuid4
+from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class MarketDataIngestionRequest(BaseModel):
-    source: str = Field(min_length=1)
-    symbols: list[str] = Field(default_factory=list)
-    timeframe: str = Field(min_length=1)
+    provider: Literal["massive"] = "massive"
+    asset_class: Literal["stocks", "options"] = "stocks"
+    universe_members: list[str] = Field(default_factory=list)
+    resolutions: list[str] = Field(default_factory=list)
+    feature_recipe_version: str = Field(default="v1", min_length=1)
+    label_recipe_version: str = Field(default="v1", min_length=1)
     start_date: date
     end_date: date
 
+    # Backward-compatible legacy fields.
+    source: str | None = Field(default=None, min_length=1)
+    symbols: list[str] = Field(default_factory=list)
+    timeframe: str | None = Field(default=None, min_length=1)
+
+    @model_validator(mode="after")
+    def _normalize_legacy_fields(self) -> "MarketDataIngestionRequest":
+        if not self.universe_members and self.symbols:
+            self.universe_members = self.symbols
+        if not self.resolutions and self.timeframe:
+            self.resolutions = [self.timeframe]
+        if not self.resolutions:
+            self.resolutions = ["1d"]
+        return self
+
 
 class MarketDataIngestionResponse(BaseModel):
-    request_id: UUID = Field(default_factory=uuid4)
+    request_id: str
+    dataset_id: str
     status: str = "accepted"
     source: str
     symbols: list[str] = Field(default_factory=list)

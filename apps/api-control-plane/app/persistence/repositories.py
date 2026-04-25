@@ -7,6 +7,7 @@ from uuid import UUID, uuid4
 from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
+from app.domain.market_data.spec import dataset_id_from_spec
 from app.jobs.models import JobLifecycleEvent, JobStatus
 from app.persistence.models import (
     BacktestRunRow,
@@ -403,20 +404,39 @@ class MarketDataSqlRepository:
         self._session = session
 
     def request_ingestion(self, payload: MarketDataIngestionRequest) -> MarketDataIngestionResponse:
-        response = MarketDataIngestionResponse(source=payload.source, symbols=payload.symbols, timeframe=payload.timeframe)
-        symbols = payload.symbols or ["UNKNOWN"]
-        dataset_id = str(response.request_id)
+        dataset_id, serialized_spec = dataset_id_from_spec(payload)
+        source = payload.source or payload.provider
+        symbols = payload.universe_members or payload.symbols or ["UNKNOWN"]
+        timeframe = (payload.resolutions[0] if payload.resolutions else payload.timeframe) or "1d"
+
+        existing = self._session.get(MarketDataCatalogRow, dataset_id)
+        if existing is not None:
+            return MarketDataIngestionResponse(
+                request_id=dataset_id,
+                dataset_id=dataset_id,
+                status="already_exists",
+                source=existing.source,
+                symbols=list((existing.metadata_json or {}).get("symbols", symbols)),
+                timeframe=existing.timeframe,
+            )
+
         self._session.add(
             MarketDataCatalogRow(
                 dataset_id=dataset_id,
-                source=payload.source,
+                source=source,
                 symbol=symbols[0],
-                timeframe=payload.timeframe,
+                timeframe=timeframe,
                 metadata_json={
+                    "dataset_spec": serialized_spec,
+                    "provider": payload.provider,
+                    "asset_class": payload.asset_class,
                     "symbols": symbols,
-                    "status": response.status,
+                    "resolutions": payload.resolutions,
+                    "status": "accepted",
                     "start_date": payload.start_date.isoformat(),
                     "end_date": payload.end_date.isoformat(),
+                    "feature_recipe_version": payload.feature_recipe_version,
+                    "label_recipe_version": payload.label_recipe_version,
                 },
             )
         )
@@ -425,13 +445,20 @@ class MarketDataSqlRepository:
                 DatasetPartitionRow(
                     dataset_id=dataset_id,
                     symbol=symbol,
-                    timeframe=payload.timeframe,
+                    timeframe=timeframe,
                     partition_start=payload.start_date,
                     partition_end=payload.end_date,
                 )
             )
         self._session.commit()
-        return response
+        return MarketDataIngestionResponse(
+            request_id=dataset_id,
+            dataset_id=dataset_id,
+            status="accepted",
+            source=source,
+            symbols=symbols,
+            timeframe=timeframe,
+        )
 
     def get_cache_coverage(self, symbol: str, timeframe: str) -> MarketDataCacheCoverageResponse:
         result = self._session.execute(
