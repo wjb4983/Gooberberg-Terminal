@@ -54,7 +54,7 @@ class BearerTokenAuthMiddleware(BaseHTTPMiddleware):
         revoked_token_ids = _normalize_scopes(settings.api_auth_revoked_token_ids)
         request.state.auth_scope = settings.api_auth_scope
 
-        if not credentials or request.url.path in self._health_paths:
+        if not credentials or request.url.path in self._health_paths or request.method.upper() == "OPTIONS":
             return await call_next(request)
 
         auth_header = request.headers.get("Authorization", "")

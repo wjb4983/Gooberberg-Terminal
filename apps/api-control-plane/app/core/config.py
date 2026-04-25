@@ -14,7 +14,9 @@ class Settings(BaseSettings):
 
     postgres_dsn: str | None = Field(default=None)
     redis_dsn: str | None = Field(default=None)
-    cors_allowed_origins: str = Field(default="http://localhost:1420,http://127.0.0.1:1420")
+    cors_allowed_origins: str = Field(
+        default="http://localhost:1420,http://127.0.0.1:1420,tauri://localhost,http://tauri.localhost,https://tauri.localhost"
+    )
 
     heartbeat_interval_seconds: float = Field(default=15.0)
     ws_replay_window: int = Field(default=512, ge=32, le=20000)

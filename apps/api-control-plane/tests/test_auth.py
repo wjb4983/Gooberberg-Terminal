@@ -138,6 +138,51 @@ def test_model_config_mutation_requires_admin_scope() -> None:
         _reset_settings()
 
 
+def test_cors_preflight_bypasses_bearer_auth() -> None:
+    previous_token = os.environ.get(TOKEN_ENV)
+    previous_scope = os.environ.get(SCOPE_ENV)
+    os.environ[TOKEN_ENV] = "private-token"
+    os.environ[SCOPE_ENV] = "control-plane:admin"
+    _reset_settings()
+
+    try:
+        client = TestClient(create_app())
+        response = client.options(
+            "/api/v1/model-configs",
+            headers={
+                "Origin": "http://localhost:1420",
+                "Access-Control-Request-Method": "POST",
+                "Access-Control-Request-Headers": "authorization,content-type",
+            },
+        )
+
+        assert response.status_code == 200
+        assert response.headers["access-control-allow-origin"] == "http://localhost:1420"
+
+        packaged_response = client.options(
+            "/api/v1/model-configs",
+            headers={
+                "Origin": "http://tauri.localhost",
+                "Access-Control-Request-Method": "POST",
+                "Access-Control-Request-Headers": "authorization,content-type",
+            },
+        )
+        assert packaged_response.status_code == 200
+        assert packaged_response.headers["access-control-allow-origin"] == "http://tauri.localhost"
+    finally:
+        if previous_token is None:
+            os.environ.pop(TOKEN_ENV, None)
+        else:
+            os.environ[TOKEN_ENV] = previous_token
+
+        if previous_scope is None:
+            os.environ.pop(SCOPE_ENV, None)
+        else:
+            os.environ[SCOPE_ENV] = previous_scope
+
+        _reset_settings()
+
+
 def test_health_endpoint_stays_public() -> None:
     previous_token = os.environ.get(TOKEN_ENV)
     os.environ[TOKEN_ENV] = "private-token"
