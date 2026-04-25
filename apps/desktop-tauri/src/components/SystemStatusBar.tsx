@@ -1,8 +1,5 @@
-import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import type { HealthResponse, QueueHealthResponse } from '@gb/schemas';
-
-import { createDesktopApiClient } from '../api/client';
 
 type IndicatorState = 'healthy' | 'degraded' | 'offline';
 
@@ -22,6 +19,7 @@ interface StatusSnapshot {
   liveness: ProbeResult<{ status: string }>;
   apiHealth: ProbeResult<HealthResponse>;
   queueHealth: ProbeResult<QueueHealthResponse>;
+  webSocket: ProbeResult<{ status: string }>;
 }
 
 function normalizeBaseUrl(baseUrl: string): string {
@@ -46,6 +44,97 @@ async function probeLiveness(baseUrl: string): Promise<ProbeResult<{ status: str
   }
 }
 
+async function probeApiHealth(baseUrl: string): Promise<ProbeResult<HealthResponse>> {
+  try {
+    const response = await fetch(`${normalizeBaseUrl(baseUrl)}/api/v1/health`, { headers: { Accept: 'application/json' } });
+    if (!response.ok) {
+      return { ok: false, detail: `HTTP ${response.status}` };
+    }
+
+    const payload = await response.json() as Partial<HealthResponse>;
+    if (payload.status !== 'ok') {
+      return { ok: false, detail: `unexpected status: ${String(payload.status ?? 'unknown')}` };
+    }
+
+    return { ok: true, data: payload as HealthResponse, detail: `status=${payload.status}` };
+  } catch (error) {
+    return { ok: false, detail: error instanceof Error ? error.message : 'request failed' };
+  }
+}
+
+async function probeQueueHealth(baseUrl: string): Promise<ProbeResult<QueueHealthResponse>> {
+  try {
+    const response = await fetch(`${normalizeBaseUrl(baseUrl)}/api/v1/health/queue`, { headers: { Accept: 'application/json' } });
+    if (!response.ok) {
+      return { ok: false, detail: `HTTP ${response.status}` };
+    }
+
+    const payload = await response.json() as {
+      status?: string;
+      queue_depth?: number | null;
+      worker_heartbeat_at?: string | null;
+      worker_heartbeat_age_seconds?: number | null;
+      detail?: string;
+    };
+    if (typeof payload.status !== 'string') {
+      return { ok: false, detail: 'queue health payload missing status' };
+    }
+
+    return {
+      ok: true,
+      data: {
+        status: payload.status,
+        queueDepth: payload.queue_depth ?? null,
+        workerHeartbeatAt: payload.worker_heartbeat_at ?? null,
+        workerHeartbeatAgeSeconds: payload.worker_heartbeat_age_seconds ?? null,
+        detail: payload.detail ?? '',
+      },
+      detail: payload.detail ?? `status=${payload.status}`,
+    };
+  } catch (error) {
+    return { ok: false, detail: error instanceof Error ? error.message : 'request failed' };
+  }
+}
+
+async function probeWebSocket(baseUrl: string): Promise<ProbeResult<{ status: string }>> {
+  if (typeof WebSocket === 'undefined') {
+    return { ok: false, detail: 'WebSocket is unavailable in this runtime' };
+  }
+
+  const wsUrl = `${normalizeBaseUrl(baseUrl).replace(/^http/, 'ws')}/ws`;
+  return new Promise((resolve) => {
+    let settled = false;
+    const socket = new WebSocket(wsUrl);
+    const timeout = window.setTimeout(() => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      socket.close();
+      resolve({ ok: false, detail: 'websocket probe timed out' });
+    }, 5_000);
+
+    socket.addEventListener('open', () => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      window.clearTimeout(timeout);
+      socket.close();
+      resolve({ ok: true, data: { status: 'connected' }, detail: 'websocket endpoint reachable' });
+    });
+
+    socket.addEventListener('error', () => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      window.clearTimeout(timeout);
+      resolve({ ok: false, detail: 'websocket connection failed' });
+    });
+  });
+}
+
 function toIndicatorFromApiHealth(health?: HealthResponse): IndicatorState {
   if (!health) {
     return 'offline';
@@ -68,6 +157,7 @@ function computeAggregate(snapshot: Omit<StatusSnapshot, 'aggregate'>): Indicato
     snapshot.liveness.ok ? 'healthy' : 'offline',
     snapshot.apiHealth.ok ? toIndicatorFromApiHealth(snapshot.apiHealth.data) : 'offline',
     snapshot.queueHealth.ok ? toIndicatorFromQueueHealth(snapshot.queueHealth.data) : 'offline',
+    snapshot.webSocket.ok ? 'healthy' : 'offline',
   ];
 
   if (indicators.every((item) => item === 'offline')) {
@@ -89,15 +179,14 @@ function formatTimestamp(timestamp: number): string {
 }
 
 export function SystemStatusBar({ baseUrl, wsStatus }: SystemStatusBarProps): JSX.Element {
-  const client = useMemo(() => createDesktopApiClient({ baseHttpUrl: baseUrl }), [baseUrl]);
-
   const { data, isLoading, dataUpdatedAt } = useQuery<StatusSnapshot>({
     queryKey: ['system', 'status-bar', baseUrl],
     queryFn: async () => {
-      const [livenessResult, apiResult, queueResult] = await Promise.allSettled([
+      const [livenessResult, apiResult, queueResult, webSocketResult] = await Promise.allSettled([
         probeLiveness(baseUrl),
-        client.getHealth(),
-        client.getQueueHealth(),
+        probeApiHealth(baseUrl),
+        probeQueueHealth(baseUrl),
+        probeWebSocket(baseUrl),
       ]);
 
       const liveness: ProbeResult<{ status: string }> =
@@ -107,19 +196,20 @@ export function SystemStatusBar({ baseUrl, wsStatus }: SystemStatusBarProps): JS
 
       const apiHealth: ProbeResult<HealthResponse> =
         apiResult.status === 'fulfilled'
-          ? { ok: true, data: apiResult.value, detail: `status=${apiResult.value.status}` }
+          ? apiResult.value
           : { ok: false, detail: apiResult.reason instanceof Error ? apiResult.reason.message : 'request failed' };
 
       const queueHealth: ProbeResult<QueueHealthResponse> =
         queueResult.status === 'fulfilled'
-          ? {
-            ok: true,
-            data: queueResult.value,
-            detail: queueResult.value.detail,
-          }
+          ? queueResult.value
           : { ok: false, detail: queueResult.reason instanceof Error ? queueResult.reason.message : 'request failed' };
 
-      const snapshotWithoutAggregate = { liveness, apiHealth, queueHealth };
+      const webSocket: ProbeResult<{ status: string }> =
+        webSocketResult.status === 'fulfilled'
+          ? webSocketResult.value
+          : { ok: false, detail: webSocketResult.reason instanceof Error ? webSocketResult.reason.message : 'request failed' };
+
+      const snapshotWithoutAggregate = { liveness, apiHealth, queueHealth, webSocket };
       return {
         ...snapshotWithoutAggregate,
         aggregate: computeAggregate(snapshotWithoutAggregate),
@@ -152,7 +242,9 @@ export function SystemStatusBar({ baseUrl, wsStatus }: SystemStatusBarProps): JS
       <span className="status-item" title="The most recent refresh that completed successfully for this status panel.">
         Last refresh: <strong>{formatTimestamp(dataUpdatedAt)}</strong>
       </span>
-      <span className="status-item">WebSocket: <strong>{wsStatus}</strong></span>
+      <span className="status-item" title={data?.webSocket.detail ?? 'WebSocket endpoint not queried yet.'}>
+        WebSocket: <strong>{data?.webSocket.ok ? 'healthy' : (wsStatus || 'offline')}</strong>
+      </span>
     </div>
   );
 }

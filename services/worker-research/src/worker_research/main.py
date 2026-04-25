@@ -28,6 +28,7 @@ JOB_TIMEOUT_SECONDS = 20.0
 MAX_ATTEMPTS = 3
 ARTIFACT_ROOT = Path("/artifacts")
 CONTROL_PLANE_EVENTS_URL = os.getenv("GB_CONTROL_PLANE_EVENTS_URL", "http://localhost:8000/api/v1")
+HEARTBEAT_INTERVAL_SECONDS = float(os.getenv("GB_WORKER_HEARTBEAT_INTERVAL_SECONDS", "15"))
 
 try:
     from redis.asyncio import Redis
@@ -76,6 +77,7 @@ async def run_worker() -> None:
 
     client = Redis.from_url(redis_dsn, encoding="utf-8", decode_responses=True)
     await client.ping()
+    heartbeat_task = asyncio.create_task(emit_worker_heartbeat())
     try:
         while True:
             popped = await client.blpop(JOB_QUEUE_KEY, timeout=1)
@@ -94,7 +96,23 @@ async def run_worker() -> None:
                 continue
             await handle_with_timeout(client, envelope)
     finally:
+        heartbeat_task.cancel()
         await client.aclose()
+
+
+async def emit_worker_heartbeat() -> None:
+    url = f"{CONTROL_PLANE_EVENTS_URL}/health/queue/heartbeat"
+    while True:
+        def _send() -> None:
+            req = urllib.request.Request(url, data=b"{}", headers={"Content-Type": "application/json"}, method="POST")
+            with urllib.request.urlopen(req, timeout=3):
+                pass
+
+        try:
+            await asyncio.to_thread(_send)
+        except Exception:
+            logger.debug("worker heartbeat failed")
+        await asyncio.sleep(HEARTBEAT_INTERVAL_SECONDS)
 
 
 async def handle_with_timeout(client: Redis, envelope: JobEnvelope) -> None:

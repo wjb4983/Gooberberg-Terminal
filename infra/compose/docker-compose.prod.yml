@@ -164,6 +164,66 @@ services:
           cpus: "0.25"
           memory: 128M
 
+  worker-training:
+    image: ghcr.io/gooberberg/worker-training:latest
+    build:
+      context: ../..
+      dockerfile: infra/docker/worker.Dockerfile
+      args:
+        SERVICE_PATH: services/worker-training
+        MODULE_NAME: worker_training.main
+    restart: unless-stopped
+    init: true
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:size=64m,noexec,nosuid
+    environment:
+      GB_REDIS_DSN: redis://redis:6379/0
+      GB_CONTROL_PLANE_EVENTS_URL: http://api-control-plane:8000/api/v1
+      GB_WORKER_HEARTBEAT_INTERVAL_SECONDS: ${GB_WORKER_HEARTBEAT_INTERVAL_SECONDS:-15}
+    volumes:
+      - worker-artifacts:/artifacts
+    depends_on:
+      api-control-plane:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - gb-prod-private
+    <<: [*default-logging, *default-resources]
+
+  worker-research:
+    image: ghcr.io/gooberberg/worker-research:latest
+    build:
+      context: ../..
+      dockerfile: infra/docker/worker.Dockerfile
+      args:
+        SERVICE_PATH: services/worker-research
+        MODULE_NAME: worker_research.main
+    restart: unless-stopped
+    init: true
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:size=64m,noexec,nosuid
+    environment:
+      GB_REDIS_DSN: redis://redis:6379/0
+      GB_CONTROL_PLANE_EVENTS_URL: http://api-control-plane:8000/api/v1
+      GB_WORKER_HEARTBEAT_INTERVAL_SECONDS: ${GB_WORKER_HEARTBEAT_INTERVAL_SECONDS:-15}
+    volumes:
+      - worker-artifacts:/artifacts
+    depends_on:
+      api-control-plane:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - gb-prod-private
+    <<: [*default-logging, *default-resources]
+
   # Optional internet-facing reverse proxy profile with TLS termination placeholders.
   nginx:
     image: nginx:1.27-alpine
@@ -201,6 +261,8 @@ volumes:
     name: gb-prod-postgres-data
   redis-data:
     name: gb-prod-redis-data
+  worker-artifacts:
+    name: gb-prod-worker-artifacts
   nginx-certs:
     name: gb-prod-nginx-certs
   nginx-acme:
