@@ -12,6 +12,8 @@ interface TrainingRunItem {
   model_config_id: string;
   dataset_id: string;
   job_id: string;
+  task_type: string;
+  subtask_type: string;
   status: string;
   parameters: Record<string, unknown>;
   created_at: string;
@@ -27,6 +29,125 @@ interface RunEvent {
   timestamp: string;
   status: string;
   detail: string;
+}
+
+interface ArtifactSummaryItem {
+  id: number;
+  created_at: string;
+}
+
+interface ArtifactDetailItem extends ArtifactSummaryItem {
+  metrics: Record<string, unknown>;
+}
+
+interface MetricDefinition {
+  key: string;
+  label: string;
+  aliases?: string[];
+}
+
+interface MetricBundle {
+  id: string;
+  label: string;
+  metrics: MetricDefinition[];
+}
+
+interface ResolvedMetric {
+  bundleId: string;
+  bundleLabel: string;
+  definition: MetricDefinition;
+  value: unknown;
+}
+
+const metricBundles: MetricBundle[] = [
+  {
+    id: 'ranking_signals',
+    label: 'Ranking / Signals',
+    metrics: [
+      { key: 'precision_at_k', label: 'precision@k', aliases: ['precision@k', 'precision_at_top_k'] },
+      { key: 'hit_rate', label: 'hit rate' },
+      { key: 'turnover', label: 'turnover' },
+      { key: 'net_information_ratio', label: 'net information ratio', aliases: ['information_ratio_net'] },
+    ],
+  },
+  {
+    id: 'volatility',
+    label: 'Volatility',
+    metrics: [
+      { key: 'vol_mae', label: 'vol forecast MAE', aliases: ['mae_vol_forecast', 'mae'] },
+      { key: 'vol_rmse', label: 'vol forecast RMSE', aliases: ['rmse_vol_forecast', 'rmse'] },
+      { key: 'calibration_error', label: 'calibration error', aliases: ['vol_calibration_error'] },
+    ],
+  },
+  {
+    id: 'regime',
+    label: 'Regime',
+    metrics: [
+      { key: 'regime_state_accuracy', label: 'regime-state accuracy', aliases: ['regime_accuracy'] },
+      { key: 'regime_state_f1', label: 'regime-state F1', aliases: ['regime_f1'] },
+      { key: 'transition_precision', label: 'transition precision' },
+      { key: 'transition_recall', label: 'transition recall' },
+    ],
+  },
+  {
+    id: 'portfolio_realism',
+    label: 'Portfolio realism',
+    metrics: [
+      { key: 'net_sharpe', label: 'net Sharpe', aliases: ['sharpe_net'] },
+      { key: 'max_drawdown', label: 'max drawdown', aliases: ['max_drawdown_pct'] },
+      { key: 'capacity_proxy', label: 'capacity proxy' },
+      { key: 'cost_adjusted_return', label: 'cost-adjusted return', aliases: ['net_return_after_costs'] },
+    ],
+  },
+];
+
+const primaryMetricKeys: string[] = [
+  'precision_at_k',
+  'hit_rate',
+  'vol_rmse',
+  'regime_state_f1',
+  'net_sharpe',
+  'max_drawdown',
+  'cost_adjusted_return',
+];
+
+function flattenMetrics(metrics: Record<string, unknown>, prefix = ''): Record<string, unknown> {
+  return Object.entries(metrics).reduce<Record<string, unknown>>((acc, [key, value]) => {
+    const normalizedKey = prefix ? `${prefix}.${key}` : key;
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+      return { ...acc, ...flattenMetrics(value as Record<string, unknown>, normalizedKey) };
+    }
+    acc[normalizedKey] = value;
+    return acc;
+  }, {});
+}
+
+function resolveMetric(metricMap: Record<string, unknown>, definition: MetricDefinition): unknown {
+  const candidateKeys = [definition.key, ...(definition.aliases ?? [])];
+  for (const candidate of candidateKeys) {
+    if (candidate in metricMap) return metricMap[candidate];
+  }
+  const normalizedMetricMap = new Map<string, unknown>(
+    Object.entries(metricMap).map(([key, value]) => [key.replace(/[.\s@_-]/g, '').toLowerCase(), value]),
+  );
+  for (const candidate of candidateKeys) {
+    const normalizedCandidate = candidate.replace(/[.\s@_-]/g, '').toLowerCase();
+    if (normalizedMetricMap.has(normalizedCandidate)) return normalizedMetricMap.get(normalizedCandidate);
+  }
+  return undefined;
+}
+
+function formatMetricValue(value: unknown): string {
+  if (value === undefined || value === null) return 'n/a';
+  if (typeof value === 'number') {
+    if (!Number.isFinite(value)) return String(value);
+    if (Math.abs(value) >= 1000) return value.toLocaleString(undefined, { maximumFractionDigits: 2 });
+    if (Math.abs(value) < 0.01 && value !== 0) return value.toExponential(2);
+    return value.toLocaleString(undefined, { maximumFractionDigits: 4 });
+  }
+  if (typeof value === 'boolean') return value ? 'true' : 'false';
+  if (Array.isArray(value)) return value.join(', ');
+  return String(value);
 }
 
 async function requestJson<T>(baseUrl: string, path: string, init?: RequestInit): Promise<T> {
@@ -52,6 +173,7 @@ export function TrainingRunsPage({ baseUrl }: TrainingRunsPageProps): JSX.Elemen
   const [selectedConfigId, setSelectedConfigId] = useState('');
   const [jobDetail, setJobDetail] = useState<string>('No live status yet.');
   const [eventsByJob, setEventsByJob] = useState<Record<string, RunEvent[]>>({});
+  const [selectedRunMetrics, setSelectedRunMetrics] = useState<Record<string, unknown>>({});
   const [error, setError] = useState<string | null>(null);
   const lastSeqRef = useRef<number | undefined>(undefined);
 
@@ -148,10 +270,40 @@ export function TrainingRunsPage({ baseUrl }: TrainingRunsPageProps): JSX.Elemen
   useEffect(() => {
     const run = selectedRun;
     if (!run) return;
+    setSelectedRunMetrics({});
     void requestJson<{ id: string; status: string; detail: string }>(baseUrl, `/api/v1/jobs/${encodeURIComponent(run.job_id)}`)
       .then((payload) => setJobDetail(`${payload.status}: ${payload.detail}`))
       .catch(() => setJobDetail('Unable to load persisted job summary.'));
+    void requestJson<ArtifactSummaryItem[]>(baseUrl, `/api/v1/jobs/${encodeURIComponent(run.job_id)}/artifacts`)
+      .then((artifacts) => {
+        const latest = [...artifacts].sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at))[0];
+        if (!latest) return;
+        void requestJson<ArtifactDetailItem>(baseUrl, `/api/v1/jobs/${encodeURIComponent(run.job_id)}/artifacts/${latest.id}`)
+          .then((detail) => setSelectedRunMetrics(detail.metrics ?? {}))
+          .catch(() => setSelectedRunMetrics({}));
+      })
+      .catch(() => setSelectedRunMetrics({}));
   }, [baseUrl, selectedRun]);
+
+  const resolvedMetrics = useMemo<ResolvedMetric[]>(() => {
+    const flattened = flattenMetrics(selectedRunMetrics);
+    return metricBundles.flatMap((bundle) => bundle.metrics.map((definition) => ({
+      bundleId: bundle.id,
+      bundleLabel: bundle.label,
+      definition,
+      value: resolveMetric(flattened, definition),
+    })));
+  }, [selectedRunMetrics]);
+
+  const primaryMetrics = useMemo(
+    () => resolvedMetrics.filter((metric) => primaryMetricKeys.includes(metric.definition.key)),
+    [resolvedMetrics],
+  );
+
+  const secondaryMetricsByBundle = useMemo(() => metricBundles.map((bundle) => ({
+    bundle,
+    metrics: resolvedMetrics.filter((metric) => metric.bundleId === bundle.id && !primaryMetricKeys.includes(metric.definition.key)),
+  })), [resolvedMetrics]);
 
   return (
     <section>
@@ -194,6 +346,38 @@ export function TrainingRunsPage({ baseUrl }: TrainingRunsPageProps): JSX.Elemen
             <p><strong>Run ID:</strong> {selectedRun.id}</p>
             <p><strong>Job:</strong> {selectedRun.job_id}</p>
             <p><strong>Persisted summary:</strong> {jobDetail}</p>
+            <div className="card" style={{ marginTop: '0.75rem', marginBottom: '0.75rem' }}>
+              <h4 style={{ marginTop: 0 }}>Primary metrics</h4>
+              <p className="muted" style={{ marginTop: 0 }}>Showing 7 key metrics by default. Expand bundles below for secondary metrics.</p>
+              <table className="jobs-table" style={{ fontSize: '0.9rem' }}>
+                <thead><tr><th>Metric</th><th>Bundle</th><th>Value</th></tr></thead>
+                <tbody>
+                  {primaryMetrics.map((metric) => (
+                    <tr key={metric.definition.key}>
+                      <td>{metric.definition.label}</td>
+                      <td>{metric.bundleLabel}</td>
+                      <td><code>{formatMetricValue(metric.value)}</code></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {secondaryMetricsByBundle.map(({ bundle, metrics }) => (
+                <details key={bundle.id} style={{ marginTop: '0.5rem' }}>
+                  <summary>{bundle.label} secondary metrics</summary>
+                  <table className="jobs-table" style={{ marginTop: '0.4rem', fontSize: '0.85rem' }}>
+                    <thead><tr><th>Metric</th><th>Value</th></tr></thead>
+                    <tbody>
+                      {metrics.map((metric) => (
+                        <tr key={metric.definition.key}>
+                          <td>{metric.definition.label}</td>
+                          <td><code>{formatMetricValue(metric.value)}</code></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </details>
+              ))}
+            </div>
             <ul>
               {(eventsByJob[selectedRun.job_id] ?? []).map((event, index) => (
                 <li key={`${event.timestamp}-${index}`}>{new Date(event.timestamp).toLocaleTimeString()} · {event.status} · {event.detail}</li>
