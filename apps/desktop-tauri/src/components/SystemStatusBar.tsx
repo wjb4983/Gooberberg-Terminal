@@ -230,20 +230,20 @@ export function SystemStatusBar({ baseUrl, wsStatus }: SystemStatusBarProps): JS
         <span className={`status-dot status-${aggregate}`} aria-hidden="true" />
         System: <strong>{aggregate}</strong>
       </span>
-      <span className="status-item" title={data?.liveness.detail ?? 'Liveness endpoint not queried yet.'}>
-        /healthz: <strong>{data?.liveness.ok ? 'healthy' : 'offline'}</strong>
+      <span className="status-item" title={data?.liveness?.detail ?? 'Liveness endpoint not queried yet.'}>
+        /healthz: <strong>{data?.liveness?.ok ? 'healthy' : 'offline'}</strong>
       </span>
-      <span className="status-item" title={data?.apiHealth.detail ?? 'Versioned API health not queried yet.'}>
-        /api/v1/health: <strong>{data?.apiHealth.ok ? toIndicatorFromApiHealth(data.apiHealth.data) : 'offline'}</strong>
+      <span className="status-item" title={data?.apiHealth?.detail ?? 'Versioned API health not queried yet.'}>
+        /api/v1/health: <strong>{data?.apiHealth?.ok ? toIndicatorFromApiHealth(data.apiHealth.data) : 'offline'}</strong>
       </span>
-      <span className="status-item" title={data?.queueHealth.detail ?? 'Queue health not queried yet.'}>
-        Queue/worker: <strong>{data?.queueHealth.ok ? toIndicatorFromQueueHealth(data.queueHealth.data) : 'offline'}</strong>
+      <span className="status-item" title={data?.queueHealth?.detail ?? 'Queue health not queried yet.'}>
+        Queue/worker: <strong>{data?.queueHealth?.ok ? toIndicatorFromQueueHealth(data.queueHealth.data) : 'offline'}</strong>
       </span>
       <span className="status-item" title="The most recent refresh that completed successfully for this status panel.">
         Last refresh: <strong>{formatTimestamp(dataUpdatedAt)}</strong>
       </span>
-      <span className="status-item" title={data?.webSocket.detail ?? 'WebSocket endpoint not queried yet.'}>
-        WebSocket: <strong>{data?.webSocket.ok ? 'healthy' : (wsStatus || 'offline')}</strong>
+      <span className="status-item" title={data?.webSocket?.detail ?? 'WebSocket endpoint not queried yet.'}>
+        WebSocket: <strong>{data?.webSocket?.ok ? 'healthy' : (wsStatus || 'offline')}</strong>
       </span>
     </div>
   );

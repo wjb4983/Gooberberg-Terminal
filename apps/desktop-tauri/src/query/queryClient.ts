@@ -1,6 +1,6 @@
 import { QueryClient, dehydrate, hydrate } from '@tanstack/react-query';
 
-const CACHE_KEY = 'gb.desktop.query-cache.v1';
+const CACHE_KEY = 'gb.desktop.query-cache.v2';
 
 function shouldRetry(failureCount: number, error: unknown): boolean {
   if (failureCount >= 2) {
