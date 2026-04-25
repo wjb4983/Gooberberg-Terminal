@@ -11,9 +11,15 @@ interface TrainingRunItem {
   id: string;
   model_config_id: string;
   dataset_id: string;
+  dataset_spec_hash: string;
+  dataset_manifest_version: string;
+  resolved_symbol_count: number;
+  resolved_member_count: number;
+  model_config_version_tag: string;
   job_id: string;
   task_type: string;
   subtask_type: string;
+  constraint_profile_version: string;
   status: string;
   parameters: Record<string, unknown>;
   created_at: string;
@@ -345,6 +351,12 @@ export function TrainingRunsPage({ baseUrl }: TrainingRunsPageProps): JSX.Elemen
           <>
             <p><strong>Run ID:</strong> {selectedRun.id}</p>
             <p><strong>Job:</strong> {selectedRun.job_id}</p>
+            <p><strong>Task/Subtask:</strong> {selectedRun.task_type} / {selectedRun.subtask_type}</p>
+            <p><strong>Dataset manifest:</strong> {selectedRun.dataset_manifest_version}</p>
+            <p><strong>Dataset spec hash:</strong> <code>{selectedRun.dataset_spec_hash.slice(0, 16)}…</code></p>
+            <p><strong>Resolved symbols/members:</strong> {selectedRun.resolved_symbol_count} / {selectedRun.resolved_member_count}</p>
+            <p><strong>Model config version:</strong> {selectedRun.model_config_version_tag}</p>
+            <p><strong>Constraint profile version:</strong> {selectedRun.constraint_profile_version}</p>
             <p><strong>Persisted summary:</strong> {jobDetail}</p>
             <div className="card" style={{ marginTop: '0.75rem', marginBottom: '0.75rem' }}>
               <h4 style={{ marginTop: 0 }}>Primary metrics</h4>

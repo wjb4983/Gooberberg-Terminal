@@ -54,10 +54,16 @@ class TrainingRunResponse(TaskSubtypeValidatedModel):
     id: UUID = Field(default_factory=uuid4)
     model_config_id: UUID
     dataset_id: str
+    dataset_spec_hash: str = ""
+    dataset_manifest_version: str = "v1"
+    resolved_symbol_count: int = 0
+    resolved_member_count: int = 0
+    model_config_version_tag: str = "unknown"
     job_id: UUID
     status: RunStatus = RunStatus.QUEUED
     parameters: dict[str, Any] = Field(default_factory=dict)
     constraints: RunConstraints | None = None
+    constraint_profile_version: str = "v1"
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
     @model_validator(mode="after")

@@ -1,4 +1,5 @@
 from datetime import UTC, date, datetime
+from hashlib import sha256
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -60,6 +61,15 @@ def _resolve_dataset_resolutions(dataset_timeframe: str, dataset_metadata: dict[
     return [dataset_timeframe]
 
 
+def _resolve_member_count(dataset_metadata: dict[str, object], fallback_count: int) -> int:
+    raw_members = dataset_metadata.get("universe_members")
+    if isinstance(raw_members, list):
+        member_count = len([item for item in raw_members if isinstance(item, str) and item])
+        if member_count > 0:
+            return member_count
+    return fallback_count
+
+
 def _build_missing_chunks(
     market_data_service: MarketDataService,
     *,
@@ -119,6 +129,35 @@ async def create_training_run(
     job_id = uuid4()
     accepted_at = datetime.now(UTC)
     trace_id = request_id_ctx_var.get() or str(uuid4())
+    symbols = _resolve_dataset_symbols(dataset.symbol, dataset.metadata)
+    resolutions = _resolve_dataset_resolutions(dataset.timeframe, dataset.metadata)
+    attached_parameters = attach_constraints_to_parameters(
+        parameters=payload.parameters,
+        constraints=payload.constraints,
+    )
+
+    serialized_dataset_spec = dataset.metadata.get("dataset_spec")
+    if isinstance(serialized_dataset_spec, str) and serialized_dataset_spec:
+        dataset_spec_hash = sha256(serialized_dataset_spec.encode("utf-8")).hexdigest()
+    else:
+        dataset_spec_hash = sha256(payload.dataset_id.encode("utf-8")).hexdigest()
+
+    dataset_manifest_version_raw = dataset.metadata.get("manifest_version")
+    dataset_manifest_version = (
+        str(dataset_manifest_version_raw) if isinstance(dataset_manifest_version_raw, str) else "v1"
+    )
+    model_config_payload = model_config.get("config")
+    model_config_data = model_config_payload if isinstance(model_config_payload, dict) else {}
+    model_config_version_raw = model_config_data.get("version_tag")
+    model_config_version_tag = str(model_config_version_raw) if isinstance(model_config_version_raw, str) else "unknown"
+    run_metadata_payload = attached_parameters.get("run_metadata")
+    run_metadata = run_metadata_payload if isinstance(run_metadata_payload, dict) else {}
+    constraint_profile_version_raw = run_metadata.get("constraint_profile_version")
+    constraint_profile_version = (
+        str(constraint_profile_version_raw) if isinstance(constraint_profile_version_raw, str) else "v1"
+    )
+    resolved_symbol_count = len(symbols)
+    resolved_member_count = _resolve_member_count(dataset.metadata, resolved_symbol_count)
 
     created = service.create(
         {
@@ -126,12 +165,15 @@ async def create_training_run(
             "job_id": str(job_id),
             "model_config_id": str(payload.model_config_id),
             "dataset_id": payload.dataset_id,
+            "dataset_spec_hash": dataset_spec_hash,
+            "dataset_manifest_version": dataset_manifest_version,
+            "resolved_symbol_count": resolved_symbol_count,
+            "resolved_member_count": resolved_member_count,
+            "model_config_version_tag": model_config_version_tag,
             "task_type": payload.task_type.value,
             "subtask_type": payload.subtask_type.value,
-            "parameters": attach_constraints_to_parameters(
-                parameters=payload.parameters,
-                constraints=payload.constraints,
-            ),
+            "constraint_profile_version": constraint_profile_version,
+            "parameters": attached_parameters,
             "status": "queued",
             "created_at": accepted_at,
         }
@@ -163,8 +205,6 @@ async def create_training_run(
     await _broadcast_job_event(queued_event)
 
     required_start, required_end = _resolve_required_window(dataset.metadata)
-    symbols = _resolve_dataset_symbols(dataset.symbol, dataset.metadata)
-    resolutions = _resolve_dataset_resolutions(dataset.timeframe, dataset.metadata)
     missing_chunks = _build_missing_chunks(
         market_data_service,
         symbols=symbols,
