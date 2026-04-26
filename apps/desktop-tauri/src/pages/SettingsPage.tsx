@@ -36,13 +36,17 @@ async function probeSavedConnection(baseUrl: string, token: string): Promise<str
   const isOk = (result: PromiseSettledResult<Response>): boolean => result.status === 'fulfilled' && result.value.ok;
   const protectedOk = protectedRoute.status === 'fulfilled' && protectedRoute.value.ok;
   const protectedStatus = protectedRoute.status === 'fulfilled' ? protectedRoute.value.status : 'request failed';
+  const protectedDetail =
+    protectedRoute.status === 'rejected' && protectedRoute.reason instanceof Error
+      ? `; ${protectedRoute.reason.message}`
+      : '';
 
   return [
     `Settings saved.`,
     `/healthz ${isOk(liveness) ? 'ok' : 'failed'}.`,
     `/api/v1/health ${isOk(health) ? 'ok' : 'failed'}.`,
     `Queue ${isOk(queue) ? 'reachable' : 'failed'}.`,
-    `Token ${protectedOk ? 'accepted' : `not accepted (${protectedStatus})`}.`,
+    `Token ${protectedOk ? 'accepted' : `not accepted (${protectedStatus}${protectedDetail})`}.`,
   ].join(' ');
 }
 
