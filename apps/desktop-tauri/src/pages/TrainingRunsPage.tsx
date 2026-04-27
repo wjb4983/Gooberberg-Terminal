@@ -3,6 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { createDesktopApiClient } from '../api/client';
 import { requestJson } from '../api/requestJson';
 import { JobLifecyclePanel } from '../components/JobLifecyclePanel';
+import { SUBTASK_TYPES, TASK_TYPES, type SubtaskType, type TaskType } from '../types/api';
 
 interface TrainingRunsPageProps {
   baseUrl: string;
@@ -118,6 +119,11 @@ const primaryMetricKeys: string[] = [
   'cost_adjusted_return',
 ];
 
+function isModelCompatible(config: ModelConfigItem, taskType: TaskType): boolean {
+  const configTaskType = typeof config.config.task_type === 'string' ? config.config.task_type : null;
+  return configTaskType === null || configTaskType === taskType;
+}
+
 function flattenMetrics(metrics: Record<string, unknown>, prefix = ''): Record<string, unknown> {
   return Object.entries(metrics).reduce<Record<string, unknown>>((acc, [key, value]) => {
     const normalizedKey = prefix ? `${prefix}.${key}` : key;
@@ -162,6 +168,8 @@ export function TrainingRunsPage({ baseUrl }: TrainingRunsPageProps): JSX.Elemen
   const [searchParams, setSearchParams] = useSearchParams();
   const [runs, setRuns] = useState<TrainingRunItem[]>([]);
   const [configs, setConfigs] = useState<ModelConfigItem[]>([]);
+  const [taskType, setTaskType] = useState<TaskType>('time_series_momentum');
+  const [subtaskType, setSubtaskType] = useState<SubtaskType>('ranking');
   const [datasetId, setDatasetId] = useState('equities_daily_v1');
   const [parametersJson, setParametersJson] = useState('{"epochs": 20, "seed": 42}');
   const [selectedConfigId, setSelectedConfigId] = useState('');
@@ -173,6 +181,10 @@ export function TrainingRunsPage({ baseUrl }: TrainingRunsPageProps): JSX.Elemen
 
   const selectedJobId = searchParams.get('job_id');
   const selectedRun = useMemo(() => runs.find((run) => run.job_id === selectedJobId) ?? null, [runs, selectedJobId]);
+  const compatibleConfigs = useMemo(
+    () => configs.filter((config) => isModelCompatible(config, taskType)),
+    [configs, taskType],
+  );
 
   const setSelectedJobId = (jobId: string): void => {
     setSearchParams((previous) => {
@@ -191,17 +203,24 @@ export function TrainingRunsPage({ baseUrl }: TrainingRunsPageProps): JSX.Elemen
       ]);
       setRuns(runPayload);
       setConfigs(configPayload);
-      if (!selectedConfigId && configPayload.length > 0) {
-        setSelectedConfigId(configPayload[0].id);
+      const nextCompatibleConfigs = configPayload.filter((config) => isModelCompatible(config, taskType));
+      if (!selectedConfigId && nextCompatibleConfigs.length > 0) {
+        setSelectedConfigId(nextCompatibleConfigs[0].id);
       }
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : 'Failed loading training runs.');
     }
-  }, [baseUrl, selectedConfigId]);
+  }, [baseUrl, selectedConfigId, taskType]);
 
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    if (!compatibleConfigs.some((config) => config.id === selectedConfigId)) {
+      setSelectedConfigId(compatibleConfigs[0]?.id ?? '');
+    }
+  }, [compatibleConfigs, selectedConfigId]);
 
   useEffect(() => {
     const connection = client.connectTopicWebSocket({
@@ -240,7 +259,11 @@ export function TrainingRunsPage({ baseUrl }: TrainingRunsPageProps): JSX.Elemen
       return;
     }
     if (!selectedConfigId) {
-      setError('Model config is required.');
+      setError('Compatible model config is required.');
+      return;
+    }
+    if (subtaskType === 'regime_state' && taskType !== 'regime_switching') {
+      setError('Subtask regime_state can only be used with task regime_switching.');
       return;
     }
 
@@ -250,6 +273,8 @@ export function TrainingRunsPage({ baseUrl }: TrainingRunsPageProps): JSX.Elemen
         body: JSON.stringify({
           model_config_id: selectedConfigId,
           dataset_id: datasetId,
+          task_type: taskType,
+          subtask_type: subtaskType,
           parameters: parsedParameters,
         }),
       });
@@ -302,18 +327,42 @@ export function TrainingRunsPage({ baseUrl }: TrainingRunsPageProps): JSX.Elemen
   return (
     <section>
       <h2>Training Runs</h2>
-      <p>Submit async training jobs; compute stays server-side while UI streams incremental updates only.</p>
+      <p>Guide training launches through tasking, dataset, compatible model config, then run submission.</p>
       {error ? <p className="muted">Error: {error}</p> : null}
       <div className="card" style={{ marginBottom: '1rem' }}>
-        <h3>Launch training run</h3>
+        <h3>1) Tasking</h3>
+        <div style={{ display: 'grid', gap: '0.5rem', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' }}>
+          <label>
+            Task
+            <select value={taskType} onChange={(event) => setTaskType(event.target.value as TaskType)}>
+              {TASK_TYPES.map((item) => <option key={item} value={item}>{item}</option>)}
+            </select>
+          </label>
+          <label>
+            Subtask
+            <select value={subtaskType} onChange={(event) => setSubtaskType(event.target.value as SubtaskType)}>
+              {SUBTASK_TYPES.map((item) => <option key={item} value={item}>{item}</option>)}
+            </select>
+          </label>
+        </div>
+      </div>
+      <div className="card" style={{ marginBottom: '1rem' }}>
+        <h3>2) Dataset</h3>
+        <input value={datasetId} onChange={(event) => setDatasetId(event.target.value)} placeholder="Dataset ID" />
+      </div>
+      <div className="card" style={{ marginBottom: '1rem' }}>
+        <h3>3) Compatible model config</h3>
+        <select value={selectedConfigId} onChange={(event) => setSelectedConfigId(event.target.value)}>
+          <option value="">Select compatible model config</option>
+          {compatibleConfigs.map((config) => (
+            <option key={config.id} value={config.id}>{typeof config.config.name === 'string' ? config.config.name : config.id}</option>
+          ))}
+        </select>
+        <p className="muted" style={{ marginBottom: 0 }}>Showing configs compatible with {taskType}.</p>
+      </div>
+      <div className="card" style={{ marginBottom: '1rem' }}>
+        <h3>4) Run submission</h3>
         <div style={{ display: 'grid', gap: '0.5rem' }}>
-          <select value={selectedConfigId} onChange={(event) => setSelectedConfigId(event.target.value)}>
-            <option value="">Select model config</option>
-            {configs.map((config) => (
-              <option key={config.id} value={config.id}>{typeof config.config.name === 'string' ? config.config.name : config.id}</option>
-            ))}
-          </select>
-          <input value={datasetId} onChange={(event) => setDatasetId(event.target.value)} placeholder="Dataset ID" />
           <textarea value={parametersJson} onChange={(event) => setParametersJson(event.target.value)} rows={4} />
           <button type="button" onClick={() => void launchRun()}>Launch training run</button>
         </div>

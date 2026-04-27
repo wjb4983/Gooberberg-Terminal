@@ -303,3 +303,65 @@ def test_revoked_structured_token_is_rejected() -> None:
         else:
             os.environ[REVOKED_ENV] = previous_revoked
         _reset_settings()
+
+
+def test_invalid_structured_token_expiry_is_ignored() -> None:
+    previous_tokens = os.environ.get(TOKENS_ENV)
+    os.environ[TOKENS_ENV] = (
+        "broken|broken-secret|control-plane:read|not-an-iso-date;"
+        "valid|valid-secret|control-plane:read|2099-01-01T00:00:00Z"
+    )
+    _reset_settings()
+
+    try:
+        client = TestClient(create_app())
+        response = client.get(
+            "/api/v1/models/deployments",
+            headers={"Authorization": "Bearer valid-secret"},
+        )
+        assert response.status_code == 200
+
+        rejected = client.get(
+            "/api/v1/models/deployments",
+            headers={"Authorization": "Bearer broken-secret"},
+        )
+        assert rejected.status_code == 401
+        assert rejected.json()["auth_result"] == "invalid_token"
+    finally:
+        if previous_tokens is None:
+            os.environ.pop(TOKENS_ENV, None)
+        else:
+            os.environ[TOKENS_ENV] = previous_tokens
+        _reset_settings()
+
+
+def test_invalid_structured_token_expiry_falls_back_to_legacy_token() -> None:
+    previous_token = os.environ.get(TOKEN_ENV)
+    previous_scope = os.environ.get(SCOPE_ENV)
+    previous_tokens = os.environ.get(TOKENS_ENV)
+    os.environ[TOKEN_ENV] = "legacy-secret"
+    os.environ[SCOPE_ENV] = "control-plane:read"
+    os.environ[TOKENS_ENV] = "broken|broken-secret|control-plane:read|not-an-iso-date"
+    _reset_settings()
+
+    try:
+        client = TestClient(create_app())
+        response = client.get(
+            "/api/v1/models/deployments",
+            headers={"Authorization": "Bearer legacy-secret"},
+        )
+        assert response.status_code == 200
+    finally:
+        if previous_token is None:
+            os.environ.pop(TOKEN_ENV, None)
+        else:
+            os.environ[TOKEN_ENV] = previous_token
+        if previous_scope is None:
+            os.environ.pop(SCOPE_ENV, None)
+        else:
+            os.environ[SCOPE_ENV] = previous_scope
+        if previous_tokens is None:
+            os.environ.pop(TOKENS_ENV, None)
+        else:
+            os.environ[TOKENS_ENV] = previous_tokens
+        _reset_settings()

@@ -271,6 +271,8 @@ export interface TrainingRun {
 export interface CreateTrainingRunRequest {
   modelConfigId: string;
   datasetId: string;
+  taskType?: string;
+  subtaskType?: string;
   parameters?: Record<string, unknown>;
 }
 

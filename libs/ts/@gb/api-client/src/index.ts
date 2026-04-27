@@ -380,6 +380,8 @@ export class GbApiClient {
       body: JSON.stringify({
         model_config_id: request.modelConfigId,
         dataset_id: request.datasetId,
+        task_type: request.taskType,
+        subtask_type: request.subtaskType,
         parameters: request.parameters ?? {},
       }),
     });

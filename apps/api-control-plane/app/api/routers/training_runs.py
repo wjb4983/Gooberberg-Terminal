@@ -26,14 +26,11 @@ from app.schemas.run_constraints import attach_constraints_to_parameters
 router = APIRouter(prefix="/training-runs", tags=["training-runs"])
 
 
-def _resolve_required_window(dataset_metadata: dict[str, object]) -> tuple[date, date]:
+def _resolve_required_window(dataset_metadata: dict[str, object]) -> tuple[date, date] | None:
     start_raw = dataset_metadata.get("start_date")
     end_raw = dataset_metadata.get("end_date")
     if not isinstance(start_raw, str) or not isinstance(end_raw, str):
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="dataset metadata is missing required start_date/end_date",
-        )
+        return None
     try:
         return date.fromisoformat(start_raw), date.fromisoformat(end_raw)
     except ValueError as exc:
@@ -204,16 +201,22 @@ async def create_training_run(
     request.app.state.job_event_repository.persist_event(queued_event)
     await _broadcast_job_event(queued_event)
 
-    required_start, required_end = _resolve_required_window(dataset.metadata)
-    missing_chunks = _build_missing_chunks(
-        market_data_service,
-        symbols=symbols,
-        resolutions=resolutions,
-        required_start=required_start,
-        required_end=required_end,
+    required_window = _resolve_required_window(dataset.metadata)
+    missing_chunks = (
+        _build_missing_chunks(
+            market_data_service,
+            symbols=symbols,
+            resolutions=resolutions,
+            required_start=required_window[0],
+            required_end=required_window[1],
+        )
+        if required_window is not None
+        else []
     )
 
     if missing_chunks:
+        assert required_window is not None
+        required_start, required_end = required_window
         by_resolution: dict[str, set[str]] = {}
         for symbol, resolution in missing_chunks:
             by_resolution.setdefault(resolution, set()).add(symbol)

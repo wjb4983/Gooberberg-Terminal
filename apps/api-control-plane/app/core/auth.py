@@ -175,7 +175,14 @@ def _parse_structured_credentials(raw_value: str) -> list[AuthCredential]:
         if not token_secret:
             logger.warning("ignoring empty auth token record", extra={"event": "auth_config_invalid"})
             continue
-        expires_at = _parse_expires_at(expires_blob)
+        try:
+            expires_at = _parse_expires_at(expires_blob)
+        except ValueError:
+            logger.warning(
+                "ignoring auth token record with invalid expiry",
+                extra={"event": "auth_config_invalid", "token_id": token_id or f"token-{index}"},
+            )
+            continue
         credentials.append(
             AuthCredential(
                 token_id=token_id or f"token-{index}",
@@ -188,9 +195,10 @@ def _parse_structured_credentials(raw_value: str) -> list[AuthCredential]:
 
 
 def _parse_expires_at(value: str) -> datetime | None:
-    if not value:
+    normalized_value = value.strip()
+    if not normalized_value:
         return None
-    normalized = value.replace("Z", "+00:00")
+    normalized = normalized_value.replace("Z", "+00:00")
     parsed = datetime.fromisoformat(normalized)
     if parsed.tzinfo is None:
         return parsed.replace(tzinfo=UTC)

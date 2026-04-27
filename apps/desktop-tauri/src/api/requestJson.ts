@@ -19,6 +19,45 @@ function formatNetworkFailureMessage(url: string, authAttached: boolean, error: 
   return `Network request failed for ${url} from ${origin}.${authHint} Check API base URL, CORS, TLS/certificate, and whether the API is reachable from this machine.${detail}`;
 }
 
+function shouldUseDevProxy(url: string): boolean {
+  if (!import.meta.env.DEV || typeof window === 'undefined') {
+    return false;
+  }
+
+  try {
+    return new URL(url).origin !== window.location.origin;
+  } catch {
+    return false;
+  }
+}
+
+function toDevProxyUrl(url: string): string {
+  return `/__gb_api_proxy?url=${encodeURIComponent(url)}`;
+}
+
+function summarizeFailureBody(body: string): string {
+  const trimmed = body.trim();
+  if (!trimmed) {
+    return '';
+  }
+
+  const maxLen = 280;
+  try {
+    const parsed = JSON.parse(trimmed) as unknown;
+    if (parsed && typeof parsed === 'object') {
+      const detail = (parsed as Record<string, unknown>).detail;
+      if (typeof detail === 'string' && detail.trim().length > 0) {
+        return `: ${detail.trim().slice(0, maxLen)}`;
+      }
+      return `: ${JSON.stringify(parsed).slice(0, maxLen)}`;
+    }
+  } catch {
+    // Fall back to raw response text for non-JSON payloads.
+  }
+
+  return `: ${trimmed.slice(0, maxLen)}`;
+}
+
 export async function requestJson<T>(baseUrl: string, path: string, init?: RequestInit): Promise<T> {
   const headers = new Headers(init?.headers);
   if (!headers.has('Accept')) {
@@ -37,6 +76,7 @@ export async function requestJson<T>(baseUrl: string, path: string, init?: Reque
   const url = `${baseUrl.replace(/\/$/, '')}${path}`;
   const method = init?.method ?? 'GET';
   const authAttached = headers.has('Authorization');
+  const browserUrl = shouldUseDevProxy(url) ? toDevProxyUrl(url) : url;
 
   if (isTauriRuntime()) {
     const response = await invoke<NativeApiHttpResponse>('api_http_request', {
@@ -49,20 +89,25 @@ export async function requestJson<T>(baseUrl: string, path: string, init?: Reque
     });
 
     if (response.status < 200 || response.status >= 300) {
-      throw new Error(`Request failed (${response.status}) for ${path}`);
+      throw new Error(
+        `Request failed (${response.status}) for ${method.toUpperCase()} ${url}${summarizeFailureBody(response.body)}`,
+      );
     }
 
     return JSON.parse(response.body) as T;
   }
 
   try {
-    const response = await fetch(url, {
+    const response = await fetch(browserUrl, {
       ...init,
       headers,
     });
 
     if (!response.ok) {
-      throw new Error(`Request failed (${response.status}) for ${path}`);
+      const responseBody = await response.text();
+      throw new Error(
+        `Request failed (${response.status}) for ${method.toUpperCase()} ${url}${summarizeFailureBody(responseBody)}`,
+      );
     }
 
     return (await response.json()) as T;

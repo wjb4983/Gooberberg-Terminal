@@ -44,6 +44,8 @@ class TaskSubtypeValidatedModel(BaseModel):
 
 
 class TrainingRunCreateRequest(TaskSubtypeValidatedModel):
+    task_type: TaskType = TaskType.TIME_SERIES_MOMENTUM
+    subtask_type: SubtaskType = SubtaskType.RANKING
     model_config_id: UUID
     dataset_id: str = Field(min_length=1)
     parameters: dict[str, Any] = Field(default_factory=dict)

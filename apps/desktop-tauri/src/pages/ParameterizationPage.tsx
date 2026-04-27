@@ -198,6 +198,8 @@ export function ParameterizationPage({ baseUrl }: ParameterizationPageProps): JS
         body: JSON.stringify({
           model_config_id: modelConfigId,
           dataset_id: datasetId.trim(),
+          task_type: taskType,
+          subtask_type: subtaskType,
           parameters: JSON.parse(parametersJson) as Record<string, unknown>,
         }),
       });
