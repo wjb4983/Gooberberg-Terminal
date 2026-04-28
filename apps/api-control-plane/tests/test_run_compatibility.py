@@ -40,6 +40,9 @@ class StubMarketDataService:
                     "data_kind": "time_series",
                     "index_type": "datetime",
                     "target_type": "regression",
+                    "fields": ["ohlcv.close", "timestamp", "entity_id", "returns.log"],
+                    "frequency": "1d",
+                    "point_in_time_ready": True,
                 },
             ),
             "ts_classification": MarketDataDatasetLookupResponse(
@@ -51,6 +54,9 @@ class StubMarketDataService:
                     "data_kind": "time_series",
                     "index_type": "datetime",
                     "target_type": "classification",
+                    "fields": ["returns.log", "timestamp"],
+                    "frequency": "1d",
+                    "point_in_time_ready": True,
                 },
             ),
             "tabular_regression": MarketDataDatasetLookupResponse(
@@ -62,6 +68,9 @@ class StubMarketDataService:
                     "data_kind": "tabular",
                     "index_type": "row_number",
                     "target_type": "regression",
+                    "fields": ["feature_a", "feature_b"],
+                    "frequency": "1d",
+                    "point_in_time_ready": False,
                 },
             ),
         }

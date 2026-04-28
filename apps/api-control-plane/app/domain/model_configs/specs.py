@@ -3,6 +3,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.domain.model_configs.compatibility import DatasetRequirement
 from app.domain.model_registry import ModelSpec
 
 
@@ -21,6 +22,11 @@ class HmmRegimeSwitchingModelSpec(ModelSpec):
     supported_data_kinds = ("time_series",)
     required_index = "datetime"
     target_type = "classification"
+    dataset_requirement = DatasetRequirement(
+        required_fields=("returns.log",),
+        required_frequency="1d",
+        require_point_in_time_data=True,
+    )
 
     def validate_config(self, config: Mapping[str, Any]) -> Mapping[str, Any]:
         parsed = HmmRegimeSwitchingConfig.model_validate(config)

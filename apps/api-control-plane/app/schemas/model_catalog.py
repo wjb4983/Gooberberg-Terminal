@@ -7,6 +7,14 @@ from app.domain.model_catalog.models import ComputeIntensity
 NonEmptyString = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
 
 
+class DatasetRequirement(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    required_fields: list[NonEmptyString] = Field(default_factory=list)
+    required_frequency: NonEmptyString | None = None
+    require_point_in_time_data: bool = False
+
+
 class ModelDefinition(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -14,6 +22,7 @@ class ModelDefinition(BaseModel):
     model_name: NonEmptyString
     description: NonEmptyString
     required_data: list[NonEmptyString] = Field(min_length=1)
+    dataset_requirement: DatasetRequirement = Field(default_factory=DatasetRequirement)
     optional_data: list[NonEmptyString] = Field(default_factory=list)
     tags: list[NonEmptyString] = Field(default_factory=list)
     leakage_risks: list[NonEmptyString] = Field(default_factory=list)

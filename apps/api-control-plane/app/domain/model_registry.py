@@ -6,6 +6,7 @@ class ModelCompatibilityMetadata(Protocol):
     supported_data_kinds: tuple[str, ...]
     required_index: str | None
     target_type: str | None
+    dataset_requirement: Mapping[str, Any] | Any
 
 
 class ModelSpec(Protocol):
@@ -15,6 +16,7 @@ class ModelSpec(Protocol):
     supported_data_kinds: tuple[str, ...]
     required_index: str | None
     target_type: str | None
+    dataset_requirement: Mapping[str, Any] | Any
 
     def validate_config(self, config: Mapping[str, Any]) -> Mapping[str, Any]:
         """Validate and normalize model configuration payload."""

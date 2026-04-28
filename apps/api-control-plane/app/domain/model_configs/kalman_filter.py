@@ -3,6 +3,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from app.domain.model_configs.compatibility import DatasetRequirement
 from app.domain.model_registry import ModelSpec
 
 
@@ -37,6 +38,11 @@ class KalmanFilterModelSpec(ModelSpec):
     supported_data_kinds = ("time_series",)
     required_index = "datetime"
     target_type = "regression"
+    dataset_requirement = DatasetRequirement(
+        required_fields=("observations.state_signal",),
+        required_frequency="1d",
+        require_point_in_time_data=True,
+    )
 
     def validate_config(self, config: Mapping[str, Any]) -> Mapping[str, Any]:
         parsed = KalmanFilterConfig.model_validate(config)
