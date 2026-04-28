@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { Link } from 'react-router-dom';
 import { requestJson } from '../api/requestJson';
 
 interface ModelsPageProps {
@@ -266,6 +267,7 @@ export function ModelsPage({ baseUrl }: ModelsPageProps): JSX.Element {
     <section>
       <h2>Models</h2>
       <p>HMM regime-switching model configuration registry. Save once, reuse for async training/sweeps/backtests.</p>
+      <p style={{ marginTop: 0 }}><Link to="/model-catalog">Explore model catalog</Link> before creating a new config.</p>
       {error ? <p className="muted">Error: {error}</p> : null}
       <div className="card" style={{ marginBottom: '1rem' }}>
         <h3>{isEditing ? 'Edit model config' : 'Create model config'}</h3>

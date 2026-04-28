@@ -4,6 +4,7 @@ import { createDesktopApiClient } from '../api/client';
 import { requestJson } from '../api/requestJson';
 import { JobLifecyclePanel } from '../components/JobLifecyclePanel';
 import { SUBTASK_TYPES, TASK_TYPES, type SubtaskType, type TaskType } from '../types/api';
+import { ModelConfigSelect } from '../components/ModelConfigSelect';
 
 interface TrainingRunsPageProps {
   baseUrl: string;
@@ -352,13 +353,13 @@ export function TrainingRunsPage({ baseUrl }: TrainingRunsPageProps): JSX.Elemen
       </div>
       <div className="card" style={{ marginBottom: '1rem' }}>
         <h3>3) Compatible model config</h3>
-        <select value={selectedConfigId} onChange={(event) => setSelectedConfigId(event.target.value)}>
-          <option value="">Select compatible model config</option>
-          {compatibleConfigs.map((config) => (
-            <option key={config.id} value={config.id}>{typeof config.config.name === 'string' ? config.config.name : config.id}</option>
-          ))}
-        </select>
-        <p className="muted" style={{ marginBottom: 0 }}>Showing configs compatible with {taskType}.</p>
+        <ModelConfigSelect
+          value={selectedConfigId}
+          options={compatibleConfigs}
+          onChange={setSelectedConfigId}
+          emptyLabel="Select compatible model config"
+          hint={`Showing configs compatible with ${taskType}.`}
+        />
       </div>
       <div className="card" style={{ marginBottom: '1rem' }}>
         <h3>4) Run submission</h3>
