@@ -1,80 +1,171 @@
-- model_family: xgboost_timeseries
+- id: phase1-001
+  slug: xgboost-time-series
+  model_family: xgboost_timeseries
   model_name: XGBoost Time Series
   description: Gradient-boosted tree forecaster with phase-1 warning templates for leakage and drift.
+  supported_tasks:
+    - forecasting.point
+    - forecasting.interval
   required_data:
     - ohlcv.close
     - timestamp
   optional_data:
     - ohlcv.volume
     - macro.calendar
+  default_parameters:
+    objective: reg:squarederror
+    n_estimators: 400
+    learning_rate: 0.05
+    max_depth: 6
+    subsample: 0.8
   tags:
     - tree-based
     - time-series
     - forecasting
+  output_schema: forecast.point_and_interval.v1
   leakage_risks:
     - rolling_window_future_peek
     - target_encoding_leakage
   failure_modes:
     - concept_drift
     - unstable_feature_importance
+  safety:
+    controls:
+      - purged_walk_forward_cv
+      - point_in_time_feature_store
+    checks:
+      - enforce_feature_cutoff_timestamps
+      - detect_label_overlap_across_splits
+  validation:
+    required:
+      - rolling_origin_backtest
+      - residual_bias_by_regime
+    thresholds:
+      min_interval_coverage: 0.8
+      max_mape: 0.2
   compute_intensity: medium
-  output_schema: forecast.point_and_interval.v1
   references:
     - https://xgboost.readthedocs.io/en/stable/
     - https://scikit-learn.org/stable/modules/generated/sklearn.model_selection.TimeSeriesSplit.html
+  implementation_status: implemented
+  quick_start_templates:
+    - template_id: xgb_forecast_intraday_v1
+      description: Intraday point+interval starter with lag and calendar features.
 
-- model_family: lightgbm_quantile
+- id: phase1-002
+  slug: lightgbm-quantile
+  model_family: lightgbm_quantile
   model_name: LightGBM Quantile
   description: Quantile regression booster with reusable parameter templates and operational warnings.
+  supported_tasks:
+    - forecasting.quantile
+    - risk.tail_estimation
   required_data:
     - ohlcv.close
     - timestamp
   optional_data:
     - known_future_covariates
     - event_flags
+  default_parameters:
+    objective: quantile
+    n_estimators: 500
+    learning_rate: 0.03
+    num_leaves: 64
+    min_data_in_leaf: 50
   tags:
     - tree-based
     - forecasting
     - quantile
+  output_schema: forecast.quantiles.v1
   leakage_risks:
     - horizon_overlap
     - global_normalization_leakage
   failure_modes:
     - tail_miscalibration
     - sparse_event_overfit
+  safety:
+    controls:
+      - embargo_between_train_validation_windows
+      - quantile_monotonicity_postcheck
+    checks:
+      - future_covariate_availability_audit
+      - split_level_scaler_fit_check
+  validation:
+    required:
+      - pinball_loss_evaluation
+      - empirical_quantile_coverage
+    thresholds:
+      p90_coverage_min: 0.85
+      p10_coverage_min: 0.85
   compute_intensity: medium
-  output_schema: forecast.quantiles.v1
   references:
     - https://lightgbm.readthedocs.io/
     - https://scikit-learn.org/stable/modules/calibration.html
+  implementation_status: implemented
+  quick_start_templates:
+    - template_id: lgbm_quantile_daily_v1
+      description: Daily quantile forecasting baseline with event flags.
 
-- model_family: prophet_seasonality
+- id: phase1-003
+  slug: prophet-seasonality
+  model_family: prophet_seasonality
   model_name: Prophet Seasonality
   description: Additive trend-seasonality model with holiday templates and warning checklists.
+  supported_tasks:
+    - forecasting.point
+    - forecasting.interval
   required_data:
     - timestamp
     - target.value
   optional_data:
     - holiday.calendar
     - regressors.exogenous
+  default_parameters:
+    growth: linear
+    seasonality_mode: additive
+    changepoint_prior_scale: 0.05
+    seasonality_prior_scale: 10.0
   tags:
     - classical
     - forecasting
     - seasonality
+  output_schema: forecast.point_and_interval.v1
   leakage_risks:
     - future_holiday_feature_leakage
   failure_modes:
     - changepoint_overreaction
     - weak_short_horizon_fit
+  safety:
+    controls:
+      - holiday_calendar_version_pinning
+      - locked_forecast_cutoff
+    checks:
+      - verify_holiday_features_are_known_in_advance
+      - changepoint_count_sanity_check
+  validation:
+    required:
+      - horizon_stratified_backtest
+      - holiday_effect_ablation
+    thresholds:
+      max_bias_abs: 0.05
+      min_smape_improvement_vs_naive: 0.03
   compute_intensity: low
-  output_schema: forecast.point_and_interval.v1
   references:
     - https://facebook.github.io/prophet/
     - https://peerj.com/preprints/3190/
+  implementation_status: implemented
+  quick_start_templates:
+    - template_id: prophet_holiday_retail_v1
+      description: Retail demand template with holiday/event regressors.
 
-- model_family: lstm_sequence_forecaster
+- id: phase1-004
+  slug: lstm-sequence-forecaster
+  model_family: lstm_sequence_forecaster
   model_name: LSTM Sequence Forecaster
   description: Recurrent neural forecaster with starter templates and phase-1 warning metadata.
+  supported_tasks:
+    - forecasting.quantile
+    - forecasting.multi_horizon
   required_data:
     - entity_id
     - timestamp
@@ -82,25 +173,55 @@
   optional_data:
     - known_future_covariates
     - static_covariates
+  default_parameters:
+    hidden_size: 128
+    num_layers: 2
+    dropout: 0.1
+    sequence_length: 64
+    learning_rate: 0.001
   tags:
     - deep-learning
     - recurrent
     - forecasting
+  output_schema: forecast.quantiles.v1
   leakage_risks:
     - sequence_padding_leakage
     - scaler_fit_on_full_series
   failure_modes:
     - vanishing_gradients
     - cold_start_underfit
+  safety:
+    controls:
+      - entity_disjoint_split_enforcement
+      - per_split_normalizer_fit
+    checks:
+      - sequence_boundary_integrity
+      - padded_token_mask_validation
+  validation:
+    required:
+      - walk_forward_panel_backtest
+      - quantile_calibration_curve
+    thresholds:
+      max_val_loss_gap: 0.15
+      min_p50_coverage: 0.75
   compute_intensity: high
-  output_schema: forecast.quantiles.v1
   references:
     - https://pytorch.org/docs/stable/generated/torch.nn.LSTM.html
     - https://www.tensorflow.org/api_docs/python/tf/keras/layers/LSTM
+  implementation_status: implemented
+  quick_start_templates:
+    - template_id: lstm_panel_demand_v1
+      description: Multi-entity demand forecasting starter with known-future covariates.
 
-- model_family: temporal_fusion_transformer
+- id: phase1-005
+  slug: temporal-fusion-transformer
+  model_family: temporal_fusion_transformer
   model_name: Temporal Fusion Transformer
   description: Multi-horizon attention model with warning templates for covariate alignment.
+  supported_tasks:
+    - forecasting.quantile
+    - forecasting.multi_horizon
+    - feature_attribution
   required_data:
     - entity_id
     - timestamp
@@ -109,100 +230,214 @@
     - known_future_covariates
     - observed_covariates
     - static_covariates
+  default_parameters:
+    hidden_size: 64
+    attention_head_size: 4
+    dropout: 0.1
+    max_encoder_length: 96
+    learning_rate: 0.0008
   tags:
     - deep-learning
     - attention
     - forecasting
+  output_schema: forecast.quantiles.v1
   leakage_risks:
     - known_future_covariate_mislabeling
     - target_scaler_forward_leakage
   failure_modes:
     - attention_instability
     - overparameterization_on_small_panels
+  safety:
+    controls:
+      - strict_known_future_covariate_contract
+      - feature_latency_registry_checks
+    checks:
+      - encoder_decoder_alignment_audit
+      - per_horizon_calibration_monitor
+  validation:
+    required:
+      - multi_horizon_backtest
+      - ablation_static_vs_dynamic_features
+    thresholds:
+      min_coverage_p90: 0.85
+      max_wql: 0.25
   compute_intensity: high
-  output_schema: forecast.quantiles.v1
   references:
     - https://pytorch-forecasting.readthedocs.io/en/stable/api/pytorch_forecasting.models.temporal_fusion_transformer._tft.TemporalFusionTransformer.html
     - https://research.google/pubs/temporal-fusion-transformers-for-interpretable-multi-horizon-time-series-forecasting/
+  implementation_status: implemented
+  quick_start_templates:
+    - template_id: tft_multi_store_weekly_v1
+      description: Weekly multi-store template with static and known-future covariates.
 
-- model_family: catboost_categorical_alpha
+- id: phase1-006
+  slug: catboost-categorical-alpha
+  model_family: catboost_categorical_alpha
   model_name: CatBoost Categorical Alpha
   description: Categorical-aware gradient booster with default templates and clear warning labels.
+  supported_tasks:
+    - forecasting.point
+    - regression
   required_data:
     - target.value
     - timestamp
   optional_data:
     - categorical.identifiers
     - price.derived_features
+  default_parameters:
+    loss_function: RMSE
+    depth: 8
+    iterations: 500
+    learning_rate: 0.05
+    l2_leaf_reg: 3.0
   tags:
     - tree-based
     - categorical
     - regression
+  output_schema: forecast.point.v1
   leakage_risks:
     - target_stat_leakage
     - temporal_fold_contamination
   failure_modes:
     - category_shift
     - unstable_online_updates
+  safety:
+    controls:
+      - ordered_target_statistics_only
+      - temporal_cv_enforcement
+    checks:
+      - category_cardinality_drift_check
+      - rare_category_handling_validation
+  validation:
+    required:
+      - rolling_window_backtest
+      - subgroup_error_analysis
+    thresholds:
+      max_rmse: 0.08
+      min_directional_accuracy: 0.55
   compute_intensity: medium
-  output_schema: forecast.point.v1
   references:
     - https://catboost.ai/
     - https://catboost.ai/docs/
+  implementation_status: implemented
+  quick_start_templates:
+    - template_id: catboost_alpha_daily_v1
+      description: Daily alpha regression starter with category handling defaults.
 
-- model_family: elasticnet_factor_model
+- id: phase1-007
+  slug: elasticnet-factor-model
+  model_family: elasticnet_factor_model
   model_name: ElasticNet Factor Model
   description: Sparse linear factor model with baseline templates and warning guidance.
+  supported_tasks:
+    - factor_modeling
+    - regression
   required_data:
     - target.value
     - factors.cross_sectional
   optional_data:
     - sector.classification
     - macro.features
+  default_parameters:
+    alpha: 0.2
+    l1_ratio: 0.6
+    fit_intercept: true
+    max_iter: 5000
   tags:
     - linear
     - regularization
     - regression
+  output_schema: factor_exposure.coefficients.v1
   leakage_risks:
     - cross_sectional_rank_leakage
     - revised_fundamental_data_leakage
   failure_modes:
     - coefficient_instability
     - factor_decay
+  safety:
+    controls:
+      - point_in_time_factor_snapshotting
+      - vintage_data_enforcement
+    checks:
+      - coefficient_sign_stability_monitor
+      - turnover_bound_check
+  validation:
+    required:
+      - rolling_cross_section_validation
+      - factor_decay_half_life_test
+    thresholds:
+      min_oos_information_coefficient: 0.02
+      max_factor_turnover: 0.35
   compute_intensity: low
-  output_schema: factor_exposure.coefficients.v1
   references:
     - https://scikit-learn.org/stable/modules/generated/sklearn.linear_model.ElasticNet.html
     - https://scikit-learn.org/stable/modules/linear_model.html
+  implementation_status: implemented
+  quick_start_templates:
+    - template_id: elasticnet_equity_factors_v1
+      description: Cross-sectional equity factor exposure starter.
 
-- model_family: random_forest_classifier_regime
+- id: phase1-008
+  slug: random-forest-regime-classifier
+  model_family: random_forest_classifier_regime
   model_name: Random Forest Regime Classifier
   description: Regime classification ensemble with templated thresholds and warning annotations.
+  supported_tasks:
+    - regime_classification
+    - classification
   required_data:
     - returns.log
     - volatility.realized
   optional_data:
     - liquidity.metrics
     - sentiment.score
+  default_parameters:
+    n_estimators: 300
+    max_depth: 10
+    min_samples_leaf: 30
+    class_weight: balanced
   tags:
     - tree-based
     - classification
     - regime-detection
+  output_schema: regime.class_probabilities.v1
   leakage_risks:
     - post_event_labeling
     - feature_window_lookahead
   failure_modes:
     - class_imbalance_bias
     - stale_split_rules
+  safety:
+    controls:
+      - purged_labeling_windows
+      - delayed_label_availability_guardrails
+    checks:
+      - class_distribution_shift_monitor
+      - regime_transition_sanity_check
+  validation:
+    required:
+      - time_block_cv
+      - confusion_matrix_by_regime
+    thresholds:
+      min_macro_f1: 0.5
+      min_recall_high_vol_regime: 0.45
   compute_intensity: medium
-  output_schema: regime.class_probabilities.v1
   references:
     - https://scikit-learn.org/stable/modules/generated/sklearn.ensemble.RandomForestClassifier.html
     - https://scikit-learn.org/stable/modules/ensemble.html
+  implementation_status: implemented
+  quick_start_templates:
+    - template_id: rf_regime_risk_v1
+      description: Regime detection template tuned for volatility/liquidity features.
 
-- model_family: tcn_forecaster
+- id: phase1-009
+  slug: tcn-forecaster
+  model_family: tcn_forecaster
   model_name: Temporal Convolutional Network Forecaster
   description: Dilated convolution forecaster with rollout templates and warning-ready metadata.
+  supported_tasks:
+    - forecasting.quantile
+    - forecasting.multi_horizon
   required_data:
     - entity_id
     - timestamp
@@ -210,43 +445,98 @@
   optional_data:
     - known_future_covariates
     - promotion.flags
+  default_parameters:
+    num_channels:
+      - 64
+      - 64
+      - 128
+    kernel_size: 3
+    dropout: 0.15
+    learning_rate: 0.001
   tags:
     - deep-learning
     - convolutional
     - forecasting
+  output_schema: forecast.quantiles.v1
   leakage_risks:
     - teacher_forcing_future_leakage
     - window_index_misalignment
   failure_modes:
     - receptive_field_undercoverage
     - unstable_long_horizon_rollout
+  safety:
+    controls:
+      - strict_teacher_forcing_disable_at_eval
+      - horizon_index_alignment_checks
+    checks:
+      - receptive_field_vs_horizon_validator
+      - rollout_error_growth_alarm
+  validation:
+    required:
+      - long_horizon_backtest
+      - rollout_stability_test
+    thresholds:
+      max_error_growth_ratio_h24_vs_h1: 2.0
+      min_p50_coverage: 0.78
   compute_intensity: high
-  output_schema: forecast.quantiles.v1
   references:
     - https://arxiv.org/abs/1803.01271
     - https://pytorch.org/docs/stable/nn.html
+  implementation_status: implemented
+  quick_start_templates:
+    - template_id: tcn_promo_demand_v1
+      description: Promotion-aware demand forecasting starter using dilated convolutions.
 
-- model_family: bayesian_structural_time_series
+- id: phase1-010
+  slug: bayesian-structural-time-series
+  model_family: bayesian_structural_time_series
   model_name: Bayesian Structural Time Series
   description: Probabilistic structural model with prior templates and explicit warning cues.
+  supported_tasks:
+    - forecasting.quantile
+    - causal_inference
+    - decomposition
   required_data:
     - timestamp
     - target.value
   optional_data:
     - regressors.exogenous
     - intervention.events
+  default_parameters:
+    n_samples: 2000
+    burn_in: 500
+    trend_component: local_linear
+    seasonality_period: 7
   tags:
     - bayesian
     - time-series
     - causal
+  output_schema: decomposition.trend_seasonal_residual.v1
   leakage_risks:
     - intervention_window_peek
     - retrospective_relabeling
   failure_modes:
     - prior_misspecification
     - wide_posterior_uncertainty
+  safety:
+    controls:
+      - intervention_date_locking
+      - prior_review_checklist
+    checks:
+      - posterior_predictive_check
+      - sensitivity_to_prior_scale
+  validation:
+    required:
+      - pre_post_intervention_backtest
+      - posterior_coverage_test
+    thresholds:
+      min_posterior_coverage: 0.8
+      max_counterfactual_bias: 0.06
   compute_intensity: medium
-  output_schema: decomposition.trend_seasonal_residual.v1
   references:
     - https://www.tensorflow.org/probability
     - https://research.google/pubs/pub41854/
+  implementation_status: implemented
+  quick_start_templates:
+    - template_id: bsts_intervention_analysis_v1
+      description: Intervention-effect estimation starter with trend/seasonal decomposition.
