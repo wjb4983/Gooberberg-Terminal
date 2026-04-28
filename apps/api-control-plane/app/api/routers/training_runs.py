@@ -189,6 +189,7 @@ async def create_training_run(
     model_config_service: ModelConfigService = Depends(get_model_config_service),
     market_data_service: MarketDataService = Depends(get_market_data_service),
 ) -> TrainingRunResponse:
+    """Create a training run, emit initial lifecycle events, and enqueue worker execution."""
     validation = _build_validation_response(
         TrainingRunValidationRequest(**payload.model_dump(mode="python")),
         request=request,

@@ -11,7 +11,7 @@ At runtime, the primary control-plane stack is:
 - Postgres: configured dependency for durable relational data (connectivity checks are currently placeholder in health endpoint).
 - Optional nginx edge profile: TLS termination and public ingress.
 
-Compose topology and network exposure are defined in `infra/compose/docker-compose.prod.yml` with private/internal defaults (Redis/Postgres not publicly published). 
+Compose topology and network exposure are defined in `infra/compose/docker-compose.prod.yml` with private/internal defaults (Redis/Postgres not publicly published).
 
 ## 2) Fast path vs slow path
 
@@ -128,3 +128,162 @@ When hardening for multi-instance production, prioritize:
 2. Real dependency probes and SLO-centric health states.
 3. Replayable event log for WS resume.
 4. Explicit data-plane service for Arrow/Parquet retrieval.
+
+## 8) Model-config -> training-run -> queue -> worker -> job-events flow
+
+The core orchestration path for model training is intentionally split across control-plane write APIs and asynchronous worker updates:
+
+1. Operator selects an existing `model_config_id` and dataset.
+2. `POST /api/v1/training-runs` validates compatibility and normalizes payload.
+3. API creates a durable training-run row (`status=queued`) and creates a `JobEnvelope`.
+4. API persists a `queued` `JobLifecycleEvent`, broadcasts it on WS topics, and enqueues the job.
+5. Worker consumes the queue item, runs training, and calls `POST /api/v1/jobs/{job_id}/events` with incremental status updates.
+6. API persists each lifecycle update, rebroadcasts WS events, and mirrors terminal status onto run rows.
+7. Terminal events (`success`/`failed`) may include `result_ref` and artifact metadata for downstream retrieval.
+
+### Sequence diagram
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Client as Operator/Client
+    participant MCR as Model Config Router
+    participant TR as Training Runs Router
+    participant DB as Run Repository (SQL)
+    participant JQ as Job Queue (Redis-backed)
+    participant W as Worker
+    participant JR as Jobs Router
+    participant JE as Job Event Store
+    participant WS as WS Topics (jobs/logs/backtests)
+
+    Client->>MCR: GET /api/v1/model-configs/{id}
+    MCR-->>Client: model_config JSON
+
+    Client->>TR: POST /api/v1/training-runs
+    TR->>TR: compatibility + dataset preflight
+    TR->>DB: create training_run(status=queued)
+    TR->>JE: persist queued event
+    TR->>WS: broadcast queued
+    TR->>JQ: enqueue JobEnvelope(training)
+    TR-->>Client: 201 TrainingRunResponse
+
+    W->>JQ: dequeue JobEnvelope
+    loop progress updates
+      W->>JR: POST /api/v1/jobs/{job_id}/events (running/progress)
+      JR->>JE: persist lifecycle event
+      JR->>WS: broadcast jobs/logs
+      JR->>DB: update run status by run_type/run_id
+      JR-->>W: 200 JobStatusResponse
+    end
+
+    W->>JR: POST /api/v1/jobs/{job_id}/events (success/failed + result_ref)
+    JR->>JE: persist terminal event + artifact summary
+    JR->>WS: broadcast terminal status
+    JR->>DB: update run status terminal
+    JR-->>W: 200 JobStatusResponse
+
+    Client->>JR: GET /api/v1/jobs/{job_id}/events
+    JR-->>Client: ordered lifecycle history
+```
+
+### Payload examples
+
+#### Example A: create training run request
+
+```json
+{
+  "task_type": "forecasting",
+  "subtask_type": "close_price",
+  "model_config_id": "7b3aab89-2af3-48f4-8af1-808a0ed19fb1",
+  "dataset_id": "us_equities_daily_v1",
+  "parameters": {
+    "epochs": 20,
+    "batch_size": 64,
+    "learning_rate": 0.001,
+    "run_metadata": {
+      "constraint_profile_version": "v2"
+    }
+  },
+  "constraints": {
+    "max_drawdown": 0.15,
+    "max_turnover": 0.35
+  }
+}
+```
+
+#### Example B: queued job envelope shape (control-plane to queue)
+
+```json
+{
+  "job_id": "2d8ecfdb-f8de-443f-8f8d-f75f3f4f24de",
+  "trace_id": "41f2f59e-b2f2-4a0c-a1c4-26bd177d2f6f",
+  "job_type": "training",
+  "run_id": "8e29b4ea-b84a-43d3-bf5d-2d5c6e3e8a9c",
+  "run_type": "training",
+  "payload": {
+    "run_id": "8e29b4ea-b84a-43d3-bf5d-2d5c6e3e8a9c",
+    "task_type": "forecasting",
+    "subtask_type": "close_price",
+    "model_config_id": "7b3aab89-2af3-48f4-8af1-808a0ed19fb1",
+    "dataset_id": "us_equities_daily_v1",
+    "parameters": {
+      "epochs": 20,
+      "batch_size": 64
+    },
+    "constraints": {
+      "max_drawdown": 0.15
+    }
+  },
+  "queued_at": "2026-04-28T00:00:00Z"
+}
+```
+
+#### Example C: worker job lifecycle update payload
+
+```json
+{
+  "status": "running",
+  "detail": "trainer started on worker-training-3",
+  "progress_pct": 12.5,
+  "message": "loading dataset shards",
+  "run_id": "8e29b4ea-b84a-43d3-bf5d-2d5c6e3e8a9c",
+  "run_type": "training"
+}
+```
+
+#### Example D: terminal worker update with artifact metadata
+
+```json
+{
+  "status": "success",
+  "detail": "training completed",
+  "progress_pct": 100,
+  "message": "complete",
+  "run_id": "8e29b4ea-b84a-43d3-bf5d-2d5c6e3e8a9c",
+  "run_type": "training",
+  "result_ref": "s3://gb-artifacts/training/8e29b4ea/model.tar.zst",
+  "artifact_checksum": "sha256:ab12cd34ef...",
+  "artifact_size_bytes": 183746291,
+  "artifact_retention_class": "intermediate",
+  "metrics": {
+    "train_loss": 0.014,
+    "val_loss": 0.019,
+    "val_mae": 0.22
+  },
+  "notes": "best checkpoint at epoch 17"
+}
+```
+
+#### Example E: broadcast event payload on `jobs` / `logs`
+
+```json
+{
+  "job_id": "2d8ecfdb-f8de-443f-8f8d-f75f3f4f24de",
+  "run_id": "8e29b4ea-b84a-43d3-bf5d-2d5c6e3e8a9c",
+  "status": "running",
+  "progress_pct": 12.5,
+  "message": "loading dataset shards",
+  "timestamp": "2026-04-28T00:00:12.500000+00:00",
+  "updated_at": "2026-04-28T00:00:12.500000+00:00"
+}
+```
