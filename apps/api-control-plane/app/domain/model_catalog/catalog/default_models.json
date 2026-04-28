@@ -3,24 +3,64 @@
     "model_family": "arima",
     "model_name": "ARIMA",
     "description": "Classical univariate autoregressive integrated moving average forecasting model.",
-    "tags": ["classical", "time-series", "forecasting"]
+    "required_data": ["ohlcv.close"],
+    "optional_data": ["ohlcv.volume", "calendar.market_sessions"],
+    "tags": ["classical", "time-series", "forecasting"],
+    "leakage_risks": ["future_target_leakage", "lookahead_feature_windows"],
+    "failure_modes": ["non_stationary_regime_shift", "sparse_observation_windows"],
+    "compute_intensity": "low",
+    "output_schema": "forecast.point_and_interval.v1",
+    "references": [
+      "https://otexts.com/fpp3/arima.html",
+      "https://www.statsmodels.org/stable/generated/statsmodels.tsa.arima.model.ARIMA.html"
+    ]
   },
   {
     "model_family": "hmm_regime_switching",
     "model_name": "HMM Regime Switching",
     "description": "Hidden Markov model with latent regime transitions for state detection.",
-    "tags": ["classical", "time-series", "classification"]
+    "required_data": ["returns.log"],
+    "optional_data": ["volatility.realized", "market_regime_priors"],
+    "tags": ["classical", "time-series", "classification"],
+    "leakage_risks": ["label_horizon_overlap", "post_event_regime_labels"],
+    "failure_modes": ["state_collapse", "pathological_transition_matrix"],
+    "compute_intensity": "medium",
+    "output_schema": "regime.posterior_probabilities.v1",
+    "references": [
+      "https://hmmlearn.readthedocs.io/",
+      "https://www.jstor.org/stable/2984875"
+    ]
   },
   {
     "model_family": "kalman_filter",
     "model_name": "Kalman Filter",
     "description": "State-space estimation model for filtering and nowcasting tasks.",
-    "tags": ["state-space", "time-series", "regression"]
+    "required_data": ["observations.state_signal"],
+    "optional_data": ["control_inputs", "sensor_noise_estimates"],
+    "tags": ["state-space", "time-series", "regression"],
+    "leakage_risks": ["smoothed_state_backfill"],
+    "failure_modes": ["covariance_divergence", "mis_specified_process_noise"],
+    "compute_intensity": "low",
+    "output_schema": "state_estimate.filtered_and_smoothed.v1",
+    "references": [
+      "https://filterpy.readthedocs.io/",
+      "https://www.cs.unc.edu/~welch/media/pdf/kalman_intro.pdf"
+    ]
   },
   {
     "model_family": "torch_nn_timeseries",
     "model_name": "Torch NN Time Series",
     "description": "Neural forecasting family built on PyTorch sequence architectures.",
-    "tags": ["deep-learning", "time-series", "forecasting"]
+    "required_data": ["ohlcv.close", "entity_id", "timestamp"],
+    "optional_data": ["static_covariates", "known_future_covariates", "textual_signals"],
+    "tags": ["deep-learning", "time-series", "forecasting"],
+    "leakage_risks": ["future_covariate_contamination", "target_normalization_over_full_window"],
+    "failure_modes": ["overfitting_short_histories", "distribution_shift_under_low_liquidity"],
+    "compute_intensity": "high",
+    "output_schema": "forecast.quantiles.v1",
+    "references": [
+      "https://pytorch.org/docs/stable/index.html",
+      "https://pytorch-forecasting.readthedocs.io/"
+    ]
   }
 ]

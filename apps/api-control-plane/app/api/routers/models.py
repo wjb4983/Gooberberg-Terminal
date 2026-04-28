@@ -78,7 +78,14 @@ async def list_model_catalog(
             model_family=item.metadata.model_family,
             model_name=item.metadata.model_name,
             description=item.metadata.description,
+            required_data=list(item.metadata.required_data),
+            optional_data=list(item.metadata.optional_data),
             tags=list(item.metadata.tags),
+            leakage_risks=list(item.metadata.leakage_risks),
+            failure_modes=list(item.metadata.failure_modes),
+            compute_intensity=item.metadata.compute_intensity.value,
+            output_schema=item.metadata.output_schema,
+            references=list(item.metadata.references),
             validator_adapter=item.validator_adapter.model_family,
         )
         for item in model_catalog_registry.list_entries()
@@ -98,7 +105,14 @@ async def get_model_catalog_item(
         model_family=item.metadata.model_family,
         model_name=item.metadata.model_name,
         description=item.metadata.description,
+        required_data=list(item.metadata.required_data),
+        optional_data=list(item.metadata.optional_data),
         tags=list(item.metadata.tags),
+        leakage_risks=list(item.metadata.leakage_risks),
+        failure_modes=list(item.metadata.failure_modes),
+        compute_intensity=item.metadata.compute_intensity.value,
+        output_schema=item.metadata.output_schema,
+        references=list(item.metadata.references),
         validator_adapter=item.validator_adapter.model_family,
     )
 

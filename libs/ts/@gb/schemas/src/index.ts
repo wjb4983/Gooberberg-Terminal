@@ -3,7 +3,7 @@ export type HealthStatus = 'healthy' | 'degraded' | 'unhealthy';
 export type JobStatus = 'queued' | 'running' | 'success' | 'failed' | 'accepted' | 'pending' | 'succeeded' | 'cancelled';
 export type RunType = 'training' | 'parameter_sweep' | 'backtest';
 export type RunStatus = 'queued' | 'running' | 'success' | 'failed' | 'cancelled';
-export type ModelFamily = 'hmm_regime_switching';
+export type ModelFamily = 'arima' | 'hmm_regime_switching' | 'kalman_filter' | 'torch_nn_timeseries';
 
 export interface Job {
   id: string;
@@ -233,6 +233,27 @@ export interface ModelDeploymentEventPayload {
   updated_at: string;
 }
 
+
+export type ModelMetadataComputeIntensity = 'low' | 'medium' | 'high';
+
+export interface ModelCatalogMetadata {
+  modelFamily: string;
+  modelName: string;
+  description: string;
+  requiredData: string[];
+  optionalData: string[];
+  tags: string[];
+  leakageRisks: string[];
+  failureModes: string[];
+  computeIntensity: ModelMetadataComputeIntensity;
+  outputSchema: string;
+  references: string[];
+}
+
+export interface ModelCatalogItem extends ModelCatalogMetadata {
+  validatorAdapter: string;
+}
+
 export interface ModelConfig {
   id: string;
   modelFamily: ModelFamily;
@@ -403,7 +424,7 @@ const graphNodeTypes: ReadonlySet<GraphNodeType> = new Set([
   'job',
 ]);
 
-const modelFamilies: ReadonlySet<ModelFamily> = new Set(['hmm_regime_switching']);
+const modelFamilies: ReadonlySet<ModelFamily> = new Set(['arima', 'hmm_regime_switching', 'kalman_filter', 'torch_nn_timeseries']);
 const runStatuses: ReadonlySet<RunStatus> = new Set(['queued', 'running', 'success', 'failed', 'cancelled']);
 
 export function parseGraphTopology(payload: unknown): GraphTopology {

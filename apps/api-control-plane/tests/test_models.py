@@ -72,6 +72,13 @@ def test_model_catalog_exposes_metadata_with_validator_adapter_link() -> None:
 
     arima = next(item for item in payload if item["model_family"] == "arima")
     assert arima["model_name"] == "ARIMA"
+    assert arima["required_data"] == ["ohlcv.close"]
+    assert "calendar.market_sessions" in arima["optional_data"]
+    assert "future_target_leakage" in arima["leakage_risks"]
+    assert "non_stationary_regime_shift" in arima["failure_modes"]
+    assert arima["compute_intensity"] == "low"
+    assert arima["output_schema"] == "forecast.point_and_interval.v1"
+    assert arima["references"]
     assert arima["validator_adapter"] == "arima"
 
 
