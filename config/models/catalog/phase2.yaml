@@ -1,254 +1,288 @@
-- model_family: nbeats_interpretable
-  model_name: N-BEATS Interpretable
-  description: Deep residual basis-expansion forecaster tuned for medium-horizon demand and price trajectories.
+- model_family: xgboost_intraday_momentum
+  model_name: XGBoost Intraday Momentum
+  description: Gradient-boosted intraday momentum model for short-horizon continuation signals.
   required_data:
-    - entity_id
+    - returns.intraday_1m
+    - volume.intraday_1m
     - timestamp
-    - target.value
-  optional_data:
-    - known_future_covariates
-    - event_flags
-  tags:
-    - deep-learning
-    - forecasting
-    - interpretable
-  leakage_risks:
-    - horizon_shift_label_leakage
-    - future_covariate_alignment_error
-  failure_modes:
-    - basis_overfit_on_sparse_series
-    - unstable_tail_forecasts
-  compute_intensity: high
-  output_schema: forecast.quantiles.v1
-  references:
-    - https://arxiv.org/abs/1905.10437
-    - https://unit8co.github.io/darts/generated_api/darts.models.forecasting.nbeats.html
-
-- model_family: patchtst_transformer
-  model_name: PatchTST Transformer
-  description: Patch-based transformer forecaster for long-context univariate and multivariate time-series windows.
-  required_data:
-    - entity_id
-    - timestamp
-    - target.value
-  optional_data:
-    - observed_covariates
-    - static_covariates
-  tags:
-    - deep-learning
-    - transformer
-    - long-horizon
-  leakage_risks:
-    - patch_window_future_overlap
-    - normalization_fit_on_holdout
-  failure_modes:
-    - sensitivity_to_patch_length
-    - degraded_short_horizon_accuracy
-  compute_intensity: high
-  output_schema: forecast.quantiles.v1
-  references:
-    - https://arxiv.org/abs/2211.14730
-    - https://huggingface.co/docs/transformers/model_doc/patchtst
-
-- model_family: deep_ar_probabilistic
-  model_name: DeepAR Probabilistic
-  description: Autoregressive recurrent model optimized for probabilistic forecasting across many related entities.
-  required_data:
-    - entity_id
-    - timestamp
-    - target.value
-  optional_data:
-    - known_future_covariates
-    - calendar.market_sessions
-  tags:
-    - deep-learning
-    - probabilistic
-    - autoregressive
-  leakage_risks:
-    - recursive_teacher_forcing_peek
-    - entity_split_contamination
-  failure_modes:
-    - error_accumulation_in_rollout
-    - poor_rare_event_calibration
-  compute_intensity: high
-  output_schema: forecast.quantiles.v1
-  references:
-    - https://arxiv.org/abs/1704.04110
-    - https://docs.aws.amazon.com/forecast/latest/dg/aws-forecast-recipe-deeparplus.html
-
-- model_family: croston_intermittent_demand
-  model_name: Croston Intermittent Demand
-  description: Classical intermittent-demand forecaster for sparse transaction sequences with zero-inflated counts.
-  required_data:
-    - timestamp
-    - target.value
-  optional_data:
-    - sku.segment
-    - calendar.promo_events
-  tags:
-    - classical
-    - intermittent-demand
-    - forecasting
-  leakage_risks:
-    - backfilled_zero_event_bias
-    - post_period_aggregation_peek
-  failure_modes:
-    - bursty_demand_underreaction
-    - structural_break_delay
-  compute_intensity: low
-  output_schema: forecast.point.v1
-  references:
-    - https://otexts.com/fpp3/counts.html
-    - https://robjhyndman.com/publications/another-look-at-measures-of-forecast-accuracy/
-
-- model_family: tbats_multi_seasonal
-  model_name: TBATS Multi-Seasonal
-  description: Exponential smoothing with Box-Cox, ARMA errors, and trigonometric seasonality for complex cycles.
-  required_data:
-    - timestamp
-    - target.value
-  optional_data:
-    - holiday.calendar
-    - tariff.regime
-  tags:
-    - classical
-    - seasonality
-    - forecasting
-  leakage_risks:
-    - seasonal_period_selection_from_future
-    - transformed_scale_peek
-  failure_modes:
-    - convergence_failures_on_long_cycles
-    - oversmoothing_abrupt_regimes
-  compute_intensity: medium
-  output_schema: forecast.point_and_interval.v1
-  references:
-    - https://otexts.com/fpp3/complexseasonality.html
-    - https://pkg.robjhyndman.com/forecast/reference/tbats.html
-
-- model_family: quantile_lasso_regression
-  model_name: Quantile Lasso Regression
-  description: Sparse linear quantile model for scenario-aware risk and tail forecasting tasks.
-  required_data:
-    - target.value
-    - factors.cross_sectional
-  optional_data:
-    - macro.features
-    - sector.classification
-  tags:
-    - linear
-    - quantile
-    - regression
-  leakage_risks:
-    - contemporaneous_factor_revision_leakage
-    - cross_sectional_standardization_leakage
-  failure_modes:
-    - coefficient_instability_in_small_samples
-    - weak_non_linear_capture
-  compute_intensity: low
-  output_schema: forecast.quantiles.v1
-  references:
-    - https://scikit-learn.org/stable/modules/generated/sklearn.linear_model.QuantileRegressor.html
-    - https://web.stanford.edu/~hastie/Papers/LARS/LeastAngle_2002.pdf
-
-- model_family: ngboost_distributional
-  model_name: NGBoost Distributional
-  description: Natural-gradient boosting for full predictive distributions with calibrated uncertainty estimates.
-  required_data:
-    - timestamp
-    - target.value
-  optional_data:
-    - known_future_covariates
-    - liquidity.metrics
-  tags:
-    - boosting
-    - probabilistic
-    - regression
-  leakage_risks:
-    - distribution_parameter_future_peek
-    - fold_reuse_leakage
-  failure_modes:
-    - unstable_distribution_fit
-    - heavy_tail_underestimation
-  compute_intensity: medium
-  output_schema: forecast.distribution.v1
-  references:
-    - https://stanfordmlgroup.github.io/ngboost/
-    - https://proceedings.mlr.press/v119/duan20a.html
-
-- model_family: hidden_markov_volatility
-  model_name: Hidden Markov Volatility
-  description: Regime-switching volatility model for latent-state risk classification and transition monitoring.
-  required_data:
-    - returns.log
-    - timestamp
+    - symbol
+  dataset_requirement:
+    required_fields:
+      - returns.intraday_1m
+      - volume.intraday_1m
+      - quote.mid.intraday_1m
+    required_frequency: 1m
+    require_point_in_time_data: true
   optional_data:
     - volatility.realized
-    - macro.regime_indicators
+    - liquidity.spread_bps
   tags:
-    - regime-detection
-    - probabilistic
-    - time-series
+    - tradable-alpha
+    - momentum
+    - intraday
+    - tree-based
   leakage_risks:
-    - smoothed_state_future_leakage
-    - lookahead_realized_volatility
+    - bar_close_to_signal_timestamp_misalignment
+    - vendor_replay_corrections_lookahead
   failure_modes:
-    - regime_label_switching
-    - transition_probability_instability
+    - dependency_warning_intraday_feed_required
+    - stale_quote_or_trade_print_gaps
   compute_intensity: medium
-  output_schema: regime.class_probabilities.v1
+  output_schema: alpha.signal.score.v1
   references:
-    - https://www.statsmodels.org/stable/generated/statsmodels.tsa.regime_switching.markov_regression.MarkovRegression.html
-    - https://www.jstor.org/stable/1912559
-
-- model_family: conformal_quantile_wrapper
-  model_name: Conformal Quantile Wrapper
-  description: Post-hoc conformal calibration layer for interval validity on top of base forecasting models.
+    - https://xgboost.readthedocs.io/en/stable/
+  params:
+    - name: max_depth
+      description: Maximum tree depth for each booster.
+      type: integer
+      default: 6
+      bounds:
+        min_value: 2
+        max_value: 12
+    - name: learning_rate
+      description: Step size shrinkage applied after each boosting step.
+      type: number
+      default: 0.05
+      bounds:
+        min_value: 0.01
+        max_value: 0.3
+  
+- model_family: linear_mean_reversion_zscore
+  model_name: Linear Mean Reversion Z-Score
+  description: Cross-sectional mean-reversion model using z-scored residual spreads and short-horizon reversal features.
   required_data:
+    - price.close
+    - returns.daily
     - timestamp
-    - target.value
+    - symbol
+  dataset_requirement:
+    required_fields:
+      - price.close
+      - returns.daily
+    required_frequency: 1d
+    require_point_in_time_data: true
   optional_data:
-    - base_model.predictions
-    - calibration.split_id
+    - sector.classification
+    - liquidity.adv20
   tags:
-    - uncertainty
-    - calibration
-    - forecasting
+    - tradable-alpha
+    - mean-reversion
+    - linear
+    - core-template
   leakage_risks:
-    - calibration_window_overlap
-    - residual_distribution_peek
+    - same_day_close_execution_assumption
+    - cross_sectional_normalization_future_peek
   failure_modes:
-    - undercoverage_under_shift
-    - conservative_intervals
+    - crowding_during_risk_off
+    - regime_shift_breaks_reversion_speed
   compute_intensity: low
-  output_schema: forecast.point_and_interval.v1
+  output_schema: alpha.signal.score.v1
   references:
-    - https://arxiv.org/abs/1905.03222
-    - https://deel-ai.github.io/puncc/theory_overview.html
+    - https://scikit-learn.org/stable/modules/linear_model.html
+  params:
+    - name: lookback_days
+      description: Lookback window for z-score estimation.
+      type: integer
+      default: 20
+      bounds:
+        min_value: 5
+        max_value: 120
+    - name: entry_z
+      description: Absolute z-score threshold for signal entry.
+      type: number
+      default: 1.5
+      bounds:
+        min_value: 0.5
+        max_value: 4.0
 
-- model_family: graph_temporal_network
-  model_name: Graph Temporal Network
-  description: Spatiotemporal graph neural forecaster for linked entities such as stores, assets, or sensors.
+- model_family: futures_carry_term_structure
+  model_name: Futures Carry Term Structure
+  description: Carry model from front-to-deferred futures term structure with roll-aware normalization.
   required_data:
-    - entity_id
+    - futures.front_contract_price
+    - futures.next_contract_price
+    - futures.days_to_expiry
     - timestamp
-    - target.value
-    - graph.edge_index
+    - symbol
+  dataset_requirement:
+    required_fields:
+      - futures.front_contract_price
+      - futures.next_contract_price
+      - futures.days_to_expiry
+    required_frequency: 1d
+    require_point_in_time_data: true
   optional_data:
-    - observed_covariates
-    - static_covariates
+    - funding.rate_proxy
+    - open_interest
   tags:
-    - deep-learning
-    - graph
-    - forecasting
+    - tradable-alpha
+    - carry
+    - futures
+    - core-template
   leakage_risks:
-    - graph_construction_future_information
-    - node_embedding_full_period_fit
+    - back_adjustment_using_future_rolls
+    - contract_chain_reconstruction_peek
   failure_modes:
-    - oversmoothing_across_nodes
-    - topology_shift_degradation
-  compute_intensity: high
-  output_schema: forecast.quantiles.v1
+    - contract_switch_discontinuities
+    - dependency_warning_roll_calendar_required
+  compute_intensity: low
+  output_schema: alpha.signal.score.v1
   references:
-    - https://arxiv.org/abs/1811.05320
-    - https://pytorch-geometric-temporal.readthedocs.io/
+    - https://www.cmegroup.com/education.html
+  params:
+    - name: min_days_to_expiry
+      description: Minimum days to expiry for valid front contract sampling.
+      type: integer
+      default: 7
+      bounds:
+        min_value: 1
+        max_value: 30
+
+- model_family: elasticnet_cross_sectional_factor_alpha
+  model_name: ElasticNet Cross-Sectional Factor Alpha
+  description: Sparse factor alpha model with sector-neutralized exposures and turnover-aware shrinkage.
+  required_data:
+    - factors.cross_sectional
+    - returns.forward_1d
+    - timestamp
+    - symbol
+  dataset_requirement:
+    required_fields:
+      - factors.cross_sectional
+      - returns.forward_1d
+      - fundamentals.point_in_time
+    required_frequency: 1d
+    require_point_in_time_data: true
+  optional_data:
+    - sector.classification
+    - country.classification
+  tags:
+    - tradable-alpha
+    - factor
+    - linear
+    - core-template
+  leakage_risks:
+    - revised_fundamental_snapshot_leakage
+    - rebalance_timestamp_execution_mismatch
+  failure_modes:
+    - factor_decay_post_crowding
+    - unstable_coefficients_in_sparse_universes
+  compute_intensity: low
+  output_schema: alpha.factor_return_forecast.v1
+  references:
+    - https://scikit-learn.org/stable/modules/generated/sklearn.linear_model.ElasticNet.html
+  params:
+    - name: alpha
+      description: Total regularization strength.
+      type: number
+      default: 0.2
+      bounds:
+        min_value: 0.001
+        max_value: 2.0
+    - name: l1_ratio
+      description: Mix between l1 and l2 penalties.
+      type: number
+      default: 0.6
+      bounds:
+        min_value: 0.0
+        max_value: 1.0
+
+- model_family: event_driven_earnings_drift
+  model_name: Event-Driven Earnings Drift
+  description: Post-earnings announcement drift model combining surprise magnitude, guidance tone, and liquidity filters.
+  required_data:
+    - earnings.surprise_pct
+    - earnings.announcement_timestamp
+    - returns.intraday_5m
+    - symbol
+  dataset_requirement:
+    required_fields:
+      - earnings.surprise_pct
+      - earnings.announcement_timestamp
+      - earnings.point_in_time_calendar
+    required_frequency: event
+    require_point_in_time_data: true
+  optional_data:
+    - analyst.revisions_7d
+    - sentiment.guidance_tone
+  tags:
+    - tradable-alpha
+    - event-driven
+    - earnings
+  leakage_risks:
+    - announcement_time_timezone_shift
+    - revised_eps_consensus_lookahead
+  failure_modes:
+    - dependency_requirement_earnings_feed_mandatory
+    - overnight_gap_execution_slippage
+  compute_intensity: medium
+  output_schema: alpha.signal.score.v1
+  references:
+    - https://www.sec.gov/edgar/searchedgar/companysearch
+
+- model_family: analyst_revision_diffusion_alpha
+  model_name: Analyst Revision Diffusion Alpha
+  description: Revision breadth and estimate-diffusion signal capturing delayed price response to analyst changes.
+  required_data:
+    - analyst.revisions
+    - analyst.consensus_history
+    - timestamp
+    - symbol
+  dataset_requirement:
+    required_fields:
+      - analyst.revisions
+      - analyst.consensus_history
+      - analyst.revision_timestamp
+    required_frequency: 1d
+    require_point_in_time_data: true
+  optional_data:
+    - earnings.next_announcement_date
+    - short_interest.days_to_cover
+  tags:
+    - tradable-alpha
+    - event-driven
+    - analyst-revisions
+  leakage_risks:
+    - consensus_backfill_after_market_close
+    - broker_survivorship_bias
+  failure_modes:
+    - dependency_requirement_analyst_revision_feed_mandatory
+    - low_coverage_small_cap_universe
+  compute_intensity: low
+  output_schema: alpha.signal.score.v1
+  references:
+    - https://www.investopedia.com/terms/e/earnings-estimate.asp
+
+- model_family: options_iv_skew_reversion
+  model_name: Options IV Skew Reversion
+  description: Relative-value alpha from implied-volatility skew dislocations and subsequent normalization.
+  required_data:
+    - options.iv_surface
+    - options.skew_25d
+    - options.open_interest
+    - timestamp
+    - symbol
+  dataset_requirement:
+    required_fields:
+      - options.iv_surface
+      - options.skew_25d
+      - options.chain_snapshot_timestamp
+    required_frequency: 5m
+    require_point_in_time_data: true
+  optional_data:
+    - options.volume
+    - realized_volatility_20d
+  tags:
+    - tradable-alpha
+    - options
+    - mean-reversion
+  leakage_risks:
+    - option_chain_restatement_lookahead
+    - stale_surface_interpolation_bias
+  failure_modes:
+    - dependency_requirement_options_chain_mandatory
+    - dependency_warning_intraday_options_quotes_required
+  compute_intensity: high
+  output_schema: alpha.signal.score.v1
+  references:
+    - https://www.theocc.com/market-data
