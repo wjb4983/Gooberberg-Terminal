@@ -81,7 +81,15 @@ from app.schemas.testing_runs import (
     TestingRunResponse,
     TestingTargetReference,
 )
-from app.schemas.training_runs import RunStatus, SubtaskType, TaskType, TrainingRunCreateRequest, TrainingRunResponse
+from app.schemas.training_runs import (
+    RunStatus,
+    SubtaskType,
+    TaskType,
+    TrainingRunCreateRequest,
+    TrainingRunResponse,
+    TrainingRunValidationRequest,
+    TrainingRunValidationResponse,
+)
 
 __all__ = [
     "AlertAcknowledgeResponse",
@@ -160,6 +168,8 @@ __all__ = [
     "TimeSeriesTile",
     "TrainingRunCreateRequest",
     "TrainingRunResponse",
+    "TrainingRunValidationRequest",
+    "TrainingRunValidationResponse",
     "TransactionCostModel",
     "ExecutionDelayModel",
     "WebSocketContractEnvelope",
