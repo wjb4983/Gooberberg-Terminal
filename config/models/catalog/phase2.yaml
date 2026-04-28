@@ -1,0 +1,254 @@
+- model_family: nbeats_interpretable
+  model_name: N-BEATS Interpretable
+  description: Deep residual basis-expansion forecaster tuned for medium-horizon demand and price trajectories.
+  required_data:
+    - entity_id
+    - timestamp
+    - target.value
+  optional_data:
+    - known_future_covariates
+    - event_flags
+  tags:
+    - deep-learning
+    - forecasting
+    - interpretable
+  leakage_risks:
+    - horizon_shift_label_leakage
+    - future_covariate_alignment_error
+  failure_modes:
+    - basis_overfit_on_sparse_series
+    - unstable_tail_forecasts
+  compute_intensity: high
+  output_schema: forecast.quantiles.v1
+  references:
+    - https://arxiv.org/abs/1905.10437
+    - https://unit8co.github.io/darts/generated_api/darts.models.forecasting.nbeats.html
+
+- model_family: patchtst_transformer
+  model_name: PatchTST Transformer
+  description: Patch-based transformer forecaster for long-context univariate and multivariate time-series windows.
+  required_data:
+    - entity_id
+    - timestamp
+    - target.value
+  optional_data:
+    - observed_covariates
+    - static_covariates
+  tags:
+    - deep-learning
+    - transformer
+    - long-horizon
+  leakage_risks:
+    - patch_window_future_overlap
+    - normalization_fit_on_holdout
+  failure_modes:
+    - sensitivity_to_patch_length
+    - degraded_short_horizon_accuracy
+  compute_intensity: high
+  output_schema: forecast.quantiles.v1
+  references:
+    - https://arxiv.org/abs/2211.14730
+    - https://huggingface.co/docs/transformers/model_doc/patchtst
+
+- model_family: deep_ar_probabilistic
+  model_name: DeepAR Probabilistic
+  description: Autoregressive recurrent model optimized for probabilistic forecasting across many related entities.
+  required_data:
+    - entity_id
+    - timestamp
+    - target.value
+  optional_data:
+    - known_future_covariates
+    - calendar.market_sessions
+  tags:
+    - deep-learning
+    - probabilistic
+    - autoregressive
+  leakage_risks:
+    - recursive_teacher_forcing_peek
+    - entity_split_contamination
+  failure_modes:
+    - error_accumulation_in_rollout
+    - poor_rare_event_calibration
+  compute_intensity: high
+  output_schema: forecast.quantiles.v1
+  references:
+    - https://arxiv.org/abs/1704.04110
+    - https://docs.aws.amazon.com/forecast/latest/dg/aws-forecast-recipe-deeparplus.html
+
+- model_family: croston_intermittent_demand
+  model_name: Croston Intermittent Demand
+  description: Classical intermittent-demand forecaster for sparse transaction sequences with zero-inflated counts.
+  required_data:
+    - timestamp
+    - target.value
+  optional_data:
+    - sku.segment
+    - calendar.promo_events
+  tags:
+    - classical
+    - intermittent-demand
+    - forecasting
+  leakage_risks:
+    - backfilled_zero_event_bias
+    - post_period_aggregation_peek
+  failure_modes:
+    - bursty_demand_underreaction
+    - structural_break_delay
+  compute_intensity: low
+  output_schema: forecast.point.v1
+  references:
+    - https://otexts.com/fpp3/counts.html
+    - https://robjhyndman.com/publications/another-look-at-measures-of-forecast-accuracy/
+
+- model_family: tbats_multi_seasonal
+  model_name: TBATS Multi-Seasonal
+  description: Exponential smoothing with Box-Cox, ARMA errors, and trigonometric seasonality for complex cycles.
+  required_data:
+    - timestamp
+    - target.value
+  optional_data:
+    - holiday.calendar
+    - tariff.regime
+  tags:
+    - classical
+    - seasonality
+    - forecasting
+  leakage_risks:
+    - seasonal_period_selection_from_future
+    - transformed_scale_peek
+  failure_modes:
+    - convergence_failures_on_long_cycles
+    - oversmoothing_abrupt_regimes
+  compute_intensity: medium
+  output_schema: forecast.point_and_interval.v1
+  references:
+    - https://otexts.com/fpp3/complexseasonality.html
+    - https://pkg.robjhyndman.com/forecast/reference/tbats.html
+
+- model_family: quantile_lasso_regression
+  model_name: Quantile Lasso Regression
+  description: Sparse linear quantile model for scenario-aware risk and tail forecasting tasks.
+  required_data:
+    - target.value
+    - factors.cross_sectional
+  optional_data:
+    - macro.features
+    - sector.classification
+  tags:
+    - linear
+    - quantile
+    - regression
+  leakage_risks:
+    - contemporaneous_factor_revision_leakage
+    - cross_sectional_standardization_leakage
+  failure_modes:
+    - coefficient_instability_in_small_samples
+    - weak_non_linear_capture
+  compute_intensity: low
+  output_schema: forecast.quantiles.v1
+  references:
+    - https://scikit-learn.org/stable/modules/generated/sklearn.linear_model.QuantileRegressor.html
+    - https://web.stanford.edu/~hastie/Papers/LARS/LeastAngle_2002.pdf
+
+- model_family: ngboost_distributional
+  model_name: NGBoost Distributional
+  description: Natural-gradient boosting for full predictive distributions with calibrated uncertainty estimates.
+  required_data:
+    - timestamp
+    - target.value
+  optional_data:
+    - known_future_covariates
+    - liquidity.metrics
+  tags:
+    - boosting
+    - probabilistic
+    - regression
+  leakage_risks:
+    - distribution_parameter_future_peek
+    - fold_reuse_leakage
+  failure_modes:
+    - unstable_distribution_fit
+    - heavy_tail_underestimation
+  compute_intensity: medium
+  output_schema: forecast.distribution.v1
+  references:
+    - https://stanfordmlgroup.github.io/ngboost/
+    - https://proceedings.mlr.press/v119/duan20a.html
+
+- model_family: hidden_markov_volatility
+  model_name: Hidden Markov Volatility
+  description: Regime-switching volatility model for latent-state risk classification and transition monitoring.
+  required_data:
+    - returns.log
+    - timestamp
+  optional_data:
+    - volatility.realized
+    - macro.regime_indicators
+  tags:
+    - regime-detection
+    - probabilistic
+    - time-series
+  leakage_risks:
+    - smoothed_state_future_leakage
+    - lookahead_realized_volatility
+  failure_modes:
+    - regime_label_switching
+    - transition_probability_instability
+  compute_intensity: medium
+  output_schema: regime.class_probabilities.v1
+  references:
+    - https://www.statsmodels.org/stable/generated/statsmodels.tsa.regime_switching.markov_regression.MarkovRegression.html
+    - https://www.jstor.org/stable/1912559
+
+- model_family: conformal_quantile_wrapper
+  model_name: Conformal Quantile Wrapper
+  description: Post-hoc conformal calibration layer for interval validity on top of base forecasting models.
+  required_data:
+    - timestamp
+    - target.value
+  optional_data:
+    - base_model.predictions
+    - calibration.split_id
+  tags:
+    - uncertainty
+    - calibration
+    - forecasting
+  leakage_risks:
+    - calibration_window_overlap
+    - residual_distribution_peek
+  failure_modes:
+    - undercoverage_under_shift
+    - conservative_intervals
+  compute_intensity: low
+  output_schema: forecast.point_and_interval.v1
+  references:
+    - https://arxiv.org/abs/1905.03222
+    - https://deel-ai.github.io/puncc/theory_overview.html
+
+- model_family: graph_temporal_network
+  model_name: Graph Temporal Network
+  description: Spatiotemporal graph neural forecaster for linked entities such as stores, assets, or sensors.
+  required_data:
+    - entity_id
+    - timestamp
+    - target.value
+    - graph.edge_index
+  optional_data:
+    - observed_covariates
+    - static_covariates
+  tags:
+    - deep-learning
+    - graph
+    - forecasting
+  leakage_risks:
+    - graph_construction_future_information
+    - node_embedding_full_period_fit
+  failure_modes:
+    - oversmoothing_across_nodes
+    - topology_shift_degradation
+  compute_intensity: high
+  output_schema: forecast.quantiles.v1
+  references:
+    - https://arxiv.org/abs/1811.05320
+    - https://pytorch-geometric-temporal.readthedocs.io/
