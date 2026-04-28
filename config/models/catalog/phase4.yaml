@@ -1,0 +1,269 @@
+- model_family: tftx_temporal_moe
+  model_name: TFTx Temporal MoE
+  description: Mixture-of-experts extension of temporal transformers for adaptive multi-regime forecasting.
+  required_data:
+    - entity_id
+    - timestamp
+    - target.value
+  optional_data:
+    - known_future_covariates
+    - static_covariates
+  tags:
+    - deep-learning
+    - transformer
+    - forecasting
+    - planned
+    - experimental
+  leakage_risks:
+    - regime_gate_trained_on_future_labels
+    - covariate_availability_mislabeling
+  failure_modes:
+    - expert_collapse
+    - unstable_gate_switching
+  compute_intensity: high
+  output_schema: forecast.quantiles.v1
+  references:
+    - https://arxiv.org/abs/1912.09363
+    - https://pytorch-forecasting.readthedocs.io/
+
+- model_family: tiny_time_mix_patch_encoder
+  model_name: TinyTimeMix Patch Encoder
+  description: Lightweight patch-mixing encoder for low-latency horizon forecasting on edge workloads.
+  required_data:
+    - timestamp
+    - target.value
+  optional_data:
+    - entity_id
+    - observed_covariates
+  tags:
+    - deep-learning
+    - patch-model
+    - forecasting
+    - planned
+    - experimental
+  leakage_risks:
+    - patch_stride_future_overlap
+    - streaming_normalizer_drift_leakage
+  failure_modes:
+    - horizon_aliasing
+    - degraded_long_context_recall
+  compute_intensity: medium
+  output_schema: forecast.point_and_interval.v1
+  references:
+    - https://arxiv.org/abs/2306.09364
+    - https://nixtlaverse.nixtla.io/neuralforecast/
+
+- model_family: wavelet_diffusion_forecaster
+  model_name: Wavelet Diffusion Forecaster
+  description: Diffusion-based probabilistic model over wavelet components for multimodal scenario generation.
+  required_data:
+    - entity_id
+    - timestamp
+    - target.value
+  optional_data:
+    - known_future_covariates
+    - event_flags
+  tags:
+    - generative
+    - probabilistic
+    - forecasting
+    - planned
+    - experimental
+  leakage_risks:
+    - denoising_schedule_calibrated_on_test_period
+    - decomposition_window_lookahead
+  failure_modes:
+    - mode_collapse_under_low_signal
+    - slow_sampling_inference
+  compute_intensity: high
+  output_schema: forecast.distribution.v1
+  references:
+    - https://arxiv.org/abs/2006.11239
+    - https://arxiv.org/abs/2205.09991
+
+- model_family: online_bayesian_changepoint_hazard
+  model_name: Online Bayesian Changepoint Hazard
+  description: Sequential changepoint detector with hazard priors for adaptive drift-aware forecasting pipelines.
+  required_data:
+    - timestamp
+    - target.value
+  optional_data:
+    - exogenous.signals
+    - entity_id
+  tags:
+    - bayesian
+    - changepoint
+    - planned
+  leakage_risks:
+    - retrospective_hazard_tuning
+    - segment_boundary_future_peek
+  failure_modes:
+    - excessive_false_positive_segments
+    - delayed_break_detection
+  compute_intensity: low
+  output_schema: regime.change_probability.v1
+  references:
+    - https://arxiv.org/abs/0710.3742
+    - https://proceedings.neurips.cc/paper/2007/file/4f285f72e01f49e8bf8f7f27f4f4f6f7-Paper.pdf
+
+- model_family: pooled_hierarchical_reconciliation
+  model_name: Pooled Hierarchical Reconciliation
+  description: Coherent top-down and bottom-up reconciliation layer for grouped panel forecasts.
+  required_data:
+    - entity_id
+    - timestamp
+    - target.value
+    - hierarchy.parent_id
+  optional_data:
+    - hierarchy.level
+    - base_model.point_forecast
+  tags:
+    - hierarchical
+    - forecasting
+    - planned
+  leakage_risks:
+    - hierarchy_snapshot_taken_post_horizon
+    - reconciliation_weights_fit_on_eval
+  failure_modes:
+    - incoherent_updates_after_reorg
+    - high_variance_bottom_level_adjustments
+  compute_intensity: medium
+  output_schema: forecast.reconciled.v1
+  references:
+    - https://otexts.com/fpp3/hierarchical.html
+    - https://robjhyndman.com/publications/nnmint/
+
+- model_family: retrieval_augmented_regime_classifier
+  model_name: Retrieval Augmented Regime Classifier
+  description: Regime classifier combining live features with nearest historical episodes from a vector index.
+  required_data:
+    - timestamp
+    - returns.log
+    - volatility.realized
+  optional_data:
+    - embeddings.market_state
+    - liquidity.metrics
+  tags:
+    - classification
+    - retrieval
+    - planned
+    - experimental
+  leakage_risks:
+    - retrieval_index_contains_future_windows
+    - embedding_model_fit_on_holdout
+  failure_modes:
+    - neighbor_drift_under_new_regimes
+    - brittle_similarity_metric
+  compute_intensity: medium
+  output_schema: regime.class_probabilities.v1
+  references:
+    - https://arxiv.org/abs/2005.11401
+    - https://faiss.ai/
+
+- model_family: graph_diffusion_spillover
+  model_name: Graph Diffusion Spillover
+  description: Graph diffusion forecaster modeling spillover effects across linked entities and sectors.
+  required_data:
+    - entity_id
+    - timestamp
+    - target.value
+    - graph.edge_index
+  optional_data:
+    - graph.edge_weight
+    - observed_covariates
+  tags:
+    - graph
+    - deep-learning
+    - forecasting
+    - planned
+    - experimental
+  leakage_risks:
+    - future_edge_reweighting
+    - global_node_encoder_fit_leakage
+  failure_modes:
+    - oversmoothing_on_dense_graphs
+    - sensitivity_to_topology_noise
+  compute_intensity: high
+  output_schema: forecast.quantiles.v1
+  references:
+    - https://arxiv.org/abs/2001.05140
+    - https://pytorch-geometric-temporal.readthedocs.io/
+
+- model_family: tabular_in_context_learner
+  model_name: Tabular In-Context Learner
+  description: Prompt-based in-context learner for few-shot tabular classification and regression tasks.
+  required_data:
+    - features.tabular
+    - target.value
+  optional_data:
+    - target.class
+    - fold.assignment
+  tags:
+    - foundation-model
+    - tabular
+    - planned
+    - experimental
+  leakage_risks:
+    - demonstration_pool_contains_validation_rows
+    - prompt_template_target_leakage
+  failure_modes:
+    - context_order_sensitivity
+    - unstable_calibration_across_batches
+  compute_intensity: high
+  output_schema: forecast.point.v1
+  references:
+    - https://arxiv.org/abs/2207.01848
+    - https://arxiv.org/abs/2402.17563
+
+- model_family: conformalized_quantile_network_v2
+  model_name: Conformalized Quantile Network v2
+  description: Neural quantile forecaster with rolling conformal recalibration for robust finite-sample coverage.
+  required_data:
+    - timestamp
+    - target.value
+  optional_data:
+    - known_future_covariates
+    - calibration.split_id
+  tags:
+    - uncertainty
+    - calibration
+    - forecasting
+    - planned
+  leakage_risks:
+    - calibration_set_temporal_overlap
+    - residual_cache_cross_split_leakage
+  failure_modes:
+    - conservative_bands_under_stable_regimes
+    - undercoverage_after_large_shocks
+  compute_intensity: medium
+  output_schema: forecast.point_and_interval.v1
+  references:
+    - https://arxiv.org/abs/1905.03222
+    - https://arxiv.org/abs/2307.16895
+
+- model_family: synthetic_control_bayesian_dynamic
+  model_name: Synthetic Control Bayesian Dynamic
+  description: Bayesian dynamic synthetic control for intervention impact analysis under non-stationary baselines.
+  required_data:
+    - timestamp
+    - target.value
+    - intervention.flag
+  optional_data:
+    - donor_pool.series
+    - covariates.pre_treatment
+  tags:
+    - causal
+    - bayesian
+    - planned
+    - experimental
+  leakage_risks:
+    - donor_selection_using_post_period_fit
+    - intervention_date_relabeling
+  failure_modes:
+    - weak_donor_overlap
+    - posterior_instability_with_short_preperiod
+  compute_intensity: medium
+  output_schema: causal_effect.posterior.v1
+  references:
+    - https://www.aeaweb.org/articles?id=10.1257/jep.31.2.391
+    - https://arxiv.org/abs/2211.05984
