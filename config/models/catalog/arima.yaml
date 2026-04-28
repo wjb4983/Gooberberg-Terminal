@@ -1,0 +1,23 @@
+model_family: arima
+model_name: ARIMA
+description: Classical univariate autoregressive integrated moving average forecasting model.
+required_data:
+  - ohlcv.close
+optional_data:
+  - ohlcv.volume
+  - calendar.market_sessions
+tags:
+  - classical
+  - time-series
+  - forecasting
+leakage_risks:
+  - future_target_leakage
+  - lookahead_feature_windows
+failure_modes:
+  - non_stationary_regime_shift
+  - sparse_observation_windows
+compute_intensity: low
+output_schema: forecast.point_and_interval.v1
+references:
+  - https://otexts.com/fpp3/arima.html
+  - https://www.statsmodels.org/stable/generated/statsmodels.tsa.arima.model.ARIMA.html

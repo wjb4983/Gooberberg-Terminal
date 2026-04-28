@@ -1,0 +1,26 @@
+model_family: torch_nn_timeseries
+model_name: Torch NN Time Series
+description: Neural forecasting family built on PyTorch sequence architectures.
+required_data:
+  - ohlcv.close
+  - entity_id
+  - timestamp
+optional_data:
+  - static_covariates
+  - known_future_covariates
+  - textual_signals
+tags:
+  - deep-learning
+  - time-series
+  - forecasting
+leakage_risks:
+  - future_covariate_contamination
+  - target_normalization_over_full_window
+failure_modes:
+  - overfitting_short_histories
+  - distribution_shift_under_low_liquidity
+compute_intensity: high
+output_schema: forecast.quantiles.v1
+references:
+  - https://pytorch.org/docs/stable/index.html
+  - https://pytorch-forecasting.readthedocs.io/

@@ -64,7 +64,7 @@ async def app_lifespan(app: FastAPI) -> AsyncIterator[None]:
         model_registry.register(TorchNnTimeseriesModelSpec())
         model_registry.register(KalmanFilterModelSpec())
         model_registry.register(ArimaModelSpec())
-        catalog_directory = Path(__file__).resolve().parent / "domain" / "model_catalog" / "catalog"
+        catalog_directory = Path(__file__).resolve().parents[3] / "config" / "models" / "catalog"
         metadata_entries = load_model_metadata_from_directory(catalog_directory)
         translated_catalog_entries = bind_validator_adapters(metadata_entries, model_registry)
         model_catalog_registry = ModelCatalogRegistry(translated_catalog_entries)
