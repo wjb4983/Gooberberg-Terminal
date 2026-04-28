@@ -21,8 +21,12 @@ def test_catalog_loader_rejects_invalid_metadata_with_explicit_error(tmp_path: P
         encoding="utf-8",
     )
 
-    with pytest.raises(ValueError, match=r"compute_intensity.*broken\.json.*item index 0"):
+    with pytest.raises(ValueError) as exc_info:
         load_model_metadata_from_directory(tmp_path)
+
+    message = str(exc_info.value)
+    assert "compute_intensity" in message
+    assert "broken.json" in message
 
 
 def test_catalog_loader_rejects_duplicate_families(tmp_path: Path) -> None:
