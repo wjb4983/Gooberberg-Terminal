@@ -1,0 +1,26 @@
+[
+  {
+    "model_family": "arima",
+    "model_name": "ARIMA",
+    "description": "Classical univariate autoregressive integrated moving average forecasting model.",
+    "tags": ["classical", "time-series", "forecasting"]
+  },
+  {
+    "model_family": "hmm_regime_switching",
+    "model_name": "HMM Regime Switching",
+    "description": "Hidden Markov model with latent regime transitions for state detection.",
+    "tags": ["classical", "time-series", "classification"]
+  },
+  {
+    "model_family": "kalman_filter",
+    "model_name": "Kalman Filter",
+    "description": "State-space estimation model for filtering and nowcasting tasks.",
+    "tags": ["state-space", "time-series", "regression"]
+  },
+  {
+    "model_family": "torch_nn_timeseries",
+    "model_name": "Torch NN Time Series",
+    "description": "Neural forecasting family built on PyTorch sequence architectures.",
+    "tags": ["deep-learning", "time-series", "forecasting"]
+  }
+]

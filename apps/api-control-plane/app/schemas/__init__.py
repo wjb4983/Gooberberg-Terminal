@@ -51,6 +51,7 @@ from app.schemas.models import (
     ModelDeployment,
     ModelDeploymentActionResponse,
     ModelDeploymentCreateRequest,
+    ModelCatalogItem,
     ModelDeploymentEvent,
     ModelDeploymentStatus,
 )
@@ -126,6 +127,7 @@ __all__ = [
     "ModelDeploymentCreateRequest",
     "ModelDeploymentEvent",
     "ModelDeploymentStatus",
+    "ModelCatalogItem",
     "ModelFamily",
     "ParameterSetCloneRequest",
     "ParameterSetCreateRequest",

@@ -42,3 +42,11 @@ class ModelDeploymentEvent(BaseModel):
     event_type: str
     detail: str
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+
+class ModelCatalogItem(BaseModel):
+    model_family: str
+    model_name: str
+    description: str
+    tags: list[str] = Field(default_factory=list)
+    validator_adapter: str

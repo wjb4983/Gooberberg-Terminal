@@ -30,6 +30,13 @@ from app.domain.job_runner import JobRunnerRepository, JobRunnerService
 from app.persistence import create_database
 from app.persistence.job_events import JobEventRepository
 from app.persistence.models import Base
+from pathlib import Path
+
+from app.domain.model_catalog import (
+    ModelCatalogRegistry,
+    bind_validator_adapters,
+    load_model_metadata_from_directory,
+)
 from app.domain.model_configs import (
     ArimaModelSpec,
     HmmRegimeSwitchingModelSpec,
@@ -57,6 +64,10 @@ async def app_lifespan(app: FastAPI) -> AsyncIterator[None]:
         model_registry.register(TorchNnTimeseriesModelSpec())
         model_registry.register(KalmanFilterModelSpec())
         model_registry.register(ArimaModelSpec())
+        catalog_directory = Path(__file__).resolve().parent / "domain" / "model_catalog" / "catalog"
+        metadata_entries = load_model_metadata_from_directory(catalog_directory)
+        translated_catalog_entries = bind_validator_adapters(metadata_entries, model_registry)
+        model_catalog_registry = ModelCatalogRegistry(translated_catalog_entries)
         task_registry = TaskRegistry()
 
         async def _noop_task_runner(payload: Mapping[str, object]) -> dict[str, object]:
@@ -71,6 +82,7 @@ async def app_lifespan(app: FastAPI) -> AsyncIterator[None]:
         app.state.settings = settings
         app.state.database = database
         app.state.model_registry = model_registry
+        app.state.model_catalog_registry = model_catalog_registry
         app.state.task_registry = task_registry
         app.state.job_runner_service = JobRunnerService(JobRunnerRepository(), task_registry)
         app.state.job_event_repository = JobEventRepository(app.state.database.session_factory)
