@@ -4,11 +4,13 @@ from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from app.api.dependencies import get_model_registry
+from app.api.dependencies import get_model_catalog_registry, get_model_registry
 from app.api.routers.ws import manager as ws_manager
+from app.domain.model_catalog import ModelCatalogRegistry
 from app.domain.model_registry import ModelRegistry
 from app.schemas import (
     ModelDeployment,
+    ModelCatalogItem,
     ModelDeploymentActionResponse,
     ModelDeploymentCreateRequest,
     ModelDeploymentEvent,
@@ -62,6 +64,42 @@ async def _broadcast_model_event(
                 "model_version": deployment.model_version,
             },
         },
+    )
+
+
+
+
+@router.get("/catalog", response_model=list[ModelCatalogItem])
+async def list_model_catalog(
+    model_catalog_registry: ModelCatalogRegistry = Depends(get_model_catalog_registry),
+) -> list[ModelCatalogItem]:
+    return [
+        ModelCatalogItem(
+            model_family=item.metadata.model_family,
+            model_name=item.metadata.model_name,
+            description=item.metadata.description,
+            tags=list(item.metadata.tags),
+            validator_adapter=item.validator_adapter.model_family,
+        )
+        for item in model_catalog_registry.list_entries()
+    ]
+
+
+@router.get("/catalog/{model_family}", response_model=ModelCatalogItem)
+async def get_model_catalog_item(
+    model_family: str,
+    model_catalog_registry: ModelCatalogRegistry = Depends(get_model_catalog_registry),
+) -> ModelCatalogItem:
+    item = model_catalog_registry.get(model_family)
+    if item is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="model catalog entry not found")
+
+    return ModelCatalogItem(
+        model_family=item.metadata.model_family,
+        model_name=item.metadata.model_name,
+        description=item.metadata.description,
+        tags=list(item.metadata.tags),
+        validator_adapter=item.validator_adapter.model_family,
     )
 
 

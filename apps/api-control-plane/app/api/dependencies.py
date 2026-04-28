@@ -11,6 +11,7 @@ from app.domain.job_runner import JobRunnerService
 from app.domain.market_data import Repository as MarketDataRepository
 from app.domain.market_data import Service as MarketDataService
 from app.domain.model_configs import ModelConfigRepository, ModelConfigService
+from app.domain.model_catalog import ModelCatalogRegistry
 from app.domain.model_registry import ModelRegistry
 from app.domain.parameter_sweeps import Repository as ParameterSweepRepository
 from app.domain.parameter_sweeps import Service as ParameterSweepService
@@ -32,6 +33,10 @@ def get_db_session(request: Request) -> Generator[Session, None, None]:
 
 def get_model_registry(request: Request) -> ModelRegistry:
     return request.app.state.model_registry
+
+
+def get_model_catalog_registry(request: Request) -> ModelCatalogRegistry:
+    return request.app.state.model_catalog_registry
 
 
 def get_task_registry(request: Request) -> TaskRegistry:

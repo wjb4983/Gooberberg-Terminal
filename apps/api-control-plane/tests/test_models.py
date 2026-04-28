@@ -63,3 +63,18 @@ def test_model_families_exposes_all_registered_specs() -> None:
     assert "torch_nn_timeseries" in payload
     assert "kalman_filter" in payload
     assert "arima" in payload
+
+
+def test_model_catalog_exposes_metadata_with_validator_adapter_link() -> None:
+    response = client.get("/api/v1/models/deployments/catalog")
+    assert response.status_code == 200
+    payload = response.json()
+
+    arima = next(item for item in payload if item["model_family"] == "arima")
+    assert arima["model_name"] == "ARIMA"
+    assert arima["validator_adapter"] == "arima"
+
+
+def test_model_catalog_item_not_found_returns_404() -> None:
+    response = client.get("/api/v1/models/deployments/catalog/does_not_exist")
+    assert response.status_code == 404
