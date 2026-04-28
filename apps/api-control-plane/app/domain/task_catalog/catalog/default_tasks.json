@@ -1,0 +1,23 @@
+[
+  {
+    "task_type": "time_series_momentum",
+    "subtask_type": "ranking",
+    "description": "Rank assets by expected momentum over a forward horizon.",
+    "compatibility_references": [
+      "dataset.ohlcv.adjusted",
+      "feature_set.momentum.v1"
+    ],
+    "references": [
+      "docs/adr/ADR-transport-contract-v1.md"
+    ]
+  },
+  {
+    "task_type": "regime_switching",
+    "subtask_type": "regime_state",
+    "description": "Classify current market regime state from historical features.",
+    "compatibility_references": [
+      "dataset.returns.windowed",
+      "labeling.regime.hmm"
+    ]
+  }
+]
