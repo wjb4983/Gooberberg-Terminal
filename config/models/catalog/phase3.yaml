@@ -10,6 +10,7 @@
     - calendar.market_sessions
   tags:
     - foundation-model
+    - experimental
     - deep-learning
     - forecasting
   leakage_risks:
@@ -19,6 +20,7 @@
     - weak_domain_transfer_on_sparse_series
     - unstable_extreme_quantile_behavior
   compute_intensity: high
+  runtime_notes: GPU recommended for pretraining adaptation; CPU inference feasible for batch horizons.
   output_schema: forecast.quantiles.v1
   references:
     - https://arxiv.org/abs/2310.10688
@@ -38,6 +40,7 @@
     - state-space
     - deep-learning
     - long-horizon
+    - experimental
   leakage_risks:
     - context_window_future_overlap
     - scaler_fit_on_validation_tail
@@ -45,6 +48,7 @@
     - sensitivity_to_sequence_chunking
     - degraded_short_context_precision
   compute_intensity: high
+  runtime_notes: Best on modern GPUs for long contexts; memory-efficient streaming inference supported.
   output_schema: forecast.quantiles.v1
   references:
     - https://arxiv.org/abs/2312.00752
@@ -63,6 +67,7 @@
     - meta-learning
     - transformer
     - classification
+    - experimental
   leakage_risks:
     - fold_assignment_contamination
     - imputation_statistics_leakage
@@ -70,6 +75,7 @@
     - degraded_performance_on_wide_tables
     - calibration_shift_under_domain_change
   compute_intensity: medium
+  runtime_notes: CPU-friendly for small tables; optional GPU acceleration for larger ensembles.
   output_schema: classification.class_probabilities.v1
   references:
     - https://www.nature.com/articles/s41586-024-08328-6
@@ -88,6 +94,7 @@
     - hybrid
     - forecasting
     - seasonality
+    - beta
   leakage_risks:
     - future_regressor_backfill_leakage
     - changepoint_tuning_on_holdout
@@ -95,6 +102,7 @@
     - overfitting_with_dense_events
     - unstable_trend_break_detection
   compute_intensity: medium
+  runtime_notes: Runs on CPU for moderate datasets; GPU helps with neural autoregressive components.
   output_schema: decomposition.trend_seasonal_residual.v1
   references:
     - https://neuralprophet.com/
@@ -114,6 +122,7 @@
     - deep-learning
     - forecasting
     - multi-horizon
+    - mature
   leakage_risks:
     - horizon_specific_feature_shift_leakage
     - rolling_origin_overlap
@@ -121,6 +130,7 @@
     - horizon_coupling_instability
     - underfit_on_high_frequency_spikes
   compute_intensity: high
+  runtime_notes: GPU preferred for training and long-horizon backtests; CPU only for light inference.
   output_schema: forecast.quantiles.v1
   references:
     - https://arxiv.org/abs/2201.12886
@@ -146,6 +156,7 @@
     - recursive_error_accumulation
     - lag_set_instability_under_shift
   compute_intensity: medium
+  runtime_notes: Optimized for CPU training/inference with optional histogram GPU boosters.
   output_schema: forecast.point_and_interval.v1
   references:
     - https://skforecast.org/
@@ -164,6 +175,7 @@
   tags:
     - bayesian
     - causal
+    - beta
     - time-series
   leakage_risks:
     - post_intervention_covariate_peek
@@ -172,6 +184,7 @@
     - weak_counterfactual_identifiability
     - sensitivity_to_prior_selection
   compute_intensity: medium
+  runtime_notes: CPU execution typical; MCMC sampling time scales with intervention window length.
   output_schema: causal_effect.posterior.v1
   references:
     - https://research.google/pubs/pub41854/
@@ -190,6 +203,7 @@
     - deep-learning
     - tabular
     - regression
+    - beta
   leakage_risks:
     - target_dependent_preprocessing_leakage
     - entity_fold_contamination
@@ -197,6 +211,7 @@
     - unstable_training_on_small_batches
     - feature_mask_collapse
   compute_intensity: medium
+  runtime_notes: GPU improves fit stability; CPU acceptable for smaller tabular workloads.
   output_schema: forecast.point.v1
   references:
     - https://arxiv.org/abs/1908.07442
@@ -216,6 +231,7 @@
     - machine-learning
     - forecasting
     - global-model
+    - mature
   leakage_risks:
     - grouped_lag_misalignment
     - split_definition_leakage
@@ -223,6 +239,7 @@
     - brittle_feature_store_dependencies
     - weak_extrapolation_under_structural_breaks
   compute_intensity: medium
+  runtime_notes: CPU-parallel execution by default; cluster scaling available for large panels.
   output_schema: forecast.point_and_interval.v1
   references:
     - https://nixtlaverse.nixtla.io/mlforecast/
@@ -249,6 +266,7 @@
     - feature_explosion_memory_pressure
     - unstable_importance_rankings
   compute_intensity: medium
+  runtime_notes: CPU feasible but feature extraction is memory-heavy; parallel workers recommended.
   output_schema: classification.class_probabilities.v1
   references:
     - https://tsfresh.readthedocs.io/
