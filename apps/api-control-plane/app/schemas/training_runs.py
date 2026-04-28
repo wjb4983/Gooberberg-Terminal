@@ -52,6 +52,23 @@ class TrainingRunCreateRequest(TaskSubtypeValidatedModel):
     constraints: RunConstraints | None = None
 
 
+class TrainingRunValidationRequest(TaskSubtypeValidatedModel):
+    task_type: TaskType = TaskType.TIME_SERIES_MOMENTUM
+    subtask_type: SubtaskType = SubtaskType.RANKING
+    model_config_id: UUID
+    dataset_id: str = Field(min_length=1)
+    parameters: dict[str, Any] = Field(default_factory=dict)
+    constraints: RunConstraints | None = None
+
+
+class TrainingRunValidationResponse(BaseModel):
+    normalized_payload: TrainingRunCreateRequest
+    warnings: list[str] = Field(default_factory=list)
+    errors: list[str] = Field(default_factory=list)
+    compatible: bool = False
+    valid: bool = False
+
+
 class TrainingRunResponse(TaskSubtypeValidatedModel):
     id: UUID = Field(default_factory=uuid4)
     model_config_id: UUID

@@ -20,7 +20,13 @@ from app.domain.model_configs.service import ModelConfigService
 from app.domain.training_runs import Service as TrainingRunService
 from app.jobs.models import JobEnvelope, JobLifecycleEvent, JobStatus
 from app.jobs.store import job_state_store, job_submission_store
-from app.schemas import MarketDataIngestionRequest, TrainingRunCreateRequest, TrainingRunResponse
+from app.schemas import (
+    MarketDataIngestionRequest,
+    TrainingRunCreateRequest,
+    TrainingRunResponse,
+    TrainingRunValidationRequest,
+    TrainingRunValidationResponse,
+)
 from app.schemas.run_constraints import attach_constraints_to_parameters
 
 router = APIRouter(prefix="/training-runs", tags=["training-runs"])
@@ -89,6 +95,92 @@ def _build_missing_chunks(
     return missing_chunks
 
 
+def _build_validation_response(
+    payload: TrainingRunValidationRequest,
+    *,
+    request: Request,
+    model_config_service: ModelConfigService,
+    market_data_service: MarketDataService,
+) -> TrainingRunValidationResponse:
+    warnings: list[str] = []
+    errors: list[str] = []
+    compatible = True
+
+    model_config = model_config_service.get(payload.model_config_id)
+    if model_config is None:
+        errors.append("model config not found")
+        compatible = False
+
+    dataset_id = payload.dataset_id.strip()
+    if dataset_id != payload.dataset_id:
+        warnings.append("dataset_id was normalized by trimming surrounding whitespace")
+
+    dataset = market_data_service.lookup_dataset(dataset_id)
+    if dataset is None:
+        errors.append("dataset not found; ingest data and retry")
+        compatible = False
+
+    if model_config is not None and dataset is not None:
+        model_spec = request.app.state.model_registry.require(str(model_config["model_family"]))
+        dataset_profile = resolve_dataset_compatibility(dataset.metadata, dataset.timeframe)
+        compatibility_errors = validate_model_dataset_compatibility(
+            model_spec=model_spec,
+            dataset_metadata=dataset_profile,
+        )
+        if compatibility_errors:
+            compatible = False
+            errors.extend(f"compatibility: {error}" for error in compatibility_errors)
+
+    normalized_payload = TrainingRunCreateRequest(
+        task_type=payload.task_type,
+        subtask_type=payload.subtask_type,
+        model_config_id=payload.model_config_id,
+        dataset_id=dataset_id,
+        parameters=attach_constraints_to_parameters(
+            parameters=payload.parameters,
+            constraints=payload.constraints,
+        ),
+        constraints=payload.constraints,
+    )
+    return TrainingRunValidationResponse(
+        normalized_payload=normalized_payload,
+        warnings=warnings,
+        errors=errors,
+        compatible=compatible,
+        valid=len(errors) == 0,
+    )
+
+
+@router.post("/compatibility", response_model=TrainingRunValidationResponse)
+def validate_training_run_compatibility(
+    payload: TrainingRunValidationRequest,
+    request: Request,
+    model_config_service: ModelConfigService = Depends(get_model_config_service),
+    market_data_service: MarketDataService = Depends(get_market_data_service),
+) -> TrainingRunValidationResponse:
+    return _build_validation_response(
+        payload,
+        request=request,
+        model_config_service=model_config_service,
+        market_data_service=market_data_service,
+    )
+
+
+@router.post("/preflight", response_model=TrainingRunValidationResponse)
+def preflight_training_run(
+    payload: TrainingRunValidationRequest,
+    request: Request,
+    model_config_service: ModelConfigService = Depends(get_model_config_service),
+    market_data_service: MarketDataService = Depends(get_market_data_service),
+) -> TrainingRunValidationResponse:
+    return _build_validation_response(
+        payload,
+        request=request,
+        model_config_service=model_config_service,
+        market_data_service=market_data_service,
+    )
+
+
 @router.post("", response_model=TrainingRunResponse, status_code=status.HTTP_201_CREATED)
 async def create_training_run(
     payload: TrainingRunCreateRequest,
@@ -97,30 +189,27 @@ async def create_training_run(
     model_config_service: ModelConfigService = Depends(get_model_config_service),
     market_data_service: MarketDataService = Depends(get_market_data_service),
 ) -> TrainingRunResponse:
-    model_config = model_config_service.get(payload.model_config_id)
-    if model_config is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="model config not found")
-
-    dataset = market_data_service.lookup_dataset(payload.dataset_id)
-    if dataset is None:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="dataset not found; ingest data and retry",
-        )
-
-    model_spec = request.app.state.model_registry.require(str(model_config["model_family"]))
-    dataset_profile = resolve_dataset_compatibility(dataset.metadata, dataset.timeframe)
-    compatibility_errors = validate_model_dataset_compatibility(
-        model_spec=model_spec, dataset_metadata=dataset_profile
+    validation = _build_validation_response(
+        TrainingRunValidationRequest(**payload.model_dump(mode="python")),
+        request=request,
+        model_config_service=model_config_service,
+        market_data_service=market_data_service,
     )
-    if compatibility_errors:
+    if not validation.valid:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail={
-                "message": "model config is incompatible with dataset",
-                "errors": compatibility_errors,
+                "message": "training run preflight failed",
+                "errors": validation.errors,
             },
         )
+    normalized_payload = validation.normalized_payload
+    assert normalized_payload.dataset_id
+
+    model_config = model_config_service.get(normalized_payload.model_config_id)
+    assert model_config is not None
+    dataset = market_data_service.lookup_dataset(normalized_payload.dataset_id)
+    assert dataset is not None
 
     run_id = uuid4()
     job_id = uuid4()
@@ -128,16 +217,13 @@ async def create_training_run(
     trace_id = request_id_ctx_var.get() or str(uuid4())
     symbols = _resolve_dataset_symbols(dataset.symbol, dataset.metadata)
     resolutions = _resolve_dataset_resolutions(dataset.timeframe, dataset.metadata)
-    attached_parameters = attach_constraints_to_parameters(
-        parameters=payload.parameters,
-        constraints=payload.constraints,
-    )
+    attached_parameters = normalized_payload.parameters
 
     serialized_dataset_spec = dataset.metadata.get("dataset_spec")
     if isinstance(serialized_dataset_spec, str) and serialized_dataset_spec:
         dataset_spec_hash = sha256(serialized_dataset_spec.encode("utf-8")).hexdigest()
     else:
-        dataset_spec_hash = sha256(payload.dataset_id.encode("utf-8")).hexdigest()
+        dataset_spec_hash = sha256(normalized_payload.dataset_id.encode("utf-8")).hexdigest()
 
     dataset_manifest_version_raw = dataset.metadata.get("manifest_version")
     dataset_manifest_version = (
@@ -160,15 +246,15 @@ async def create_training_run(
         {
             "id": str(run_id),
             "job_id": str(job_id),
-            "model_config_id": str(payload.model_config_id),
-            "dataset_id": payload.dataset_id,
+            "model_config_id": str(normalized_payload.model_config_id),
+            "dataset_id": normalized_payload.dataset_id,
             "dataset_spec_hash": dataset_spec_hash,
             "dataset_manifest_version": dataset_manifest_version,
             "resolved_symbol_count": resolved_symbol_count,
             "resolved_member_count": resolved_member_count,
             "model_config_version_tag": model_config_version_tag,
-            "task_type": payload.task_type.value,
-            "subtask_type": payload.subtask_type.value,
+            "task_type": normalized_payload.task_type.value,
+            "subtask_type": normalized_payload.subtask_type.value,
             "constraint_profile_version": constraint_profile_version,
             "parameters": attached_parameters,
             "status": "queued",
@@ -182,7 +268,7 @@ async def create_training_run(
         job_type="training",
         run_id=run_id,
         run_type="training",
-        payload={"run_id": str(run_id), **payload.model_dump(mode="json")},
+        payload={"run_id": str(run_id), **normalized_payload.model_dump(mode="json")},
         queued_at=accepted_at,
     )
     queued_event = JobLifecycleEvent(

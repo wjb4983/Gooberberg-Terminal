@@ -171,3 +171,64 @@ def test_duplicate_dataset_ingestion_with_same_spec_returns_same_dataset_id() ->
     assert second_payload["request_id"] == first_payload["request_id"]
     assert second_payload["dataset_id"] == first_payload["dataset_id"]
     assert second_payload["status"] == "already_exists"
+
+
+def test_training_run_preflight_returns_normalized_payload() -> None:
+    market_data_service = StubMarketDataService(
+        coverage=MarketDataCacheCoverageResponse(
+            symbol="AAPL",
+            timeframe="1d",
+            available_start=date(2025, 1, 1),
+            available_end=date(2025, 1, 2),
+            coverage_pct=100.0,
+        )
+    )
+
+    with _test_client(market_data_service) as client:
+        response = client.post(
+            "/api/v1/training-runs/preflight",
+            json={
+                "model_config_id": str(MODEL_CONFIG_ID),
+                "dataset_id": f" {DATASET_ID} ",
+                "task_type": "time_series_momentum",
+                "subtask_type": "ranking",
+                "parameters": {"epochs": 2},
+            },
+        )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["valid"] is True
+    assert body["compatible"] is True
+    assert body["normalized_payload"]["dataset_id"] == DATASET_ID
+    assert len(body["warnings"]) == 1
+
+
+def test_training_run_compatibility_reports_missing_dataset() -> None:
+    market_data_service = StubMarketDataService(
+        coverage=MarketDataCacheCoverageResponse(
+            symbol="AAPL",
+            timeframe="1d",
+            available_start=date(2025, 1, 1),
+            available_end=date(2025, 1, 2),
+            coverage_pct=100.0,
+        )
+    )
+
+    with _test_client(market_data_service) as client:
+        response = client.post(
+            "/api/v1/training-runs/compatibility",
+            json={
+                "model_config_id": str(MODEL_CONFIG_ID),
+                "dataset_id": "missing_dataset",
+                "task_type": "time_series_momentum",
+                "subtask_type": "ranking",
+                "parameters": {"epochs": 2},
+            },
+        )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["valid"] is False
+    assert body["compatible"] is False
+    assert "dataset not found; ingest data and retry" in body["errors"]

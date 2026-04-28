@@ -114,6 +114,20 @@ interface FormErrors {
   [key: string]: string;
 }
 
+interface TrainingRunValidationResponse {
+  normalized_payload: {
+    model_config_id: string;
+    dataset_id: string;
+    task_type: TaskType;
+    subtask_type: SubtaskType;
+    parameters: Record<string, unknown>;
+  };
+  warnings: string[];
+  errors: string[];
+  compatible: boolean;
+  valid: boolean;
+}
+
 const defaultModelConfigForm: ModelConfigFormState = {
   numRegimes: '3',
   lookbackWindow: '252',
@@ -202,36 +216,6 @@ function validateModelConfig(form: ModelConfigFormState, shared: SharedConfigFie
   const maxIterations = Number(form.maxIterations);
   if (!Number.isFinite(maxIterations) || maxIterations < 10) {
     errors.maxIterations = 'Max iterations must be a number >= 10.';
-  }
-  return errors;
-}
-
-function validateLaunchForm(form: TrainingLaunchFormState): FormErrors {
-  const errors: FormErrors = {};
-  if (!form.modelConfigId) {
-    errors.modelConfigId = 'Choose a saved model config before launching training.';
-  }
-  if (!form.datasetId.trim()) {
-    errors.datasetId = 'Dataset ID is required, e.g. equities_daily_v1.';
-  }
-  if (form.subtaskType === 'regime_state' && form.taskType !== 'regime_switching') {
-    errors.subtaskType = 'Subtask regime_state is only valid with task type regime_switching.';
-  }
-  const epochs = Number(form.epochs);
-  if (!Number.isFinite(epochs) || epochs < 1) {
-    errors.epochs = 'Epochs must be a positive integer.';
-  }
-  const seed = Number(form.seed);
-  if (!Number.isFinite(seed) || seed < 0) {
-    errors.seed = 'Seed must be a non-negative integer.';
-  }
-  const learningRate = Number(form.learningRate);
-  if (!Number.isFinite(learningRate) || learningRate <= 0 || learningRate > 1) {
-    errors.learningRate = 'Learning rate must be > 0 and <= 1.';
-  }
-  const batchSize = Number(form.batchSize);
-  if (!Number.isFinite(batchSize) || batchSize < 1) {
-    errors.batchSize = 'Batch size must be a positive integer.';
   }
   return errors;
 }
@@ -500,15 +484,9 @@ export function BuildingModelsPage({ baseUrl }: BuildingModelsPageProps): JSX.El
   };
 
   const launchTrainingRun = async (): Promise<void> => {
-    const validation = validateLaunchForm(launchForm);
-    setLaunchErrors(validation);
-    if (Object.keys(validation).length > 0) {
-      return;
-    }
-
     const optimisticId = `optimistic-${crypto.randomUUID()}`;
     const nowIso = new Date().toISOString();
-    const payload = {
+    const draftPayload = {
       model_config_id: launchForm.modelConfigId,
       dataset_id: launchForm.datasetId.trim(),
       task_type: launchForm.taskType,
@@ -523,8 +501,23 @@ export function BuildingModelsPage({ baseUrl }: BuildingModelsPageProps): JSX.El
 
     setError(null);
     setIsLaunchingRun(true);
+    setLaunchErrors({});
 
-    setJobs((previous) => [{
+    try {
+      const preflight = await requestJson<TrainingRunValidationResponse>(baseUrl, '/api/v1/training-runs/preflight', {
+        method: 'POST',
+        body: JSON.stringify(draftPayload),
+      });
+      if (!preflight.valid) {
+        setLaunchErrors({ submit: preflight.errors.join(' ') || 'Preflight failed.' });
+        return;
+      }
+      if (preflight.warnings.length > 0) {
+        setError(preflight.warnings.join(' '));
+      }
+      const payload = preflight.normalized_payload;
+
+      setJobs((previous) => [{
       id: optimisticId,
       datasetId: payload.dataset_id,
       modelConfigId: payload.model_config_id,
@@ -537,10 +530,9 @@ export function BuildingModelsPage({ baseUrl }: BuildingModelsPageProps): JSX.El
       payload,
       isOptimistic: true,
       source: 'training-run',
-    }, ...previous]);
-    setSelectedJobId(optimisticId);
+      }, ...previous]);
+      setSelectedJobId(optimisticId);
 
-    try {
       const created = await requestJson<TrainingRunItem>(baseUrl, '/api/v1/training-runs', {
         method: 'POST',
         body: JSON.stringify(payload),
@@ -750,6 +742,7 @@ export function BuildingModelsPage({ baseUrl }: BuildingModelsPageProps): JSX.El
             </div>
           </div>
           <button type="button" disabled={isLaunchingRun} onClick={() => void launchTrainingRun()}>{isLaunchingRun ? 'Submitting…' : 'Launch training job'}</button>
+          {launchErrors.submit ? <small className="muted">{launchErrors.submit}</small> : null}
         </div>
       </div>
 
