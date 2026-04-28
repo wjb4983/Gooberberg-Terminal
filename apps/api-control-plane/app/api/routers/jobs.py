@@ -194,6 +194,7 @@ async def publish_job_event(
     event_update: JobLifecycleUpdateRequest,
     request: Request,
 ) -> JobStatusResponse:
+    """Persist a worker lifecycle update, rebroadcast it, and sync run status."""
     existing = job_state_store.get(job_id)
     if existing is None:
         existing = request.app.state.job_event_repository.get_latest_event(job_id)
