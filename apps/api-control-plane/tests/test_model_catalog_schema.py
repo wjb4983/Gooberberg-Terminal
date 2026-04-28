@@ -32,3 +32,24 @@ def test_model_definition_schema_rejects_empty_required_data() -> None:
 
     with pytest.raises(ValueError, match=r"required_data"):
         parse_model_definitions(payload)
+
+
+def test_model_definition_schema_supports_dataset_requirement() -> None:
+    payload = {
+        "model_family": "demo",
+        "model_name": "Demo",
+        "description": "x",
+        "required_data": ["ohlcv.close"],
+        "dataset_requirement": {
+            "required_fields": ["ohlcv.close", "timestamp"],
+            "required_frequency": "1d",
+            "require_point_in_time_data": True,
+        },
+        "output_schema": "schema.v1",
+    }
+
+    definition = parse_model_definitions(payload)[0]
+
+    assert definition.dataset_requirement.required_fields == ["ohlcv.close", "timestamp"]
+    assert definition.dataset_requirement.required_frequency == "1d"
+    assert definition.dataset_requirement.require_point_in_time_data is True
