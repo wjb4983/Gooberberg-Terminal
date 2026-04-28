@@ -7,6 +7,7 @@ const navGroups = [
     label: 'Model Lifecycle',
     items: [
       { label: 'Design', to: '/models' },
+      { label: 'Catalog', to: '/model-catalog' },
       { label: 'Parameterize', to: '/parameterization' },
       { label: 'Train', to: '/training-runs' },
       { label: 'Sweep', to: '/parameter-sweeps' },

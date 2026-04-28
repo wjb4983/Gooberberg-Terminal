@@ -233,3 +233,56 @@ body {
   background: #3c1212;
   border-color: #ef4444;
 }
+
+.catalog-toolbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 220px;
+  gap: 0.5rem;
+}
+
+.catalog-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 1rem;
+  align-items: start;
+}
+
+.catalog-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 0.75rem;
+}
+
+.catalog-card {
+  text-align: left;
+  border: 1px solid #2b3558;
+  border-radius: 8px;
+  background: #131b31;
+  color: inherit;
+  padding: 0.8rem;
+  cursor: pointer;
+}
+
+.catalog-card-selected {
+  border-color: #7c9cff;
+  box-shadow: 0 0 0 1px #7c9cff inset;
+}
+
+.catalog-drawer {
+  max-width: 100%;
+  position: sticky;
+  top: 1rem;
+}
+
+.catalog-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.catalog-tag {
+  border: 1px solid #2b3558;
+  border-radius: 999px;
+  padding: 0.1rem 0.5rem;
+  font-size: 0.78rem;
+}

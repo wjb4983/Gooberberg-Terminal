@@ -25,6 +25,7 @@ import { TrainingRunsPage } from './pages/TrainingRunsPage';
 import { BacktestsPage } from './pages/BacktestsPage';
 import { ModelsPage } from './pages/ModelsPage';
 import { ModelDeploymentsPage } from './pages/ModelDeploymentsPage';
+import { ModelCatalogPage } from './pages/ModelCatalogPage';
 
 interface ToastItem {
   id: number;
@@ -79,6 +80,7 @@ export function App(): JSX.Element {
           <Route path="jobs/:jobId" element={<ErrorBoundary><JobDetailPage baseUrl={preferences.baseUrl} /></ErrorBoundary>} />
 
           <Route path="models" element={<ErrorBoundary><ModelsPage baseUrl={preferences.baseUrl} /></ErrorBoundary>} />
+          <Route path="model-catalog" element={<ErrorBoundary><ModelCatalogPage baseUrl={preferences.baseUrl} /></ErrorBoundary>} />
           <Route path="parameterization" element={<ErrorBoundary><ParameterizationPage baseUrl={preferences.baseUrl} /></ErrorBoundary>} />
           <Route path="training-runs" element={<ErrorBoundary><TrainingRunsPage baseUrl={preferences.baseUrl} /></ErrorBoundary>} />
           <Route path="parameter-sweeps" element={<ErrorBoundary><ParameterSweepsPage baseUrl={preferences.baseUrl} /></ErrorBoundary>} />

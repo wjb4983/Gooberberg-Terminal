@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { requestJson } from '../api/requestJson';
 import { SUBTASK_TYPES, TASK_TYPES, type SubtaskType, type TaskType } from '../types/api';
+import { ModelConfigSelect } from '../components/ModelConfigSelect';
 
 interface ParameterizationPageProps {
   baseUrl: string;
@@ -275,6 +277,7 @@ export function ParameterizationPage({ baseUrl }: ParameterizationPageProps): JS
     <section>
       <h2>Parameterization</h2>
       <p className="muted">Guide training launches through a 4-step flow: tasking, dataset, compatible model config, then run submission.</p>
+      <p style={{ marginTop: 0 }}><Link to="/model-catalog">Browse model catalog</Link> to compare metadata while selecting compatible configs.</p>
       {pageError ? <p className="error">{pageError}</p> : null}
 
       <div className="card" style={{ marginBottom: '1rem' }}>
@@ -372,19 +375,13 @@ export function ParameterizationPage({ baseUrl }: ParameterizationPageProps): JS
 
       <div className="card" style={{ marginBottom: '1rem' }}>
         <h3>3) Select model config</h3>
-        <p className="muted">Filtered by task compatibility ({taskType}).</p>
-        <label>
-          Compatible model configs
-          <select value={modelConfigId} onChange={(event) => setModelConfigId(event.target.value)}>
-            <option value="">Select compatible model config</option>
-            {compatibleModelConfigs.map((item) => {
-              const modelName = typeof item.config.name === 'string' ? item.config.name : item.id;
-              return (
-                <option key={item.id} value={item.id}>{modelName} ({item.model_family})</option>
-              );
-            })}
-          </select>
-        </label>
+        <ModelConfigSelect
+          value={modelConfigId}
+          options={compatibleModelConfigs}
+          onChange={setModelConfigId}
+          emptyLabel="Select compatible model config"
+          hint={`Filtered by task compatibility (${taskType}).`}
+        />
         {launchErrors.modelConfigId ? <small className="error">{launchErrors.modelConfigId}</small> : null}
       </div>
 
