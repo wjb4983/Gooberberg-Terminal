@@ -53,3 +53,97 @@ def test_model_definition_schema_supports_dataset_requirement() -> None:
     assert definition.dataset_requirement.required_fields == ["ohlcv.close", "timestamp"]
     assert definition.dataset_requirement.required_frequency == "1d"
     assert definition.dataset_requirement.require_point_in_time_data is True
+
+
+@pytest.mark.parametrize(
+    ("params", "expected_error"),
+    [
+        pytest.param(
+            [
+                {
+                    "name": "lookback",
+                    "description": "Lookback window",
+                    "type": "integer",
+                    "default": 20,
+                    "bounds": {"min_value": 5, "max_value": 200},
+                }
+            ],
+            None,
+            id="numeric-range-valid",
+        ),
+        pytest.param(
+            [
+                {
+                    "name": "lookback",
+                    "description": "Lookback window",
+                    "type": "integer",
+                    "default": 2,
+                    "bounds": {"min_value": 5, "max_value": 200},
+                }
+            ],
+            "below minimum bound",
+            id="numeric-range-default-outside-bounds",
+        ),
+        pytest.param(
+            [
+                {
+                    "name": "vol_target",
+                    "description": "Volatility target",
+                    "type": "number",
+                    "default": 0.1,
+                    "bounds": {"min_value": 0.0, "max_value": 1.0},
+                    "advanced": True,
+                    "conditional_flag": "enable_risk_targeting",
+                }
+            ],
+            None,
+            id="advanced-conditional-flag-valid",
+        ),
+        pytest.param(
+            [
+                {
+                    "name": "regime",
+                    "description": "Regime selector",
+                    "type": "enum",
+                    "default": "trend",
+                    "allowed_values": ["trend", "mean_reversion"],
+                }
+            ],
+            None,
+            id="enum-valid",
+        ),
+        pytest.param(
+            [
+                {
+                    "name": "regime",
+                    "description": "Regime selector",
+                    "type": "enum",
+                    "default": "carry",
+                    "allowed_values": ["trend", "mean_reversion"],
+                }
+            ],
+            "allowed_values",
+            id="enum-default-not-allowed",
+        ),
+    ],
+)
+def test_model_definition_schema_parameter_validation_matrix(
+    params: list[dict[str, object]],
+    expected_error: str | None,
+) -> None:
+    payload = {
+        "model_family": "demo",
+        "model_name": "Demo",
+        "description": "x",
+        "required_data": ["ohlcv.close"],
+        "output_schema": "schema.v1",
+        "params": params,
+    }
+
+    if expected_error is None:
+        definition = parse_model_definitions(payload)[0]
+        assert len(definition.params) == len(params)
+        return
+
+    with pytest.raises(ValueError, match=expected_error):
+        parse_model_definitions(payload)
