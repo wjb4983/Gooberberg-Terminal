@@ -11,6 +11,12 @@ class ModelDeploymentStatus(StrEnum):
     INACTIVE = "inactive"
 
 
+class ModelMetadataComputeIntensity(StrEnum):
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+
+
 class ModelDeployment(BaseModel):
     id: UUID = Field(default_factory=uuid4)
     model_name: str = Field(min_length=2, max_length=80, pattern=r"^[a-zA-Z0-9][a-zA-Z0-9._-]{1,79}$")
@@ -48,5 +54,12 @@ class ModelCatalogItem(BaseModel):
     model_family: str
     model_name: str
     description: str
+    required_data: list[str] = Field(default_factory=list)
+    optional_data: list[str] = Field(default_factory=list)
     tags: list[str] = Field(default_factory=list)
+    leakage_risks: list[str] = Field(default_factory=list)
+    failure_modes: list[str] = Field(default_factory=list)
+    compute_intensity: ModelMetadataComputeIntensity
+    output_schema: str
+    references: list[str] = Field(default_factory=list)
     validator_adapter: str
