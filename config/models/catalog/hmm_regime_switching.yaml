@@ -1,0 +1,23 @@
+model_family: hmm_regime_switching
+model_name: HMM Regime Switching
+description: Hidden Markov model with latent regime transitions for state detection.
+required_data:
+  - returns.log
+optional_data:
+  - volatility.realized
+  - market_regime_priors
+tags:
+  - classical
+  - time-series
+  - classification
+leakage_risks:
+  - label_horizon_overlap
+  - post_event_regime_labels
+failure_modes:
+  - state_collapse
+  - pathological_transition_matrix
+compute_intensity: medium
+output_schema: regime.posterior_probabilities.v1
+references:
+  - https://hmmlearn.readthedocs.io/
+  - https://www.jstor.org/stable/2984875

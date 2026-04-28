@@ -5,12 +5,16 @@ import pytest
 from app.domain.model_catalog.loader import load_model_metadata_from_directory
 
 
-CATALOG_DIRECTORY = Path(__file__).resolve().parents[1] / "app" / "domain" / "model_catalog" / "catalog"
+CATALOG_DIRECTORY = Path(__file__).resolve().parents[3] / "config" / "models" / "catalog"
 
 
 def test_catalog_fixtures_validate_successfully() -> None:
     entries = load_model_metadata_from_directory(CATALOG_DIRECTORY)
+    fixture_files = sorted(CATALOG_DIRECTORY.glob("*.yaml"))
+
+    assert fixture_files
     assert entries
+    assert len(entries) == len(fixture_files)
     assert all(entry.required_data for entry in entries)
 
 

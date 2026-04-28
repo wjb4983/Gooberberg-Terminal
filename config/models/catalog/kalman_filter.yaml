@@ -1,0 +1,22 @@
+model_family: kalman_filter
+model_name: Kalman Filter
+description: State-space estimation model for filtering and nowcasting tasks.
+required_data:
+  - observations.state_signal
+optional_data:
+  - control_inputs
+  - sensor_noise_estimates
+tags:
+  - state-space
+  - time-series
+  - regression
+leakage_risks:
+  - smoothed_state_backfill
+failure_modes:
+  - covariance_divergence
+  - mis_specified_process_noise
+compute_intensity: low
+output_schema: state_estimate.filtered_and_smoothed.v1
+references:
+  - https://filterpy.readthedocs.io/
+  - https://www.cs.unc.edu/~welch/media/pdf/kalman_intro.pdf
