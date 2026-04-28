@@ -1,0 +1,252 @@
+- model_family: xgboost_timeseries
+  model_name: XGBoost Time Series
+  description: Gradient-boosted tree forecaster with phase-1 warning templates for leakage and drift.
+  required_data:
+    - ohlcv.close
+    - timestamp
+  optional_data:
+    - ohlcv.volume
+    - macro.calendar
+  tags:
+    - tree-based
+    - time-series
+    - forecasting
+  leakage_risks:
+    - rolling_window_future_peek
+    - target_encoding_leakage
+  failure_modes:
+    - concept_drift
+    - unstable_feature_importance
+  compute_intensity: medium
+  output_schema: forecast.point_and_interval.v1
+  references:
+    - https://xgboost.readthedocs.io/en/stable/
+    - https://scikit-learn.org/stable/modules/generated/sklearn.model_selection.TimeSeriesSplit.html
+
+- model_family: lightgbm_quantile
+  model_name: LightGBM Quantile
+  description: Quantile regression booster with reusable parameter templates and operational warnings.
+  required_data:
+    - ohlcv.close
+    - timestamp
+  optional_data:
+    - known_future_covariates
+    - event_flags
+  tags:
+    - tree-based
+    - forecasting
+    - quantile
+  leakage_risks:
+    - horizon_overlap
+    - global_normalization_leakage
+  failure_modes:
+    - tail_miscalibration
+    - sparse_event_overfit
+  compute_intensity: medium
+  output_schema: forecast.quantiles.v1
+  references:
+    - https://lightgbm.readthedocs.io/
+    - https://scikit-learn.org/stable/modules/calibration.html
+
+- model_family: prophet_seasonality
+  model_name: Prophet Seasonality
+  description: Additive trend-seasonality model with holiday templates and warning checklists.
+  required_data:
+    - timestamp
+    - target.value
+  optional_data:
+    - holiday.calendar
+    - regressors.exogenous
+  tags:
+    - classical
+    - forecasting
+    - seasonality
+  leakage_risks:
+    - future_holiday_feature_leakage
+  failure_modes:
+    - changepoint_overreaction
+    - weak_short_horizon_fit
+  compute_intensity: low
+  output_schema: forecast.point_and_interval.v1
+  references:
+    - https://facebook.github.io/prophet/
+    - https://peerj.com/preprints/3190/
+
+- model_family: lstm_sequence_forecaster
+  model_name: LSTM Sequence Forecaster
+  description: Recurrent neural forecaster with starter templates and phase-1 warning metadata.
+  required_data:
+    - entity_id
+    - timestamp
+    - target.value
+  optional_data:
+    - known_future_covariates
+    - static_covariates
+  tags:
+    - deep-learning
+    - recurrent
+    - forecasting
+  leakage_risks:
+    - sequence_padding_leakage
+    - scaler_fit_on_full_series
+  failure_modes:
+    - vanishing_gradients
+    - cold_start_underfit
+  compute_intensity: high
+  output_schema: forecast.quantiles.v1
+  references:
+    - https://pytorch.org/docs/stable/generated/torch.nn.LSTM.html
+    - https://www.tensorflow.org/api_docs/python/tf/keras/layers/LSTM
+
+- model_family: temporal_fusion_transformer
+  model_name: Temporal Fusion Transformer
+  description: Multi-horizon attention model with warning templates for covariate alignment.
+  required_data:
+    - entity_id
+    - timestamp
+    - target.value
+  optional_data:
+    - known_future_covariates
+    - observed_covariates
+    - static_covariates
+  tags:
+    - deep-learning
+    - attention
+    - forecasting
+  leakage_risks:
+    - known_future_covariate_mislabeling
+    - target_scaler_forward_leakage
+  failure_modes:
+    - attention_instability
+    - overparameterization_on_small_panels
+  compute_intensity: high
+  output_schema: forecast.quantiles.v1
+  references:
+    - https://pytorch-forecasting.readthedocs.io/en/stable/api/pytorch_forecasting.models.temporal_fusion_transformer._tft.TemporalFusionTransformer.html
+    - https://research.google/pubs/temporal-fusion-transformers-for-interpretable-multi-horizon-time-series-forecasting/
+
+- model_family: catboost_categorical_alpha
+  model_name: CatBoost Categorical Alpha
+  description: Categorical-aware gradient booster with default templates and clear warning labels.
+  required_data:
+    - target.value
+    - timestamp
+  optional_data:
+    - categorical.identifiers
+    - price.derived_features
+  tags:
+    - tree-based
+    - categorical
+    - regression
+  leakage_risks:
+    - target_stat_leakage
+    - temporal_fold_contamination
+  failure_modes:
+    - category_shift
+    - unstable_online_updates
+  compute_intensity: medium
+  output_schema: forecast.point.v1
+  references:
+    - https://catboost.ai/
+    - https://catboost.ai/docs/
+
+- model_family: elasticnet_factor_model
+  model_name: ElasticNet Factor Model
+  description: Sparse linear factor model with baseline templates and warning guidance.
+  required_data:
+    - target.value
+    - factors.cross_sectional
+  optional_data:
+    - sector.classification
+    - macro.features
+  tags:
+    - linear
+    - regularization
+    - regression
+  leakage_risks:
+    - cross_sectional_rank_leakage
+    - revised_fundamental_data_leakage
+  failure_modes:
+    - coefficient_instability
+    - factor_decay
+  compute_intensity: low
+  output_schema: factor_exposure.coefficients.v1
+  references:
+    - https://scikit-learn.org/stable/modules/generated/sklearn.linear_model.ElasticNet.html
+    - https://scikit-learn.org/stable/modules/linear_model.html
+
+- model_family: random_forest_classifier_regime
+  model_name: Random Forest Regime Classifier
+  description: Regime classification ensemble with templated thresholds and warning annotations.
+  required_data:
+    - returns.log
+    - volatility.realized
+  optional_data:
+    - liquidity.metrics
+    - sentiment.score
+  tags:
+    - tree-based
+    - classification
+    - regime-detection
+  leakage_risks:
+    - post_event_labeling
+    - feature_window_lookahead
+  failure_modes:
+    - class_imbalance_bias
+    - stale_split_rules
+  compute_intensity: medium
+  output_schema: regime.class_probabilities.v1
+  references:
+    - https://scikit-learn.org/stable/modules/generated/sklearn.ensemble.RandomForestClassifier.html
+    - https://scikit-learn.org/stable/modules/ensemble.html
+
+- model_family: tcn_forecaster
+  model_name: Temporal Convolutional Network Forecaster
+  description: Dilated convolution forecaster with rollout templates and warning-ready metadata.
+  required_data:
+    - entity_id
+    - timestamp
+    - target.value
+  optional_data:
+    - known_future_covariates
+    - promotion.flags
+  tags:
+    - deep-learning
+    - convolutional
+    - forecasting
+  leakage_risks:
+    - teacher_forcing_future_leakage
+    - window_index_misalignment
+  failure_modes:
+    - receptive_field_undercoverage
+    - unstable_long_horizon_rollout
+  compute_intensity: high
+  output_schema: forecast.quantiles.v1
+  references:
+    - https://arxiv.org/abs/1803.01271
+    - https://pytorch.org/docs/stable/nn.html
+
+- model_family: bayesian_structural_time_series
+  model_name: Bayesian Structural Time Series
+  description: Probabilistic structural model with prior templates and explicit warning cues.
+  required_data:
+    - timestamp
+    - target.value
+  optional_data:
+    - regressors.exogenous
+    - intervention.events
+  tags:
+    - bayesian
+    - time-series
+    - causal
+  leakage_risks:
+    - intervention_window_peek
+    - retrospective_relabeling
+  failure_modes:
+    - prior_misspecification
+    - wide_posterior_uncertainty
+  compute_intensity: medium
+  output_schema: decomposition.trend_seasonal_residual.v1
+  references:
+    - https://www.tensorflow.org/probability
+    - https://research.google/pubs/pub41854/
