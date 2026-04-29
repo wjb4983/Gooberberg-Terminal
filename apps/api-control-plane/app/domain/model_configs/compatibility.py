@@ -59,7 +59,7 @@ def validate_model_dataset_compatibility(
     dataset_metadata: DatasetCompatibilityMetadata,
 ) -> list[str]:
     errors: list[str] = []
-    requirement = _resolve_dataset_requirement(model_spec)
+    requirement = resolve_dataset_requirement(model_spec)
 
     if dataset_metadata.data_kind is None:
         errors.append(
@@ -145,7 +145,7 @@ def _as_bool(value: Any) -> bool | None:
     return None
 
 
-def _resolve_dataset_requirement(model_spec: ModelSpec) -> DatasetRequirement:
+def resolve_dataset_requirement(model_spec: ModelSpec) -> DatasetRequirement:
     raw = getattr(model_spec, "dataset_requirement", None)
     if isinstance(raw, DatasetRequirement):
         return raw
