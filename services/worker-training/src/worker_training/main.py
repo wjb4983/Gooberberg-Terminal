@@ -125,64 +125,10 @@ class TrainingAdapter:
         raise NotImplementedError
 
 
-class ArimaAdapter(TrainingAdapter):
-    name = "arima"
-    model_family = "statistical"
-    capabilities = (AdapterCapability(task="forecasting", subtask="univariate", data_type="timeseries_float"),)
-
-    def run(self, request: TrainingRunRequest) -> AdapterOutput:
-        coeff = round(0.8 + request.learning_rate, 5)
-        return AdapterOutput(
-            adapter_name=self.name,
-            model_blob=f"ARIMA({request.epochs})::{request.seed}".encode("utf-8"),
-            metrics_payload={"primary_metric": 0.9123, "aic": 123.4, "bic": 127.8},
-            diagnostics={"coefficients": [coeff, -0.12, 0.05], "converged": True},
-        )
+from worker_training.adapters.phase1 import PHASE1_ADAPTERS
 
 
-class KalmanFilterAdapter(TrainingAdapter):
-    name = "kalman_filter"
-    model_family = "state_space"
-    capabilities = (AdapterCapability(task="forecasting", subtask="univariate", data_type="timeseries_float"),)
-
-    def run(self, request: TrainingRunRequest) -> AdapterOutput:
-        q = round(request.learning_rate * 0.5, 6)
-        return AdapterOutput(
-            adapter_name=self.name,
-            model_blob=f"KALMAN::{request.seed}".encode("utf-8"),
-            metrics_payload={"primary_metric": 0.8877, "rmse": 0.114, "nll": 2.31},
-            diagnostics={"transition_noise": q, "state_dim": 4, "stability_score": 0.97},
-        )
-
-
-class TorchNNTimeSeriesAdapter(TrainingAdapter):
-    name = "torch_nn_timeseries"
-    model_family = "neural"
-    capabilities = (
-        AdapterCapability(task="forecasting", subtask="univariate", data_type="timeseries_float"),
-        AdapterCapability(task="forecasting", subtask="multivariate", data_type="timeseries_float"),
-    )
-
-    def run(self, request: TrainingRunRequest) -> AdapterOutput:
-        if request.epochs <= 0:
-            raise AdapterExecutionError(
-                code="invalid_epochs",
-                message="epochs must be greater than zero",
-                diagnostics={"epochs": request.epochs},
-            )
-        return AdapterOutput(
-            adapter_name=self.name,
-            model_blob=f"TORCHNN::{request.epochs}::{request.seed}".encode("utf-8"),
-            metrics_payload={"primary_metric": 0.9345, "loss": 0.0821, "val_loss": 0.0917},
-            diagnostics={"layers": [64, 32], "dropout": 0.1, "best_epoch": min(request.epochs, 4)},
-        )
-
-
-ADAPTERS: dict[str, TrainingAdapter] = {
-    "arima": ArimaAdapter(),
-    "kalman_filter": KalmanFilterAdapter(),
-    "torch_nn_timeseries": TorchNNTimeSeriesAdapter(),
-}
+ADAPTERS: dict[str, TrainingAdapter] = dict(PHASE1_ADAPTERS)
 ADAPTER_REGISTRY = AdapterRegistry(adapters_by_family={adapter.model_family: adapter for adapter in ADAPTERS.values()})
 
 
