@@ -1,3 +1,5 @@
+from functools import lru_cache
+from pathlib import Path
 from typing import Annotated, Any, Literal
 
 from pydantic import (
@@ -91,6 +93,32 @@ class QuickStartTemplate(BaseModel):
     mode: Literal["full_adapter", "design_simulation"] = "design_simulation"
 
 
+
+
+class ModelTaxonomy(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    phase: list[NonEmptyString] = Field(min_length=1)
+    family: list[NonEmptyString] = Field(min_length=1)
+    subfamily: list[NonEmptyString] = Field(min_length=1)
+    targets: list[NonEmptyString] = Field(min_length=1)
+    horizons: list[NonEmptyString] = Field(min_length=1)
+    maturity: list[NonEmptyString] = Field(min_length=1)
+    complexity: list[NonEmptyString] = Field(min_length=1)
+
+
+@lru_cache(maxsize=1)
+def load_model_taxonomy() -> ModelTaxonomy:
+    taxonomy_path = Path(__file__).resolve().parents[4] / "config" / "models" / "taxonomy.yaml"
+    try:
+        import yaml  # type: ignore[import-not-found]
+    except ModuleNotFoundError as exc:
+        raise RuntimeError("PyYAML is required to load config/models/taxonomy.yaml") from exc
+
+    payload = yaml.safe_load(taxonomy_path.read_text(encoding="utf-8"))
+    return ModelTaxonomy.model_validate(payload)
+
+
 ParameterDefinition = Annotated[
     NumericParameterDefinition | EnumParameterDefinition,
     Field(discriminator="type"),
@@ -117,6 +145,13 @@ class ModelDefinition(BaseModel):
     experimental_warning: NonEmptyString | None = None
     implementation_status: Literal["implemented", "adapter_pending"] = "implemented"
     quick_start_templates: list[QuickStartTemplate] = Field(default_factory=list)
+    phase: NonEmptyString | None = None
+    family: NonEmptyString | None = None
+    subfamily: NonEmptyString | None = None
+    targets: list[NonEmptyString] = Field(default_factory=list)
+    horizons: list[NonEmptyString] = Field(default_factory=list)
+    maturity: NonEmptyString | None = None
+    complexity: NonEmptyString | None = None
 
     @model_validator(mode="after")
     def validate_frontier_disclaimers(self) -> "ModelDefinition":
@@ -127,12 +162,36 @@ class ModelDefinition(BaseModel):
             if self.feasibility_notes is None:
                 raise ValueError("experimental/planned entries require feasibility_notes")
 
+        taxonomy = load_model_taxonomy()
+        self._validate_taxonomy("phase", self.phase, taxonomy.phase)
+        self._validate_taxonomy("family", self.family, taxonomy.family)
+        self._validate_taxonomy("subfamily", self.subfamily, taxonomy.subfamily)
+        self._validate_taxonomy("maturity", self.maturity, taxonomy.maturity)
+        self._validate_taxonomy("complexity", self.complexity, taxonomy.complexity)
+        self._validate_taxonomy_list("targets", self.targets, taxonomy.targets)
+        self._validate_taxonomy_list("horizons", self.horizons, taxonomy.horizons)
+
         if self.implementation_status == "adapter_pending" and any(
             template.mode != "design_simulation" for template in self.quick_start_templates
         ):
             raise ValueError("adapter_pending entries must mark quick_start_templates as design_simulation")
+
         return self
 
+    @staticmethod
+    def _validate_taxonomy(field_name: str, value: str | None, allowed: list[str]) -> None:
+        if value is None:
+            return
+        if value not in allowed:
+            raise ValueError(f"invalid taxonomy value for {field_name}: '{value}'. Allowed values: {', '.join(allowed)}")
+
+    @staticmethod
+    def _validate_taxonomy_list(field_name: str, values: list[str], allowed: list[str]) -> None:
+        invalid = [value for value in values if value not in allowed]
+        if invalid:
+            raise ValueError(
+                f"invalid taxonomy value(s) for {field_name}: {invalid}. Allowed values: {', '.join(allowed)}"
+            )
 
 def parse_model_definitions(payload: Any) -> tuple[ModelDefinition, ...]:
     if isinstance(payload, dict):

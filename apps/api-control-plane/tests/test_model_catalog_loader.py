@@ -45,3 +45,50 @@ def test_catalog_loader_rejects_duplicate_families(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match=r"duplicate model_family 'demo'.*second\.json.*first\.json"):
         load_model_metadata_from_directory(tmp_path)
+
+
+def test_catalog_loader_accepts_valid_taxonomy_values(tmp_path: Path) -> None:
+    (tmp_path / "ok.yaml").write_text(
+        """
+- model_family: demo
+  model_name: Demo
+  description: x
+  required_data: [a]
+  output_schema: schema.v1
+  phase: phase1
+  family: forecasting
+  subfamily: linear
+  targets: [point]
+  horizons: [daily]
+  maturity: beta
+  complexity: medium
+""",
+        encoding="utf-8",
+    )
+
+    entries = load_model_metadata_from_directory(tmp_path)
+    assert len(entries) == 1
+
+
+def test_catalog_loader_rejects_invalid_taxonomy_values_with_clear_error(tmp_path: Path) -> None:
+    (tmp_path / "bad.yaml").write_text(
+        """
+- model_family: demo
+  model_name: Demo
+  description: x
+  required_data: [a]
+  output_schema: schema.v1
+  phase: phase9
+  targets: [point, forever]
+""",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError) as exc_info:
+        load_model_metadata_from_directory(tmp_path)
+
+    message = str(exc_info.value)
+    assert "invalid taxonomy value for phase" in message
+    assert "phase9" in message
+    assert "Allowed values" in message
+    assert "bad.yaml" in message
