@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { fetchModelCatalogItem, fetchModelCatalogList, type ModelCatalogItem } from '../api/modelCatalog';
 import { VirtualizedCatalogGrid } from '../components/model-catalog/VirtualizedCatalogGrid';
 
@@ -8,11 +8,13 @@ interface ModelCatalogPageProps {
 }
 
 export function ModelCatalogPage({ baseUrl }: ModelCatalogPageProps): JSX.Element {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [catalog, setCatalog] = useState<ModelCatalogItem[]>([]);
-  const [selectedFamily, setSelectedFamily] = useState<string>('');
+  const [selectedFamily, setSelectedFamily] = useState<string>(() => searchParams.get('family') ?? '');
   const [selectedItem, setSelectedItem] = useState<ModelCatalogItem | null>(null);
-  const [query, setQuery] = useState('');
-  const [tagFilter, setTagFilter] = useState('all');
+  const [query, setQuery] = useState(() => searchParams.get('q') ?? '');
+  const [tagFilter, setTagFilter] = useState(() => searchParams.get('tag') ?? 'all');
+  const [sortBy, setSortBy] = useState(() => searchParams.get('sort') ?? 'family-asc');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -22,14 +24,55 @@ export function ModelCatalogPage({ baseUrl }: ModelCatalogPageProps): JSX.Elemen
     void fetchModelCatalogList(baseUrl)
       .then((items) => {
         setCatalog(items);
-        const firstFamily = items[0]?.model_family ?? '';
-        setSelectedFamily(firstFamily);
+        if (!selectedFamily) {
+          const firstFamily = items[0]?.model_family ?? '';
+          setSelectedFamily(firstFamily);
+        }
       })
       .catch((loadError) => {
         setError(loadError instanceof Error ? loadError.message : 'Failed to load model catalog.');
       })
       .finally(() => setLoading(false));
-  }, [baseUrl]);
+  }, [baseUrl, selectedFamily]);
+
+  useEffect(() => {
+    const nextParams = new URLSearchParams();
+    if (query) {
+      nextParams.set('q', query);
+    }
+    if (tagFilter !== 'all') {
+      nextParams.set('tag', tagFilter);
+    }
+    if (sortBy !== 'family-asc') {
+      nextParams.set('sort', sortBy);
+    }
+    if (selectedFamily) {
+      nextParams.set('family', selectedFamily);
+    }
+    if (nextParams.toString() !== searchParams.toString()) {
+      setSearchParams(nextParams);
+    }
+  }, [query, tagFilter, sortBy, selectedFamily, searchParams, setSearchParams]);
+
+  useEffect(() => {
+    const nextQuery = searchParams.get('q') ?? '';
+    const nextTag = searchParams.get('tag') ?? 'all';
+    const nextSort = searchParams.get('sort') ?? 'family-asc';
+    const nextFamily = searchParams.get('family') ?? '';
+
+    if (query !== nextQuery) {
+      setQuery(nextQuery);
+    }
+    if (tagFilter !== nextTag) {
+      setTagFilter(nextTag);
+    }
+    if (sortBy !== nextSort) {
+      setSortBy(nextSort);
+    }
+    if (selectedFamily !== nextFamily) {
+      setSelectedFamily(nextFamily);
+    }
+  }, [query, searchParams, selectedFamily, sortBy, tagFilter]);
 
   useEffect(() => {
     if (!selectedFamily) {
@@ -52,7 +95,7 @@ export function ModelCatalogPage({ baseUrl }: ModelCatalogPageProps): JSX.Elemen
 
   const filteredCatalog = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
-    return catalog.filter((item) => {
+    const filtered = catalog.filter((item) => {
       if (tagFilter !== 'all' && !item.tags.includes(tagFilter)) {
         return false;
       }
@@ -64,7 +107,20 @@ export function ModelCatalogPage({ baseUrl }: ModelCatalogPageProps): JSX.Elemen
         .toLowerCase()
         .includes(normalizedQuery);
     });
-  }, [catalog, query, tagFilter]);
+
+    return filtered.sort((a, b) => {
+      if (sortBy === 'name-asc') {
+        return a.model_name.localeCompare(b.model_name);
+      }
+      if (sortBy === 'name-desc') {
+        return b.model_name.localeCompare(a.model_name);
+      }
+      if (sortBy === 'family-desc') {
+        return b.model_family.localeCompare(a.model_family);
+      }
+      return a.model_family.localeCompare(b.model_family);
+    });
+  }, [catalog, query, sortBy, tagFilter]);
 
   return (
     <section>
@@ -85,6 +141,12 @@ export function ModelCatalogPage({ baseUrl }: ModelCatalogPageProps): JSX.Elemen
           {knownTags.map((tag) => (
             <option key={tag} value={tag}>{tag === 'all' ? 'All tags' : tag}</option>
           ))}
+        </select>
+        <select value={sortBy} onChange={(event) => setSortBy(event.target.value)}>
+          <option value="family-asc">Family (A → Z)</option>
+          <option value="family-desc">Family (Z → A)</option>
+          <option value="name-asc">Model (A → Z)</option>
+          <option value="name-desc">Model (Z → A)</option>
         </select>
       </div>
 
