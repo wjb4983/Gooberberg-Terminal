@@ -15,6 +15,7 @@ export function ModelCatalogPage({ baseUrl }: ModelCatalogPageProps): JSX.Elemen
   const [query, setQuery] = useState(() => searchParams.get('q') ?? '');
   const [tagFilter, setTagFilter] = useState(() => searchParams.get('tag') ?? 'all');
   const [sortBy, setSortBy] = useState(() => searchParams.get('sort') ?? 'family-asc');
+  const [compareFamilies, setCompareFamilies] = useState<string[]>(() => (searchParams.get('compare') ?? '').split(',').map((v) => v.trim()).filter(Boolean).slice(0, 4));
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -49,16 +50,20 @@ export function ModelCatalogPage({ baseUrl }: ModelCatalogPageProps): JSX.Elemen
     if (selectedFamily) {
       nextParams.set('family', selectedFamily);
     }
+    if (compareFamilies.length > 0) {
+      nextParams.set('compare', compareFamilies.join(','));
+    }
     if (nextParams.toString() !== searchParams.toString()) {
       setSearchParams(nextParams);
     }
-  }, [query, tagFilter, sortBy, selectedFamily, searchParams, setSearchParams]);
+  }, [compareFamilies, query, tagFilter, sortBy, selectedFamily, searchParams, setSearchParams]);
 
   useEffect(() => {
     const nextQuery = searchParams.get('q') ?? '';
     const nextTag = searchParams.get('tag') ?? 'all';
     const nextSort = searchParams.get('sort') ?? 'family-asc';
     const nextFamily = searchParams.get('family') ?? '';
+    const nextCompare = (searchParams.get('compare') ?? '').split(',').map((v) => v.trim()).filter(Boolean).slice(0, 4);
 
     if (query !== nextQuery) {
       setQuery(nextQuery);
@@ -72,7 +77,10 @@ export function ModelCatalogPage({ baseUrl }: ModelCatalogPageProps): JSX.Elemen
     if (selectedFamily !== nextFamily) {
       setSelectedFamily(nextFamily);
     }
-  }, [query, searchParams, selectedFamily, sortBy, tagFilter]);
+    if (compareFamilies.join(',') !== nextCompare.join(',')) {
+      setCompareFamilies(nextCompare);
+    }
+  }, [compareFamilies, query, searchParams, selectedFamily, sortBy, tagFilter]);
 
   useEffect(() => {
     if (!selectedFamily) {
@@ -121,6 +129,37 @@ export function ModelCatalogPage({ baseUrl }: ModelCatalogPageProps): JSX.Elemen
       return a.model_family.localeCompare(b.model_family);
     });
   }, [catalog, query, sortBy, tagFilter]);
+
+
+
+  const compareItems = useMemo(() => {
+    const byFamily = new Map(catalog.map((item) => [item.model_family, item]));
+    return compareFamilies.map((family) => byFamily.get(family)).filter((item): item is ModelCatalogItem => Boolean(item));
+  }, [catalog, compareFamilies]);
+
+  const toggleCompare = (family: string): void => {
+    setCompareFamilies((previous) => {
+      if (previous.includes(family)) {
+        return previous.filter((entry) => entry !== family);
+      }
+      if (previous.length >= 4) {
+        return previous;
+      }
+      return [...previous, family];
+    });
+  };
+
+  const removeCompare = (family: string): void => {
+    setCompareFamilies((previous) => previous.filter((entry) => entry !== family));
+  };
+
+  const compareValue = (item: ModelCatalogItem, key: string): string => {
+    const rich = item as ModelCatalogItem & Record<string, unknown>;
+    const value = rich[key];
+    if (Array.isArray(value)) return value.join(', ');
+    if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+    return typeof value === 'string' && value.trim() ? value : 'n/a';
+  };
 
   return (
     <section>
@@ -172,13 +211,53 @@ export function ModelCatalogPage({ baseUrl }: ModelCatalogPageProps): JSX.Elemen
               <div className="catalog-tags">
                 {selectedItem.tags.map((tag) => <span key={tag} className="catalog-tag">{tag}</span>)}
               </div>
-              <p style={{ marginTop: '0.75rem' }}>
+              <p style={{ marginTop: '0.75rem', display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
                 <Link to="/models">Create config for this family</Link>
+                <button type="button" onClick={() => toggleCompare(selectedItem.model_family)} disabled={!compareFamilies.includes(selectedItem.model_family) && compareFamilies.length >= 4}>
+                  {compareFamilies.includes(selectedItem.model_family) ? 'Remove from compare' : 'Add to compare'}
+                </button>
               </p>
             </>
           )}
         </aside>
       </div>
+
+
+      <div className="card" style={{ marginTop: '1rem', overflowX: 'auto' }}>
+        <h3>Compare models (up to 4)</h3>
+        <p className="muted" style={{ marginTop: 0 }}>Compare required data, supported tasks, runtime complexity, leakage risks, and metrics across selected families.</p>
+        {compareItems.length === 0 ? <p className="muted">No models selected for comparison yet.</p> : (
+          <>
+            <p style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+              {compareItems.map((item) => (
+                <button key={item.model_family} type="button" onClick={() => removeCompare(item.model_family)}>Remove {item.model_family}</button>
+              ))}
+            </p>
+            <table>
+              <thead>
+                <tr><th>Dimension</th>{compareItems.map((item) => <th key={item.model_family}>{item.model_name}</th>)}</tr>
+              </thead>
+              <tbody>
+                {[
+                  ['Model family', 'model_family'],
+                  ['Required data', 'required_data'],
+                  ['Supported tasks', 'supported_tasks'],
+                  ['Runtime complexity', 'runtime_complexity'],
+                  ['Leakage risks', 'leakage_risks'],
+                  ['Metrics', 'metrics'],
+                  ['Tags', 'tags'],
+                ].map(([label, key]) => (
+                  <tr key={key}>
+                    <td><strong>{label}</strong></td>
+                    {compareItems.map((item) => <td key={`${item.model_family}-${key}`}>{compareValue(item, key)}</td>)}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </>
+        )}
+      </div>
+
     </section>
   );
 }
