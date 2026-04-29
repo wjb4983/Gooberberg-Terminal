@@ -201,8 +201,36 @@ def test_training_run_preflight_returns_normalized_payload() -> None:
     assert body["valid"] is True
     assert body["compatible"] is True
     assert body["normalized_payload"]["dataset_id"] == DATASET_ID
+    assert body["training_intent"]["task_type"] == "time_series_momentum"
+    assert body["training_intent"]["model_family"] == "arima"
+    assert body["training_intent"]["dataset_id"] == DATASET_ID
+    assert body["training_intent"]["validation_profile"] == "default"
     assert len(body["warnings"]) == 1
 
+
+
+
+def test_training_run_create_persists_training_intent_in_run_metadata() -> None:
+    market_data_service = StubMarketDataService(
+        coverage=MarketDataCacheCoverageResponse(
+            symbol="AAPL",
+            timeframe="1d",
+            available_start=date(2025, 1, 1),
+            available_end=date(2025, 1, 2),
+            coverage_pct=100.0,
+        )
+    )
+
+    with _test_client(market_data_service) as client:
+        create_response = client.post("/api/v1/training-runs", json=_training_payload())
+
+    assert create_response.status_code == 201
+    body = create_response.json()
+    run_metadata = body["parameters"]["run_metadata"]
+    assert run_metadata["training_intent"]["task_type"] == "time_series_momentum"
+    assert run_metadata["training_intent"]["subtask_type"] == "ranking"
+    assert run_metadata["training_intent"]["model_family"] == "arima"
+    assert run_metadata["training_intent"]["dataset_id"] == DATASET_ID
 
 def test_training_run_compatibility_reports_missing_dataset() -> None:
     market_data_service = StubMarketDataService(

@@ -61,8 +61,20 @@ class TrainingRunValidationRequest(TaskSubtypeValidatedModel):
     constraints: RunConstraints | None = None
 
 
+class TrainingIntent(TaskSubtypeValidatedModel):
+    task_type: TaskType
+    subtask_type: SubtaskType
+    model_family: str = Field(min_length=1)
+    model_config_id: UUID
+    dataset_id: str = Field(min_length=1)
+    parameter_set_id: UUID | None = None
+    validation_profile: str = Field(default="default", min_length=1)
+    override_parameters: dict[str, Any] = Field(default_factory=dict)
+
+
 class TrainingRunValidationResponse(BaseModel):
     normalized_payload: TrainingRunCreateRequest
+    training_intent: TrainingIntent
     warnings: list[str] = Field(default_factory=list)
     errors: list[str] = Field(default_factory=list)
     compatible: bool = False
