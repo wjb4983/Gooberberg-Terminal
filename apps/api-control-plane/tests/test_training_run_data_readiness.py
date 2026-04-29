@@ -204,10 +204,33 @@ def test_training_run_preflight_returns_normalized_payload() -> None:
     assert body["training_intent"]["task_type"] == "time_series_momentum"
     assert body["training_intent"]["model_family"] == "arima"
     assert body["training_intent"]["dataset_id"] == DATASET_ID
-    assert body["training_intent"]["validation_profile"] == "default"
+    assert body["training_intent"]["validation_profile"] == "walk_forward"
     assert len(body["warnings"]) == 1
 
 
+
+def test_training_run_preflight_uses_explicit_validation_profile() -> None:
+    market_data_service = StubMarketDataService(
+        coverage=MarketDataCacheCoverageResponse(
+            symbol="AAPL",
+            timeframe="1d",
+            available_start=date(2025, 1, 1),
+            available_end=date(2025, 1, 2),
+            coverage_pct=100.0,
+        )
+    )
+
+    with _test_client(market_data_service) as client:
+        response = client.post(
+            "/api/v1/training-runs/preflight",
+            json={
+                **_training_payload(),
+                "validation_profile": "purged_k_fold",
+            },
+        )
+
+    assert response.status_code == 200
+    assert response.json()["training_intent"]["validation_profile"] == "purged_k_fold"
 
 
 def test_training_run_create_persists_training_intent_in_run_metadata() -> None:
@@ -231,6 +254,7 @@ def test_training_run_create_persists_training_intent_in_run_metadata() -> None:
     assert run_metadata["training_intent"]["subtask_type"] == "ranking"
     assert run_metadata["training_intent"]["model_family"] == "arima"
     assert run_metadata["training_intent"]["dataset_id"] == DATASET_ID
+    assert run_metadata["training_intent"]["validation_profile"] == "walk_forward"
 
 def test_training_run_compatibility_reports_missing_dataset() -> None:
     market_data_service = StubMarketDataService(

@@ -6,6 +6,7 @@ from uuid import UUID, uuid4
 from pydantic import BaseModel, Field, model_validator
 
 from app.domain.task_definitions import get_task_subtask_definition
+from app.domain.training_runs.validation_profiles import ValidationProfile
 from app.schemas.run_constraints import RunConstraints, extract_constraints_from_parameters
 
 
@@ -53,6 +54,7 @@ class TrainingRunCreateRequest(TaskSubtypeValidatedModel):
     dataset_id: str = Field(min_length=1)
     parameters: dict[str, Any] = Field(default_factory=dict)
     constraints: RunConstraints | None = None
+    validation_profile: ValidationProfile | None = None
 
 
 class TrainingRunValidationRequest(TaskSubtypeValidatedModel):
@@ -62,6 +64,7 @@ class TrainingRunValidationRequest(TaskSubtypeValidatedModel):
     dataset_id: str = Field(min_length=1)
     parameters: dict[str, Any] = Field(default_factory=dict)
     constraints: RunConstraints | None = None
+    validation_profile: ValidationProfile | None = None
 
 
 class TrainingIntent(TaskSubtypeValidatedModel):
@@ -71,7 +74,7 @@ class TrainingIntent(TaskSubtypeValidatedModel):
     model_config_id: UUID
     dataset_id: str = Field(min_length=1)
     parameter_set_id: UUID | None = None
-    validation_profile: str = Field(default="default", min_length=1)
+    validation_profile: ValidationProfile
     override_parameters: dict[str, Any] = Field(default_factory=dict)
 
 
