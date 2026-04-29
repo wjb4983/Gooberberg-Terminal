@@ -133,3 +133,7 @@ Exit codes:
 - `scripts/release/build-push-server-images.sh <version> [registry]`
 
 These release scripts are intentionally cloud-agnostic and do not perform cloud deployment.
+
+## Scaffolding
+
+- `scripts/gen-model-adapter.py <model_id>`: generate a provider adapter class, validation stub, service-data unit test template, and docs entry under `docs/model-adapters/`.
