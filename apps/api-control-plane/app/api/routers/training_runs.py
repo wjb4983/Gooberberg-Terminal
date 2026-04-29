@@ -21,6 +21,7 @@ from app.domain.model_configs.compatibility import (
 from app.domain.model_configs.service import ModelConfigService
 from app.domain.training_runs import Service as TrainingRunService
 from app.domain.training_runs.dataset_qualification import QualificationContext, qualify_dataset_for_training
+from app.domain.training_runs.validation_profiles import resolve_validation_profile
 from app.jobs.models import JobEnvelope, JobLifecycleEvent, JobStatus
 from app.jobs.store import job_state_store, job_submission_store
 from app.schemas import (
@@ -167,6 +168,11 @@ def _build_validation_response(
         constraints=payload.constraints,
     )
     model_family = str(model_config["model_family"]) if model_config is not None else "unknown"
+    validation_profile = resolve_validation_profile(
+        task_type=normalized_payload.task_type.value,
+        subtask_type=normalized_payload.subtask_type.value,
+        requested_profile=payload.validation_profile,
+    )
     training_intent = TrainingIntent(
         task_type=normalized_payload.task_type,
         subtask_type=normalized_payload.subtask_type,
@@ -174,7 +180,7 @@ def _build_validation_response(
         model_config_id=normalized_payload.model_config_id,
         dataset_id=normalized_payload.dataset_id,
         parameter_set_id=None,
-        validation_profile="default",
+        validation_profile=validation_profile,
         override_parameters=dict(normalized_payload.parameters),
     )
     return TrainingRunValidationResponse(
