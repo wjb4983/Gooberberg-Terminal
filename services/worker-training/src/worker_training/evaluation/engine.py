@@ -15,6 +15,7 @@ class MetricSpec:
 
 DEFAULT_METRICS: dict[tuple[str, str], tuple[MetricSpec, ...]] = {
     ("forecasting", "univariate"): (MetricSpec("primary_metric", role="default"), MetricSpec("rmse"), MetricSpec("mae")),
+    ("forecasting", "multivariate"): (MetricSpec("primary_metric", role="default"), MetricSpec("rmse"), MetricSpec("mae")),
     ("ranking", "default"): (MetricSpec("primary_metric", role="default"), MetricSpec("ndcg"), MetricSpec("map")),
 }
 

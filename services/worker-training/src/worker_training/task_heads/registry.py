@@ -25,6 +25,7 @@ HEADS: tuple[StandardTaskHead, ...] = (
     StandardTaskHead("allocation", "default", "weight", "portfolio_weights"),
     StandardTaskHead("cost_estimation", "default", "expected_cost", "cost_estimate"),
     StandardTaskHead("forecasting", "univariate", "target_value", "point_forecast"),
+    StandardTaskHead("forecasting", "multivariate", "target_vector", "point_forecast"),
 )
 
 TASK_HEAD_REGISTRY = TaskHeadRegistry(_heads={(head.task, head.subtask): head for head in HEADS})
