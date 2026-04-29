@@ -1,6 +1,8 @@
 from collections.abc import Awaitable, Callable, Mapping
 from typing import Any, Protocol
 
+from app.domain.task_definitions import TaskSubtaskDefinition, get_task_subtask_definition
+
 TaskRunner = Callable[[Mapping[str, Any]], Awaitable[Mapping[str, Any] | None]]
 
 
@@ -31,6 +33,13 @@ class TaskRegistry:
         if runner is None:
             raise KeyError(f"task type is not registered: {task_type}")
         return runner
+
+    def resolve_definition(self, task_type: str, subtask_type: str) -> TaskSubtaskDefinition:
+        return get_task_subtask_definition(task_type=task_type, subtask_type=subtask_type)
+
+    def resolve_default_metric_bundle(self, task_type: str, subtask_type: str) -> tuple[str, ...]:
+        definition = self.resolve_definition(task_type=task_type, subtask_type=subtask_type)
+        return definition.default_metric_bundle
 
     def list_task_types(self) -> tuple[str, ...]:
         return tuple(sorted(self._runners))

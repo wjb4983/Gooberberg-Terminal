@@ -5,6 +5,7 @@ from uuid import UUID, uuid4
 
 from pydantic import BaseModel, Field, model_validator
 
+from app.domain.task_definitions import get_task_subtask_definition
 from app.schemas.run_constraints import RunConstraints, extract_constraints_from_parameters
 
 
@@ -28,6 +29,9 @@ class SubtaskType(StrEnum):
     RANKING = "ranking"
     ENTRY_SIGNAL = "entry_signal"
     EXIT_SIGNAL = "exit_signal"
+    RETURN_FORECAST = "return_forecast"
+    VOL_FORECAST = "vol_forecast"
+    ALLOCATION = "allocation"
     REGIME_STATE = "regime_state"
     OTHER = "other"
 
@@ -38,8 +42,7 @@ class TaskSubtypeValidatedModel(BaseModel):
 
     @model_validator(mode="after")
     def validate_task_subtask_compatibility(self) -> "TaskSubtypeValidatedModel":
-        if self.subtask_type == SubtaskType.REGIME_STATE and self.task_type != TaskType.REGIME_SWITCHING:
-            raise ValueError("subtask_type 'regime_state' is only valid for task_type 'regime_switching'")
+        get_task_subtask_definition(task_type=self.task_type, subtask_type=self.subtask_type)
         return self
 
 
