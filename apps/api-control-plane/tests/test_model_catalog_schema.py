@@ -55,6 +55,45 @@ def test_model_definition_schema_supports_dataset_requirement() -> None:
     assert definition.dataset_requirement.require_point_in_time_data is True
 
 
+
+
+def test_model_definition_schema_requires_disclaimer_for_experimental_or_planned_entries() -> None:
+    payload = {
+        "model_family": "demo",
+        "model_name": "Demo",
+        "description": "x",
+        "required_data": ["ohlcv.close"],
+        "tags": ["planned", "experimental"],
+        "feasibility_notes": "Feasible after adapter parity and benchmark stability checks.",
+        "output_schema": "schema.v1",
+    }
+
+    with pytest.raises(ValueError, match=r"experimental warning"):
+        parse_model_definitions(payload)
+
+
+def test_model_definition_schema_enforces_design_simulation_for_adapter_pending_templates() -> None:
+    payload = {
+        "model_family": "demo",
+        "model_name": "Demo",
+        "description": "x",
+        "required_data": ["ohlcv.close"],
+        "tags": ["planned", "experimental"],
+        "experimental_warning": "Experimental model: do not use for production decisions.",
+        "feasibility_notes": "Adapter work remains in design and requires data-contract checks.",
+        "implementation_status": "adapter_pending",
+        "quick_start_templates": [
+            {
+                "template_id": "demo_v1",
+                "description": "Starter",
+                "mode": "full_adapter",
+            }
+        ],
+        "output_schema": "schema.v1",
+    }
+
+    with pytest.raises(ValueError, match=r"design_simulation"):
+        parse_model_definitions(payload)
 @pytest.mark.parametrize(
     ("params", "expected_error"),
     [
