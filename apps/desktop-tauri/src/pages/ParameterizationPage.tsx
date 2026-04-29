@@ -41,6 +41,7 @@ interface LaunchErrors {
   modelConfigId?: string;
   parametersJson?: string;
 }
+type TrainingPreset = 'safe' | 'balanced' | 'aggressive';
 
 interface DatasetCreateForm {
   universeType: 'stocks' | 'options';
@@ -78,6 +79,9 @@ export function ParameterizationPage({ baseUrl }: ParameterizationPageProps): JS
   const [datasetId, setDatasetId] = useState('');
   const [modelConfigId, setModelConfigId] = useState('');
   const [parametersJson, setParametersJson] = useState('{"epochs": 20, "seed": 42}');
+  const [selectedPreset, setSelectedPreset] = useState<TrainingPreset>('balanced');
+  const [showAdvancedParameters, setShowAdvancedParameters] = useState(false);
+  const [changedFields, setChangedFields] = useState<string[]>([]);
 
   const [modelConfigs, setModelConfigs] = useState<ModelConfigItem[]>([]);
   const [trainingRuns, setTrainingRuns] = useState<TrainingRunItem[]>([]);
@@ -166,6 +170,54 @@ export function ParameterizationPage({ baseUrl }: ParameterizationPageProps): JS
     () => existingDatasetRows.find((item) => item.id === datasetId)?.coveragePct ?? null,
     [datasetId, existingDatasetRows],
   );
+
+  const selectedModelConfig = useMemo(
+    () => modelConfigs.find((item) => item.id === modelConfigId) ?? null,
+    [modelConfigId, modelConfigs],
+  );
+
+  const parameterDefaults = useMemo(() => {
+    const defaults = selectedModelConfig?.config.default_parameters;
+    return defaults && typeof defaults === 'object' && !Array.isArray(defaults) ? defaults as Record<string, unknown> : {};
+  }, [selectedModelConfig]);
+
+  const advancedParameterDefaults = useMemo(() => {
+    const advanced = selectedModelConfig?.config.advanced_parameters;
+    return advanced && typeof advanced === 'object' && !Array.isArray(advanced) ? advanced as Record<string, unknown> : {};
+  }, [selectedModelConfig]);
+
+  const visibleParameterKeys = useMemo(() => Object.keys(parameterDefaults), [parameterDefaults]);
+  const advancedParameterKeys = useMemo(() => Object.keys(advancedParameterDefaults), [advancedParameterDefaults]);
+
+  const presetParameters = useMemo((): Record<TrainingPreset, Record<string, unknown>> => ({
+    safe: { ...parameterDefaults, risk_level: 'safe', epochs: 10, learning_rate: 0.0005, seed: 42 },
+    balanced: { ...parameterDefaults, risk_level: 'balanced', epochs: 20, learning_rate: 0.001, seed: 42 },
+    aggressive: { ...parameterDefaults, risk_level: 'aggressive', epochs: 50, learning_rate: 0.003, seed: 42 },
+  }), [parameterDefaults]);
+
+  useEffect(() => {
+    const nextParameters = { ...presetParameters[selectedPreset], ...advancedParameterDefaults };
+    setParametersJson(JSON.stringify(nextParameters, null, 2));
+    setChangedFields([]);
+  }, [advancedParameterDefaults, presetParameters, selectedPreset]);
+
+  const parsedParameters = useMemo(() => {
+    try {
+      const parsed = JSON.parse(parametersJson);
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        return parsed as Record<string, unknown>;
+      }
+      return {};
+    } catch {
+      return {};
+    }
+  }, [parametersJson]);
+
+  const updateParameterField = (field: string, value: string): void => {
+    const next = { ...parsedParameters, [field]: value };
+    setParametersJson(JSON.stringify(next, null, 2));
+    setChangedFields((previous) => Array.from(new Set([...previous, field])));
+  };
 
   const validateLaunchForm = (): LaunchErrors => {
     const errors: LaunchErrors = {};
@@ -387,6 +439,44 @@ export function ParameterizationPage({ baseUrl }: ParameterizationPageProps): JS
 
       <div className="card" style={{ marginBottom: '1rem' }}>
         <h3>4) Launch training run</h3>
+        <div style={{ display: 'grid', gap: '0.5rem', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', marginBottom: '0.75rem' }}>
+          {(['safe', 'balanced', 'aggressive'] as TrainingPreset[]).map((preset) => (
+            <button key={preset} type="button" onClick={() => setSelectedPreset(preset)} disabled={selectedPreset === preset}>
+              {preset}
+            </button>
+          ))}
+        </div>
+        {visibleParameterKeys.length > 0 ? (
+          <div style={{ display: 'grid', gap: '0.5rem', marginBottom: '0.75rem' }}>
+            {visibleParameterKeys.map((field) => (
+              <label key={field}>
+                {field}
+                <input
+                  value={String(parsedParameters[field] ?? '')}
+                  onChange={(event) => updateParameterField(field, event.target.value)}
+                  style={changedFields.includes(field) ? { borderColor: '#fbbf24', boxShadow: '0 0 0 1px #fbbf24' } : undefined}
+                />
+              </label>
+            ))}
+          </div>
+        ) : null}
+        {advancedParameterKeys.length > 0 ? (
+          <details open={showAdvancedParameters} onToggle={(event) => setShowAdvancedParameters(event.currentTarget.open)} style={{ marginBottom: '0.75rem' }}>
+            <summary>Advanced parameters</summary>
+            <div style={{ display: 'grid', gap: '0.5rem', marginTop: '0.5rem' }}>
+              {advancedParameterKeys.map((field) => (
+                <label key={field}>
+                  {field}
+                  <input
+                    value={String(parsedParameters[field] ?? '')}
+                    onChange={(event) => updateParameterField(field, event.target.value)}
+                    style={changedFields.includes(field) ? { borderColor: '#fbbf24', boxShadow: '0 0 0 1px #fbbf24' } : undefined}
+                  />
+                </label>
+              ))}
+            </div>
+          </details>
+        ) : null}
         <label>
           Parameters JSON
           <textarea rows={5} value={parametersJson} onChange={(event) => setParametersJson(event.target.value)} />
