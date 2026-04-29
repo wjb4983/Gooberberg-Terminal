@@ -20,6 +20,7 @@ from pydantic import BaseModel, Field, ValidationError
 
 from worker_training.adapters.base import AdapterCapability
 from worker_training.adapters.registry import AdapterRegistry
+from worker_training.data.materializer import materialize_dataset_bundle
 from worker_training.task_heads import TASK_HEAD_REGISTRY
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
@@ -352,6 +353,7 @@ def write_mock_artifacts(envelope: JobEnvelope, request: TrainingRunRequest) -> 
     diagnostics_path = run_dir / "diagnostics.json"
     diagnostics_path.write_text(json.dumps(output.diagnostics, indent=2), encoding="utf-8")
     task_head = TASK_HEAD_REGISTRY.resolve(request.task, request.subtask)
+    bundle = materialize_dataset_bundle(request.model_dump(), seed=request.seed)
     metadata = {
         "job_id": str(envelope.job_id),
         "run_id": str(envelope.run_id) if envelope.run_id else None,
@@ -367,6 +369,7 @@ def write_mock_artifacts(envelope: JobEnvelope, request: TrainingRunRequest) -> 
         "target_schema": task_head.build_target_schema(),
         "prediction_output": task_head.format_prediction(output.metrics_payload),
         "request": request.model_dump(),
+        "split_manifest": bundle.split_manifest,
     }
     metadata_path = run_dir / "metadata.json"
     metadata_path.write_text(json.dumps(metadata, indent=2), encoding="utf-8")
