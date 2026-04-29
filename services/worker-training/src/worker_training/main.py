@@ -10,6 +10,7 @@ from datetime import date
 import urllib.request
 import uuid
 from dataclasses import dataclass
+from hashlib import sha256
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -61,6 +62,7 @@ class TrainingRunRequest(BaseModel):
     dataset_ref: str = "dataset://placeholder"
     epochs: int = 1
     learning_rate: float = 0.001
+    seed: int = 7
 
 
 class DatasetLookupResponse(BaseModel):
@@ -84,6 +86,81 @@ class ArtifactResult:
     ref: str
     metadata_path: Path
     sample_path: Path | None
+    diagnostics_path: Path
+    metrics_payload: dict[str, Any]
+
+
+@dataclass(slots=True)
+class AdapterOutput:
+    adapter_name: str
+    model_blob: bytes
+    metrics_payload: dict[str, Any]
+    diagnostics: dict[str, Any]
+
+
+class AdapterExecutionError(RuntimeError):
+    def __init__(self, code: str, message: str, diagnostics: dict[str, Any] | None = None) -> None:
+        super().__init__(message)
+        self.code = code
+        self.diagnostics = diagnostics or {}
+
+
+class TrainingAdapter:
+    name = "base"
+
+    def run(self, request: TrainingRunRequest) -> AdapterOutput:
+        raise NotImplementedError
+
+
+class ArimaAdapter(TrainingAdapter):
+    name = "arima"
+
+    def run(self, request: TrainingRunRequest) -> AdapterOutput:
+        coeff = round(0.8 + request.learning_rate, 5)
+        return AdapterOutput(
+            adapter_name=self.name,
+            model_blob=f"ARIMA({request.epochs})::{request.seed}".encode("utf-8"),
+            metrics_payload={"primary_metric": 0.9123, "aic": 123.4, "bic": 127.8},
+            diagnostics={"coefficients": [coeff, -0.12, 0.05], "converged": True},
+        )
+
+
+class KalmanFilterAdapter(TrainingAdapter):
+    name = "kalman_filter"
+
+    def run(self, request: TrainingRunRequest) -> AdapterOutput:
+        q = round(request.learning_rate * 0.5, 6)
+        return AdapterOutput(
+            adapter_name=self.name,
+            model_blob=f"KALMAN::{request.seed}".encode("utf-8"),
+            metrics_payload={"primary_metric": 0.8877, "rmse": 0.114, "nll": 2.31},
+            diagnostics={"transition_noise": q, "state_dim": 4, "stability_score": 0.97},
+        )
+
+
+class TorchNNTimeSeriesAdapter(TrainingAdapter):
+    name = "torch_nn_timeseries"
+
+    def run(self, request: TrainingRunRequest) -> AdapterOutput:
+        if request.epochs <= 0:
+            raise AdapterExecutionError(
+                code="invalid_epochs",
+                message="epochs must be greater than zero",
+                diagnostics={"epochs": request.epochs},
+            )
+        return AdapterOutput(
+            adapter_name=self.name,
+            model_blob=f"TORCHNN::{request.epochs}::{request.seed}".encode("utf-8"),
+            metrics_payload={"primary_metric": 0.9345, "loss": 0.0821, "val_loss": 0.0917},
+            diagnostics={"layers": [64, 32], "dropout": 0.1, "best_epoch": min(request.epochs, 4)},
+        )
+
+
+ADAPTERS: dict[str, TrainingAdapter] = {
+    "arima": ArimaAdapter(),
+    "kalman_filter": KalmanFilterAdapter(),
+    "torch_nn_timeseries": TorchNNTimeSeriesAdapter(),
+}
 
 
 async def run_worker() -> None:
@@ -155,11 +232,34 @@ async def process_job(client: Redis, envelope: JobEnvelope) -> None:
     training_request = TrainingRunRequest.model_validate(envelope.payload)
     await asyncio.sleep(0.1)
     await persist_event(client, envelope, JobStatus.RUNNING, 45.0, "building mock model artifact", None)
-    artifact = write_mock_artifacts(envelope, training_request)
+    try:
+        artifact = write_mock_artifacts(envelope, training_request)
+    except AdapterExecutionError as exc:
+        error_ref = write_error_artifact(envelope, training_request, exc)
+        await persist_event(client, envelope, JobStatus.FAILED, 100.0, f"{exc.code}: {exc}", error_ref)
+        return
     await asyncio.sleep(0.2)
     await persist_event(client, envelope, JobStatus.RUNNING, 90.0, "finalizing metadata", None)
     await asyncio.sleep(0.1)
     await persist_event(client, envelope, JobStatus.SUCCESS, 100.0, "training run completed", artifact.ref)
+
+
+def write_error_artifact(envelope: JobEnvelope, request: TrainingRunRequest, exc: AdapterExecutionError) -> str:
+    run_dir = ARTIFACT_ROOT / "training" / str(envelope.job_id)
+    run_dir.mkdir(parents=True, exist_ok=True)
+    error_payload = {
+        "schema_version": "training-error/v1",
+        "job_id": str(envelope.job_id),
+        "trace_id": envelope.trace_id,
+        "model_name": request.model_name,
+        "error_code": exc.code,
+        "error_message": str(exc),
+        "diagnostics": exc.diagnostics,
+        "failed_at": datetime.now(UTC).isoformat(),
+    }
+    error_path = run_dir / "error.json"
+    error_path.write_text(json.dumps(error_payload, indent=2), encoding="utf-8")
+    return f"file://{error_path}"
 
 
 async def ensure_data_ready(client: Redis, envelope: JobEnvelope) -> None:
@@ -232,6 +332,20 @@ async def ensure_data_ready(client: Redis, envelope: JobEnvelope) -> None:
 def write_mock_artifacts(envelope: JobEnvelope, request: TrainingRunRequest) -> ArtifactResult:
     run_dir = ARTIFACT_ROOT / "training" / str(envelope.job_id)
     run_dir.mkdir(parents=True, exist_ok=True)
+    adapter = ADAPTERS.get(request.model_name)
+    if adapter is None:
+        raise AdapterExecutionError(
+            code="adapter_not_found",
+            message=f"no adapter registered for model '{request.model_name}'",
+            diagnostics={"model_name": request.model_name, "available_adapters": sorted(ADAPTERS)},
+        )
+    output = adapter.run(request)
+
+    model_path = run_dir / "model.bin"
+    model_path.write_bytes(output.model_blob)
+    checksum = sha256(output.model_blob).hexdigest()
+    diagnostics_path = run_dir / "diagnostics.json"
+    diagnostics_path.write_text(json.dumps(output.diagnostics, indent=2), encoding="utf-8")
     metadata = {
         "job_id": str(envelope.job_id),
         "run_id": str(envelope.run_id) if envelope.run_id else None,
@@ -239,13 +353,23 @@ def write_mock_artifacts(envelope: JobEnvelope, request: TrainingRunRequest) -> 
         "worker": WORKER_NAME,
         "job_type": envelope.job_type,
         "generated_at": datetime.now(UTC).isoformat(),
+        "schema_version": "training-artifact/v1",
+        "adapter": output.adapter_name,
+        "model_checksum_sha256": checksum,
+        "diagnostics_ref": f"file://{diagnostics_path}",
+        "metrics_payload": output.metrics_payload,
         "request": request.model_dump(),
     }
     metadata_path = run_dir / "metadata.json"
     metadata_path.write_text(json.dumps(metadata, indent=2), encoding="utf-8")
-    (run_dir / "model.bin").write_bytes(b"GB-MOCK-MODEL\n")
     sample_path = try_write_parquet(run_dir / "metrics.parquet")
-    return ArtifactResult(ref=f"file://{metadata_path}", metadata_path=metadata_path, sample_path=sample_path)
+    return ArtifactResult(
+        ref=f"file://{metadata_path}",
+        metadata_path=metadata_path,
+        sample_path=sample_path,
+        diagnostics_path=diagnostics_path,
+        metrics_payload=output.metrics_payload,
+    )
 
 
 def try_write_parquet(parquet_path: Path) -> Path | None:

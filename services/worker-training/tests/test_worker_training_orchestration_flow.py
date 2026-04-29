@@ -33,12 +33,44 @@ def test_process_job_emits_running_then_success(monkeypatch: pytest.MonkeyPatch,
     monkeypatch.setattr("worker_training.main.asyncio.sleep", _no_sleep)
     monkeypatch.setattr("worker_training.main.ARTIFACT_ROOT", tmp_path)
 
-    envelope = JobEnvelope(job_id=uuid4(), trace_id="trace", job_type="training", payload={}, queued_at=datetime.now(UTC))
+    envelope = JobEnvelope(
+        job_id=uuid4(),
+        trace_id="trace",
+        job_type="training",
+        payload={"model_name": "arima"},
+        queued_at=datetime.now(UTC),
+    )
     client = _RedisStub()
 
     asyncio.run(process_job(client, envelope))  # type: ignore[arg-type]
 
     assert emitted == [JobStatus.RUNNING, JobStatus.RUNNING, JobStatus.RUNNING, JobStatus.SUCCESS]
+
+
+def test_process_job_emits_failed_for_unknown_adapter(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    emitted: list[str] = []
+
+    async def _persist_event(_client, _envelope, status, _progress, _message, _result_ref):
+        emitted.append(status)
+
+    async def _no_sleep(_: float) -> None:
+        return None
+
+    monkeypatch.setattr("worker_training.main.persist_event", _persist_event)
+    monkeypatch.setattr("worker_training.main.asyncio.sleep", _no_sleep)
+    monkeypatch.setattr("worker_training.main.ARTIFACT_ROOT", tmp_path)
+    envelope = JobEnvelope(
+        job_id=uuid4(),
+        trace_id="trace",
+        job_type="training",
+        payload={"model_name": "missing_adapter"},
+        queued_at=datetime.now(UTC),
+    )
+    client = _RedisStub()
+
+    asyncio.run(process_job(client, envelope))  # type: ignore[arg-type]
+
+    assert emitted == [JobStatus.RUNNING, JobStatus.RUNNING, JobStatus.FAILED]
 
 
 def test_handle_with_timeout_marks_failed_when_attempts_exceeded(monkeypatch: pytest.MonkeyPatch) -> None:
