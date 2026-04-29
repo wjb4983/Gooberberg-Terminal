@@ -135,6 +135,13 @@ interface TrainingRunValidationResponse {
   valid: boolean;
 }
 
+interface LaunchPreflightState {
+  normalizedPayload: TrainingRunValidationResponse['normalized_payload'] | null;
+  warnings: string[];
+  errors: string[];
+  valid: boolean;
+}
+
 const defaultModelConfigForm: ModelConfigFormState = {
   numRegimes: '3',
   lookbackWindow: '252',
@@ -320,6 +327,13 @@ export function BuildingModelsPage({ baseUrl }: BuildingModelsPageProps): JSX.El
   const [artifactSummaries, setArtifactSummaries] = useState<ArtifactSummary[]>([]);
   const [selectedArtifactId, setSelectedArtifactId] = useState<number | null>(null);
   const [artifactDetailsById, setArtifactDetailsById] = useState<Record<number, ArtifactDetail>>({});
+  const [launchPreflight, setLaunchPreflight] = useState<LaunchPreflightState>({
+    normalizedPayload: null,
+    warnings: [],
+    errors: [],
+    valid: false,
+  });
+  const [warningConfirmationChecked, setWarningConfirmationChecked] = useState(false);
 
   const selectedJob = useMemo(() => jobs.find((item) => item.id === selectedJobId) ?? null, [jobs, selectedJobId]);
   const selectedArtifact = selectedArtifactId ? artifactDetailsById[selectedArtifactId] : undefined;
@@ -559,18 +573,26 @@ export function BuildingModelsPage({ baseUrl }: BuildingModelsPageProps): JSX.El
     setError(null);
     setIsLaunchingRun(true);
     setLaunchErrors({});
+    setWarningConfirmationChecked(false);
 
     try {
       const preflight = await requestJson<TrainingRunValidationResponse>(baseUrl, '/api/v1/training-runs/preflight', {
         method: 'POST',
         body: JSON.stringify(draftPayload),
       });
+      setLaunchPreflight({
+        normalizedPayload: preflight.normalized_payload,
+        warnings: preflight.warnings,
+        errors: preflight.errors,
+        valid: preflight.valid,
+      });
       if (!preflight.valid) {
         setLaunchErrors({ submit: preflight.errors.join(' ') || 'Preflight failed.' });
         return;
       }
-      if (preflight.warnings.length > 0) {
-        setError(preflight.warnings.join(' '));
+      if (preflight.warnings.length > 0 && !warningConfirmationChecked) {
+        setLaunchErrors({ submit: 'Preflight reported warnings. Confirm to continue submitting.' });
+        return;
       }
       const payload = preflight.normalized_payload;
 
@@ -619,6 +641,30 @@ export function BuildingModelsPage({ baseUrl }: BuildingModelsPageProps): JSX.El
       setIsLaunchingRun(false);
     }
   };
+
+  const normalizedPayloadJson = useMemo(() => (
+    launchPreflight.normalizedPayload ? JSON.stringify(launchPreflight.normalizedPayload, null, 2) : ''
+  ), [launchPreflight.normalizedPayload]);
+
+  const copyNormalizedPayload = useCallback(async (): Promise<void> => {
+    if (!normalizedPayloadJson) return;
+    try {
+      await navigator.clipboard.writeText(normalizedPayloadJson);
+    } catch {
+      setError('Clipboard copy failed. Use download JSON instead.');
+    }
+  }, [normalizedPayloadJson]);
+
+  const downloadNormalizedPayload = useCallback((): void => {
+    if (!normalizedPayloadJson) return;
+    const blob = new Blob([normalizedPayloadJson], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = 'training-run-normalized-payload.json';
+    anchor.click();
+    URL.revokeObjectURL(url);
+  }, [normalizedPayloadJson]);
 
   const cancelJob = async (jobId: string): Promise<void> => {
     setJobActionPendingId(jobId);
@@ -819,8 +865,30 @@ export function BuildingModelsPage({ baseUrl }: BuildingModelsPageProps): JSX.El
               {launchErrors.batchSize ? <small className="muted">{launchErrors.batchSize}</small> : null}
             </div>
           </div>
-          <button type="button" disabled={isLaunchingRun} onClick={() => void launchTrainingRun()}>{isLaunchingRun ? 'Submitting…' : 'Launch training job'}</button>
+          {launchPreflight.warnings.length > 0 ? (
+            <label className="muted" style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+              <input
+                type="checkbox"
+                checked={warningConfirmationChecked}
+                onChange={(event) => setWarningConfirmationChecked(event.target.checked)}
+              />
+              Confirm submit despite warnings
+            </label>
+          ) : null}
+          <button type="button" disabled={isLaunchingRun || (launchPreflight.warnings.length > 0 && !warningConfirmationChecked)} onClick={() => void launchTrainingRun()}>{isLaunchingRun ? 'Submitting…' : 'Launch training job'}</button>
           {launchErrors.submit ? <small className="muted">{launchErrors.submit}</small> : null}
+          {(launchPreflight.normalizedPayload || launchPreflight.warnings.length > 0 || launchPreflight.errors.length > 0) ? (
+            <div style={{ border: '1px solid rgba(255,255,255,0.12)', borderRadius: '0.5rem', padding: '0.75rem' }}>
+              <strong>Preflight preview</strong>
+              {launchPreflight.errors.length > 0 ? <p className="muted" style={{ margin: '0.35rem 0' }}>Errors: {launchPreflight.errors.join(' ')}</p> : null}
+              {launchPreflight.warnings.length > 0 ? <p className="muted" style={{ margin: '0.35rem 0' }}>Warnings: {launchPreflight.warnings.join(' ')}</p> : null}
+              <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                <button type="button" onClick={() => void copyNormalizedPayload()} disabled={!launchPreflight.normalizedPayload}>Copy JSON</button>
+                <button type="button" onClick={downloadNormalizedPayload} disabled={!launchPreflight.normalizedPayload}>Download JSON</button>
+              </div>
+              <pre style={{ margin: 0, maxHeight: '18rem', overflow: 'auto' }}>{normalizedPayloadJson || '{}'}</pre>
+            </div>
+          ) : null}
         </div>
       </div>
 
