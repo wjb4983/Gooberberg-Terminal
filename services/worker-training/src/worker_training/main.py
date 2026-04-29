@@ -227,21 +227,12 @@ async def handle_with_timeout(client: Redis, envelope: JobEnvelope) -> None:
 
 
 async def process_job(client: Redis, envelope: JobEnvelope) -> None:
-    await ensure_data_ready(client, envelope)
-    await persist_event(client, envelope, JobStatus.RUNNING, 10.0, "training worker accepted job", None)
-    training_request = TrainingRunRequest.model_validate(envelope.payload)
-    await asyncio.sleep(0.1)
-    await persist_event(client, envelope, JobStatus.RUNNING, 45.0, "building mock model artifact", None)
-    try:
-        artifact = write_mock_artifacts(envelope, training_request)
-    except AdapterExecutionError as exc:
-        error_ref = write_error_artifact(envelope, training_request, exc)
-        await persist_event(client, envelope, JobStatus.FAILED, 100.0, f"{exc.code}: {exc}", error_ref)
-        return
-    await asyncio.sleep(0.2)
-    await persist_event(client, envelope, JobStatus.RUNNING, 90.0, "finalizing metadata", None)
-    await asyncio.sleep(0.1)
-    await persist_event(client, envelope, JobStatus.SUCCESS, 100.0, "training run completed", artifact.ref)
+    from worker_training.pipeline import run_training_pipeline
+
+    async def _emit(status: str, progress_pct: float, message: str, result_ref: str | None) -> None:
+        await persist_event(client, envelope, status, progress_pct, message, result_ref)
+
+    await run_training_pipeline(envelope, _emit)
 
 
 def write_error_artifact(envelope: JobEnvelope, request: TrainingRunRequest, exc: AdapterExecutionError) -> str:
@@ -262,7 +253,7 @@ def write_error_artifact(envelope: JobEnvelope, request: TrainingRunRequest, exc
     return f"file://{error_path}"
 
 
-async def ensure_data_ready(client: Redis, envelope: JobEnvelope) -> None:
+async def ensure_data_ready(envelope: JobEnvelope) -> None:
     request = TrainingRunRequest.model_validate(envelope.payload)
     if not request.dataset_id:
         return
@@ -307,7 +298,7 @@ async def ensure_data_ready(client: Redis, envelope: JobEnvelope) -> None:
     if not missing:
         return
 
-    await persist_event(client, envelope, JobStatus.WAITING_FOR_DATA, 1.0, "waiting for data ingestion", None)
+    logger.info("pipeline stage update", extra={"job_id": str(envelope.job_id), "trace_id": envelope.trace_id, "stage": "data_wait", "status": JobStatus.WAITING_FOR_DATA, "progress_pct": 1.0})
     by_resolution: dict[str, set[str]] = {}
     for symbol, resolution in missing:
         by_resolution.setdefault(resolution, set()).add(symbol)
@@ -326,7 +317,7 @@ async def ensure_data_ready(client: Redis, envelope: JobEnvelope) -> None:
             },
         )
 
-    await persist_event(client, envelope, JobStatus.RUNNING, 5.0, "data ingestion completed, resuming training", None)
+    logger.info("pipeline stage update", extra={"job_id": str(envelope.job_id), "trace_id": envelope.trace_id, "stage": "data_ready", "status": JobStatus.RUNNING, "progress_pct": 5.0})
 
 
 def write_mock_artifacts(envelope: JobEnvelope, request: TrainingRunRequest) -> ArtifactResult:
