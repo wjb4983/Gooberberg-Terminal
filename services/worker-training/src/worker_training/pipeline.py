@@ -19,7 +19,7 @@ from worker_training.main import (
 
 logger = logging.getLogger("worker-training.pipeline")
 
-StageEmitter = Callable[[str, float, str, str | None], Awaitable[None]]
+StageEmitter = Callable[[str, float, str, str | None, dict[str, Any] | None], Awaitable[None]]
 
 
 @dataclass(frozen=True, slots=True)
@@ -47,7 +47,13 @@ async def run_training_pipeline(
     request: TrainingRunRequest | None = None
     artifact: ArtifactResult | None = None
 
-    async def _emit(stage_key: str, *, status: str = JobStatus.RUNNING, result_ref: str | None = None) -> None:
+    async def _emit(
+        stage_key: str,
+        *,
+        status: str = JobStatus.RUNNING,
+        result_ref: str | None = None,
+        metric_bundle: dict[str, Any] | None = None,
+    ) -> None:
         stage = STAGES[stage_key]
         logger.info(
             "pipeline stage update",
@@ -59,7 +65,7 @@ async def run_training_pipeline(
                 "progress_pct": stage.progress_pct,
             },
         )
-        await emit(status, stage.progress_pct, stage.message, result_ref)
+        await emit(status, stage.progress_pct, stage.message, result_ref, metric_bundle)
 
     await _emit("load_intent")
     request = TrainingRunRequest.model_validate(envelope.payload)
@@ -74,9 +80,9 @@ async def run_training_pipeline(
         artifact = write_mock_artifacts(envelope, request)
     except AdapterExecutionError as exc:
         error_ref = write_error_artifact(envelope, request, exc)
-        await emit(JobStatus.FAILED, 100.0, f"{exc.code}: {exc}", error_ref)
+        await emit(JobStatus.FAILED, 100.0, f"{exc.code}: {exc}", error_ref, None)
         return
 
     await _emit("evaluate")
     await _emit("persist_artifacts")
-    await _emit("emit_lifecycle", status=JobStatus.SUCCESS, result_ref=artifact.ref)
+    await _emit("emit_lifecycle", status=JobStatus.SUCCESS, result_ref=artifact.ref, metric_bundle=artifact.metric_bundle)
