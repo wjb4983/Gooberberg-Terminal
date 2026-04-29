@@ -83,6 +83,14 @@ class EnumParameterDefinition(ParameterDefinitionBase):
         return self
 
 
+class QuickStartTemplate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    template_id: NonEmptyString
+    description: NonEmptyString
+    mode: Literal["full_adapter", "design_simulation"] = "design_simulation"
+
+
 ParameterDefinition = Annotated[
     NumericParameterDefinition | EnumParameterDefinition,
     Field(discriminator="type"),
@@ -105,6 +113,25 @@ class ModelDefinition(BaseModel):
     output_schema: NonEmptyString
     references: list[NonEmptyString] = Field(default_factory=list)
     params: list[ParameterDefinition] = Field(default_factory=list)
+    feasibility_notes: NonEmptyString | None = None
+    experimental_warning: NonEmptyString | None = None
+    implementation_status: Literal["implemented", "adapter_pending"] = "implemented"
+    quick_start_templates: list[QuickStartTemplate] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def validate_frontier_disclaimers(self) -> "ModelDefinition":
+        requires_disclaimer = "experimental" in self.tags or "planned" in self.tags
+        if requires_disclaimer:
+            if self.experimental_warning is None or "experimental" not in self.experimental_warning.lower():
+                raise ValueError("experimental/planned entries require explicit experimental warning text")
+            if self.feasibility_notes is None:
+                raise ValueError("experimental/planned entries require feasibility_notes")
+
+        if self.implementation_status == "adapter_pending" and any(
+            template.mode != "design_simulation" for template in self.quick_start_templates
+        ):
+            raise ValueError("adapter_pending entries must mark quick_start_templates as design_simulation")
+        return self
 
 
 def parse_model_definitions(payload: Any) -> tuple[ModelDefinition, ...]:

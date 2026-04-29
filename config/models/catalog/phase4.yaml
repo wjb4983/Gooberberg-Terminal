@@ -25,6 +25,14 @@
   references:
     - https://arxiv.org/abs/1912.09363
     - https://pytorch-forecasting.readthedocs.io/
+  feasibility_notes: Feasibility is contingent on adapter implementation, offline benchmark parity, and risk controls passing pre-production review.
+  experimental_warning: Experimental model: not production-ready; outputs are for research use only.
+  implementation_status: adapter_pending
+  quick_start_templates:
+    - template_id: design_simulation_baseline_v1
+      description: Design simulation starter only; no production execution adapter is available yet.
+      mode: design_simulation
+
 
 - model_family: tiny_time_mix_patch_encoder
   model_name: TinyTimeMix Patch Encoder
@@ -52,6 +60,14 @@
   references:
     - https://arxiv.org/abs/2306.09364
     - https://nixtlaverse.nixtla.io/neuralforecast/
+  feasibility_notes: Feasibility is contingent on adapter implementation, offline benchmark parity, and risk controls passing pre-production review.
+  experimental_warning: Experimental model: not production-ready; outputs are for research use only.
+  implementation_status: adapter_pending
+  quick_start_templates:
+    - template_id: design_simulation_baseline_v1
+      description: Design simulation starter only; no production execution adapter is available yet.
+      mode: design_simulation
+
 
 - model_family: wavelet_diffusion_forecaster
   model_name: Wavelet Diffusion Forecaster
@@ -80,6 +96,14 @@
   references:
     - https://arxiv.org/abs/2006.11239
     - https://arxiv.org/abs/2205.09991
+  feasibility_notes: Feasibility is contingent on adapter implementation, offline benchmark parity, and risk controls passing pre-production review.
+  experimental_warning: Experimental model: not production-ready; outputs are for research use only.
+  implementation_status: adapter_pending
+  quick_start_templates:
+    - template_id: design_simulation_baseline_v1
+      description: Design simulation starter only; no production execution adapter is available yet.
+      mode: design_simulation
+
 
 - model_family: online_bayesian_changepoint_hazard
   model_name: Online Bayesian Changepoint Hazard
@@ -105,6 +129,14 @@
   references:
     - https://arxiv.org/abs/0710.3742
     - https://proceedings.neurips.cc/paper/2007/file/4f285f72e01f49e8bf8f7f27f4f4f6f7-Paper.pdf
+  feasibility_notes: Feasibility is contingent on adapter implementation, offline benchmark parity, and risk controls passing pre-production review.
+  experimental_warning: Experimental model: not production-ready; outputs are for research use only.
+  implementation_status: adapter_pending
+  quick_start_templates:
+    - template_id: design_simulation_baseline_v1
+      description: Design simulation starter only; no production execution adapter is available yet.
+      mode: design_simulation
+
 
 - model_family: pooled_hierarchical_reconciliation
   model_name: Pooled Hierarchical Reconciliation
@@ -132,6 +164,14 @@
   references:
     - https://otexts.com/fpp3/hierarchical.html
     - https://robjhyndman.com/publications/nnmint/
+  feasibility_notes: Feasibility is contingent on adapter implementation, offline benchmark parity, and risk controls passing pre-production review.
+  experimental_warning: Experimental model: not production-ready; outputs are for research use only.
+  implementation_status: adapter_pending
+  quick_start_templates:
+    - template_id: design_simulation_baseline_v1
+      description: Design simulation starter only; no production execution adapter is available yet.
+      mode: design_simulation
+
 
 - model_family: retrieval_augmented_regime_classifier
   model_name: Retrieval Augmented Regime Classifier
@@ -159,6 +199,14 @@
   references:
     - https://arxiv.org/abs/2005.11401
     - https://faiss.ai/
+  feasibility_notes: Feasibility is contingent on adapter implementation, offline benchmark parity, and risk controls passing pre-production review.
+  experimental_warning: Experimental model: not production-ready; outputs are for research use only.
+  implementation_status: adapter_pending
+  quick_start_templates:
+    - template_id: design_simulation_baseline_v1
+      description: Design simulation starter only; no production execution adapter is available yet.
+      mode: design_simulation
+
 
 - model_family: graph_diffusion_spillover
   model_name: Graph Diffusion Spillover
@@ -188,6 +236,14 @@
   references:
     - https://arxiv.org/abs/2001.05140
     - https://pytorch-geometric-temporal.readthedocs.io/
+  feasibility_notes: Feasibility is contingent on adapter implementation, offline benchmark parity, and risk controls passing pre-production review.
+  experimental_warning: Experimental model: not production-ready; outputs are for research use only.
+  implementation_status: adapter_pending
+  quick_start_templates:
+    - template_id: design_simulation_baseline_v1
+      description: Design simulation starter only; no production execution adapter is available yet.
+      mode: design_simulation
+
 
 - model_family: tabular_in_context_learner
   model_name: Tabular In-Context Learner
@@ -214,6 +270,14 @@
   references:
     - https://arxiv.org/abs/2207.01848
     - https://arxiv.org/abs/2402.17563
+  feasibility_notes: Feasibility is contingent on adapter implementation, offline benchmark parity, and risk controls passing pre-production review.
+  experimental_warning: Experimental model: not production-ready; outputs are for research use only.
+  implementation_status: adapter_pending
+  quick_start_templates:
+    - template_id: design_simulation_baseline_v1
+      description: Design simulation starter only; no production execution adapter is available yet.
+      mode: design_simulation
+
 
 - model_family: conformalized_quantile_network_v2
   model_name: Conformalized Quantile Network v2
@@ -240,6 +304,14 @@
   references:
     - https://arxiv.org/abs/1905.03222
     - https://arxiv.org/abs/2307.16895
+  feasibility_notes: Feasibility is contingent on adapter implementation, offline benchmark parity, and risk controls passing pre-production review.
+  experimental_warning: Experimental model: not production-ready; outputs are for research use only.
+  implementation_status: adapter_pending
+  quick_start_templates:
+    - template_id: design_simulation_baseline_v1
+      description: Design simulation starter only; no production execution adapter is available yet.
+      mode: design_simulation
+
 
 - model_family: synthetic_control_bayesian_dynamic
   model_name: Synthetic Control Bayesian Dynamic
@@ -267,3 +339,11 @@
   references:
     - https://www.aeaweb.org/articles?id=10.1257/jep.31.2.391
     - https://arxiv.org/abs/2211.05984
+  feasibility_notes: Feasibility is contingent on adapter implementation, offline benchmark parity, and risk controls passing pre-production review.
+  experimental_warning: Experimental model: not production-ready; outputs are for research use only.
+  implementation_status: adapter_pending
+  quick_start_templates:
+    - template_id: design_simulation_baseline_v1
+      description: Design simulation starter only; no production execution adapter is available yet.
+      mode: design_simulation
+
