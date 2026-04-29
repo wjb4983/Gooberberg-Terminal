@@ -114,6 +114,13 @@ interface FormErrors {
   [key: string]: string;
 }
 
+interface TrainingRunCompatibilityStatus {
+  modelConfigId: string;
+  compatible: boolean;
+  warnings: string[];
+  errors: string[];
+}
+
 interface TrainingRunValidationResponse {
   normalized_payload: {
     model_config_id: string;
@@ -302,6 +309,8 @@ export function BuildingModelsPage({ baseUrl }: BuildingModelsPageProps): JSX.El
 
   const [configErrors, setConfigErrors] = useState<FormErrors>({});
   const [launchErrors, setLaunchErrors] = useState<FormErrors>({});
+  const [compatibilityStatuses, setCompatibilityStatuses] = useState<Record<string, TrainingRunCompatibilityStatus>>({});
+  const [compatibilityLoading, setCompatibilityLoading] = useState(false);
 
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -482,6 +491,54 @@ export function BuildingModelsPage({ baseUrl }: BuildingModelsPageProps): JSX.El
       setIsCreatingConfig(false);
     }
   };
+
+  useEffect(() => {
+    if (!launchForm.datasetId.trim() || modelConfigs.length === 0) {
+      setCompatibilityStatuses({});
+      return;
+    }
+
+    let cancelled = false;
+    const loadCompatibility = async (): Promise<void> => {
+      setCompatibilityLoading(true);
+      try {
+        const responses = await Promise.all(modelConfigs.map(async (modelConfig) => {
+          const payload = await requestJson<TrainingRunValidationResponse>(baseUrl, '/api/v1/training-runs/compatibility', {
+            method: 'POST',
+            body: JSON.stringify({
+              model_config_id: modelConfig.id,
+              dataset_id: launchForm.datasetId.trim(),
+              task_type: launchForm.taskType,
+              subtask_type: launchForm.subtaskType,
+              parameters: {},
+            }),
+          });
+          return [modelConfig.id, {
+            modelConfigId: modelConfig.id,
+            compatible: payload.compatible,
+            warnings: payload.warnings,
+            errors: payload.errors,
+          }] as const;
+        }));
+        if (!cancelled) {
+          setCompatibilityStatuses(Object.fromEntries(responses));
+        }
+      } catch {
+        if (!cancelled) {
+          setCompatibilityStatuses({});
+        }
+      } finally {
+        if (!cancelled) {
+          setCompatibilityLoading(false);
+        }
+      }
+    };
+
+    void loadCompatibility();
+    return () => {
+      cancelled = true;
+    };
+  }, [baseUrl, launchForm.datasetId, launchForm.subtaskType, launchForm.taskType, modelConfigs]);
 
   const launchTrainingRun = async (): Promise<void> => {
     const optimisticId = `optimistic-${crypto.randomUUID()}`;
@@ -712,6 +769,27 @@ export function BuildingModelsPage({ baseUrl }: BuildingModelsPageProps): JSX.El
             ))}
           </select>
           {launchErrors.modelConfigId ? <small className="muted">{launchErrors.modelConfigId}</small> : null}
+          <div style={{ border: '1px solid rgba(255,255,255,0.12)', borderRadius: '0.5rem', padding: '0.75rem' }}>
+            <strong>Candidate compatibility</strong>
+            <p className="muted" style={{ margin: '0.25rem 0 0.5rem 0' }}>Statuses come from /api/v1/training-runs/compatibility for selected dataset/task.</p>
+            {compatibilityLoading ? <p className="muted" style={{ margin: 0 }}>Checking compatibility…</p> : null}
+            {!compatibilityLoading && modelConfigs.length > 0 ? (
+              <ul style={{ margin: 0, paddingLeft: '1.25rem', display: 'grid', gap: '0.35rem' }}>
+                {modelConfigs.map((item) => {
+                  const status = compatibilityStatuses[item.id];
+                  const label = typeof item.config.name === 'string' ? item.config.name : item.id;
+                  const state = !status ? 'unknown' : !status.compatible ? 'incompatible' : status.warnings.length > 0 ? 'warning' : 'compatible';
+                  return (
+                    <li key={`compat-${item.id}`}>
+                      <span><code>{label}</code>: <strong>{state}</strong></span>
+                      {status?.errors?.length ? <div className="muted">{status.errors.join(' ')}</div> : null}
+                      {!status?.errors?.length && status?.warnings?.length ? <div className="muted">{status.warnings.join(' ')}</div> : null}
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : null}
+          </div>
           <input value={launchForm.datasetId} onChange={(event) => setLaunchForm((prev) => ({ ...prev, datasetId: event.target.value }))} placeholder="Dataset ID" />
           {launchErrors.datasetId ? <small className="muted">{launchErrors.datasetId}</small> : null}
           <div style={{ display: 'grid', gap: '0.5rem', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' }}>
