@@ -15,10 +15,12 @@ from app.core.logging import request_id_ctx_var
 from app.domain.market_data import Service as MarketDataService
 from app.domain.model_configs.compatibility import (
     resolve_dataset_compatibility,
+    resolve_dataset_requirement,
     validate_model_dataset_compatibility,
 )
 from app.domain.model_configs.service import ModelConfigService
 from app.domain.training_runs import Service as TrainingRunService
+from app.domain.training_runs.dataset_qualification import QualificationContext, qualify_dataset_for_training
 from app.jobs.models import JobEnvelope, JobLifecycleEvent, JobStatus
 from app.jobs.store import job_state_store, job_submission_store
 from app.schemas import (
@@ -133,6 +135,25 @@ def _build_validation_response(
         if compatibility_errors:
             compatible = False
             errors.extend(f"compatibility: {error}" for error in compatibility_errors)
+
+        model_config_payload = model_config.get("config")
+        qualification_result = qualify_dataset_for_training(
+            context=QualificationContext(
+                task_type=payload.task_type.value,
+                subtask_type=payload.subtask_type.value,
+                model_family=str(model_config["model_family"]),
+                model_config=model_config_payload if isinstance(model_config_payload, dict) else {},
+            ),
+            dataset_metadata=dataset_profile,
+            dataset_requirement=resolve_dataset_requirement(model_spec),
+            raw_dataset_metadata=dataset.metadata,
+        )
+        if qualification_result.errors:
+            compatible = False
+            errors.extend(f"qualification[{issue.code}]: {issue.message}" for issue in qualification_result.errors)
+        warnings.extend(
+            f"qualification[{issue.code}]: {issue.message}" for issue in qualification_result.warnings
+        )
 
     normalized_payload = TrainingRunCreateRequest(
         task_type=payload.task_type,
