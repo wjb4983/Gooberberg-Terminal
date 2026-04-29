@@ -1,4 +1,5 @@
 from datetime import UTC, date, datetime
+import logging
 from hashlib import sha256
 from uuid import UUID, uuid4
 
@@ -22,6 +23,7 @@ from app.jobs.models import JobEnvelope, JobLifecycleEvent, JobStatus
 from app.jobs.store import job_state_store, job_submission_store
 from app.schemas import (
     MarketDataIngestionRequest,
+    TrainingIntent,
     TrainingRunCreateRequest,
     TrainingRunResponse,
     TrainingRunValidationRequest,
@@ -30,6 +32,7 @@ from app.schemas import (
 from app.schemas.run_constraints import attach_constraints_to_parameters
 
 router = APIRouter(prefix="/training-runs", tags=["training-runs"])
+logger = logging.getLogger(__name__)
 
 
 def _resolve_required_window(dataset_metadata: dict[str, object]) -> tuple[date, date] | None:
@@ -142,8 +145,20 @@ def _build_validation_response(
         ),
         constraints=payload.constraints,
     )
+    model_family = str(model_config["model_family"]) if model_config is not None else "unknown"
+    training_intent = TrainingIntent(
+        task_type=normalized_payload.task_type,
+        subtask_type=normalized_payload.subtask_type,
+        model_family=model_family,
+        model_config_id=normalized_payload.model_config_id,
+        dataset_id=normalized_payload.dataset_id,
+        parameter_set_id=None,
+        validation_profile="default",
+        override_parameters=dict(normalized_payload.parameters),
+    )
     return TrainingRunValidationResponse(
         normalized_payload=normalized_payload,
+        training_intent=training_intent,
         warnings=warnings,
         errors=errors,
         compatible=compatible,
@@ -205,6 +220,8 @@ async def create_training_run(
             },
         )
     normalized_payload = validation.normalized_payload
+    training_intent = validation.training_intent
+    logger.info("normalized training intent", extra={"training_intent": training_intent.model_dump(mode="json")})
     assert normalized_payload.dataset_id
 
     model_config = model_config_service.get(normalized_payload.model_config_id)
@@ -236,6 +253,8 @@ async def create_training_run(
     model_config_version_tag = str(model_config_version_raw) if isinstance(model_config_version_raw, str) else "unknown"
     run_metadata_payload = attached_parameters.get("run_metadata")
     run_metadata = run_metadata_payload if isinstance(run_metadata_payload, dict) else {}
+    run_metadata["training_intent"] = training_intent.model_dump(mode="json")
+    attached_parameters["run_metadata"] = run_metadata
     constraint_profile_version_raw = run_metadata.get("constraint_profile_version")
     constraint_profile_version = (
         str(constraint_profile_version_raw) if isinstance(constraint_profile_version_raw, str) else "v1"
