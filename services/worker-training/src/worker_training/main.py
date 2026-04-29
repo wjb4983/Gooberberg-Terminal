@@ -21,6 +21,7 @@ from pydantic import BaseModel, Field, ValidationError
 from worker_training.adapters.base import AdapterCapability
 from worker_training.adapters.registry import AdapterRegistry
 from worker_training.data.materializer import materialize_dataset_bundle
+from worker_training.evaluation.engine import build_metric_bundle
 from worker_training.task_heads import TASK_HEAD_REGISTRY
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
@@ -97,6 +98,7 @@ class ArtifactResult:
     sample_path: Path | None
     diagnostics_path: Path
     metrics_payload: dict[str, Any]
+    metric_bundle: dict[str, Any] | None = None
 
 
 @dataclass(slots=True)
@@ -250,8 +252,14 @@ async def handle_with_timeout(client: Redis, envelope: JobEnvelope) -> None:
 async def process_job(client: Redis, envelope: JobEnvelope) -> None:
     from worker_training.pipeline import run_training_pipeline
 
-    async def _emit(status: str, progress_pct: float, message: str, result_ref: str | None) -> None:
-        await persist_event(client, envelope, status, progress_pct, message, result_ref)
+    async def _emit(
+        status: str,
+        progress_pct: float,
+        message: str,
+        result_ref: str | None,
+        metric_bundle: dict[str, Any] | None = None,
+    ) -> None:
+        await persist_event(client, envelope, status, progress_pct, message, result_ref, metric_bundle=metric_bundle)
 
     await run_training_pipeline(envelope, _emit)
 
@@ -354,6 +362,12 @@ def write_mock_artifacts(envelope: JobEnvelope, request: TrainingRunRequest) -> 
     diagnostics_path.write_text(json.dumps(output.diagnostics, indent=2), encoding="utf-8")
     task_head = TASK_HEAD_REGISTRY.resolve(request.task, request.subtask)
     bundle = materialize_dataset_bundle(request.model_dump(), seed=request.seed)
+    metric_bundle = build_metric_bundle(
+        task=request.task,
+        subtask=request.subtask,
+        output_type=task_head.prediction_kind,
+        metrics_payload=output.metrics_payload,
+    )
     metadata = {
         "job_id": str(envelope.job_id),
         "run_id": str(envelope.run_id) if envelope.run_id else None,
@@ -366,6 +380,7 @@ def write_mock_artifacts(envelope: JobEnvelope, request: TrainingRunRequest) -> 
         "model_checksum_sha256": checksum,
         "diagnostics_ref": f"file://{diagnostics_path}",
         "metrics_payload": output.metrics_payload,
+        "metric_bundle": metric_bundle,
         "target_schema": task_head.build_target_schema(),
         "prediction_output": task_head.format_prediction(output.metrics_payload),
         "request": request.model_dump(),
@@ -380,6 +395,7 @@ def write_mock_artifacts(envelope: JobEnvelope, request: TrainingRunRequest) -> 
         sample_path=sample_path,
         diagnostics_path=diagnostics_path,
         metrics_payload=output.metrics_payload,
+        metric_bundle=metric_bundle,
     )
 
 
@@ -394,7 +410,15 @@ def try_write_parquet(parquet_path: Path) -> Path | None:
     return parquet_path
 
 
-async def persist_event(client: Redis, envelope: JobEnvelope, status: str, progress_pct: float, message: str, result_ref: str | None) -> None:
+async def persist_event(
+    client: Redis,
+    envelope: JobEnvelope,
+    status: str,
+    progress_pct: float,
+    message: str,
+    result_ref: str | None,
+    metric_bundle: dict[str, Any] | None = None,
+) -> None:
     event_at = datetime.now(UTC)
     mapping = {
         "job_id": str(envelope.job_id),
@@ -408,10 +432,10 @@ async def persist_event(client: Redis, envelope: JobEnvelope, status: str, progr
     if result_ref:
         mapping["result_ref"] = result_ref
     await client.hset(f"{STATE_KEY_PREFIX}{envelope.job_id}", mapping=mapping)
-    await post_event(envelope, mapping)
+    await post_event(envelope, mapping, metric_bundle=metric_bundle)
 
 
-async def post_event(envelope: JobEnvelope, mapping: dict[str, Any]) -> None:
+async def post_event(envelope: JobEnvelope, mapping: dict[str, Any], metric_bundle: dict[str, Any] | None = None) -> None:
     payload = {
         "status": mapping["status"],
         "detail": mapping["detail"],
@@ -420,7 +444,7 @@ async def post_event(envelope: JobEnvelope, mapping: dict[str, Any]) -> None:
         "progress_pct": float(mapping["progress_pct"]),
         "message": mapping["message"],
         "result_ref": mapping.get("result_ref"),
-        "metrics": {"checkpoint": mapping["message"]},
+        "metrics": metric_bundle or {"checkpoint": mapping["message"]},
         "notes": f"emitted by {WORKER_NAME}",
     }
     body = json.dumps(payload).encode("utf-8")

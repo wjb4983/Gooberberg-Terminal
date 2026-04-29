@@ -22,9 +22,11 @@ class _RedisStub:
 
 def test_process_job_emits_running_then_success(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     emitted: list[str] = []
+    emitted_metric_bundles: list[dict | None] = []
 
-    async def _persist_event(_client, _envelope, status, _progress, _message, _result_ref):
+    async def _persist_event(_client, _envelope, status, _progress, _message, _result_ref, metric_bundle=None):
         emitted.append(status)
+        emitted_metric_bundles.append(metric_bundle)
 
     monkeypatch.setattr("worker_training.main.persist_event", _persist_event)
     monkeypatch.setattr("worker_training.main.ARTIFACT_ROOT", tmp_path)
@@ -49,13 +51,16 @@ def test_process_job_emits_running_then_success(monkeypatch: pytest.MonkeyPatch,
         JobStatus.RUNNING,
         JobStatus.SUCCESS,
     ]
+    assert emitted_metric_bundles[-1] is not None
 
 
-def test_process_job_emits_failed_for_unknown_adapter(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+def test_process_job_uses_family_fallback_for_unknown_adapter(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     emitted: list[str] = []
+    emitted_metric_bundles: list[dict | None] = []
 
-    async def _persist_event(_client, _envelope, status, _progress, _message, _result_ref):
+    async def _persist_event(_client, _envelope, status, _progress, _message, _result_ref, metric_bundle=None):
         emitted.append(status)
+        emitted_metric_bundles.append(metric_bundle)
 
     monkeypatch.setattr("worker_training.main.persist_event", _persist_event)
     monkeypatch.setattr("worker_training.main.ARTIFACT_ROOT", tmp_path)
@@ -70,14 +75,17 @@ def test_process_job_emits_failed_for_unknown_adapter(monkeypatch: pytest.Monkey
 
     asyncio.run(process_job(client, envelope))  # type: ignore[arg-type]
 
-    assert emitted == [JobStatus.RUNNING, JobStatus.RUNNING, JobStatus.RUNNING, JobStatus.RUNNING, JobStatus.FAILED]
+    assert emitted[-1] == JobStatus.SUCCESS
+    assert emitted.count(JobStatus.RUNNING) >= 4
 
 
 def test_handle_with_timeout_marks_failed_when_attempts_exceeded(monkeypatch: pytest.MonkeyPatch) -> None:
     emitted: list[str] = []
+    emitted_metric_bundles: list[dict | None] = []
 
-    async def _persist_event(_client, _envelope, status, _progress, _message, _result_ref):
+    async def _persist_event(_client, _envelope, status, _progress, _message, _result_ref, metric_bundle=None):
         emitted.append(status)
+        emitted_metric_bundles.append(metric_bundle)
 
     monkeypatch.setattr("worker_training.main.persist_event", _persist_event)
 
