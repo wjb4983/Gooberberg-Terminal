@@ -46,6 +46,8 @@ def test_adapter_contract_artifacts(monkeypatch, tmp_path: Path, adapter_name: s
     diagnostics = json.loads(artifact.diagnostics_path.read_text(encoding="utf-8"))
 
     assert metadata["schema_version"] == "training-artifact/v1"
+    assert metadata["target_schema"]["task"] == request.task
+    assert metadata["prediction_output"]["schema_version"] == "prediction-output/v1"
     assert metadata["adapter"] == adapter_name
     assert isinstance(metadata["metrics_payload"], dict)
     assert "primary_metric" in metadata["metrics_payload"]
