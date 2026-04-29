@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { fetchModelCatalogItem, fetchModelCatalogList, type ModelCatalogItem } from '../api/modelCatalog';
+import { VirtualizedCatalogGrid } from '../components/model-catalog/VirtualizedCatalogGrid';
 
 interface ModelCatalogPageProps {
   baseUrl: string;
@@ -88,24 +89,15 @@ export function ModelCatalogPage({ baseUrl }: ModelCatalogPageProps): JSX.Elemen
       </div>
 
       <div className="catalog-layout">
-        <div className="catalog-grid">
-          {!loading && filteredCatalog.length === 0 ? <p className="muted">No catalog entries match current filters.</p> : null}
-          {filteredCatalog.map((item) => (
-            <button
-              key={item.model_family}
-              type="button"
-              className={`catalog-card ${selectedFamily === item.model_family ? 'catalog-card-selected' : ''}`}
-              onClick={() => setSelectedFamily(item.model_family)}
-            >
-              <h3>{item.model_name}</h3>
-              <p className="muted" style={{ margin: '0.25rem 0' }}>{item.model_family}</p>
-              <p style={{ marginTop: 0 }}>{item.description}</p>
-              <div className="catalog-tags">
-                {item.tags.map((tag) => <span key={tag} className="catalog-tag">{tag}</span>)}
-              </div>
-            </button>
-          ))}
-        </div>
+        {loading ? <p className="muted">Loading catalog entries…</p> : null}
+        {!loading && filteredCatalog.length === 0 ? <p className="muted">No catalog entries match current filters.</p> : null}
+        {!loading && filteredCatalog.length > 0 ? (
+          <VirtualizedCatalogGrid
+            items={filteredCatalog}
+            selectedFamily={selectedFamily}
+            onSelect={setSelectedFamily}
+          />
+        ) : null}
 
         <aside className="card catalog-drawer">
           <h3>Details</h3>

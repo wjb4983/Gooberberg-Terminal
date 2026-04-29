@@ -286,3 +286,29 @@ body {
   padding: 0.1rem 0.5rem;
   font-size: 0.78rem;
 }
+
+.catalog-grid-viewport {
+  height: min(72vh, 860px);
+  overflow: auto;
+  border: 1px solid #2b3558;
+  border-radius: 8px;
+  padding: 0.4rem;
+}
+
+.catalog-grid-spacer {
+  position: relative;
+}
+
+.catalog-grid {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 0.75rem;
+}
+
+.catalog-card {
+  min-height: 210px;
+}
