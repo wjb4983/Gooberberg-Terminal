@@ -1,0 +1,38 @@
+phase:
+  - phase1
+  - phase2
+  - phase3
+  - phase4
+family:
+  - forecasting
+  - tradable_alpha
+  - regime
+  - risk
+  - execution
+subfamily:
+  - tree_based
+  - linear
+  - neural
+  - probabilistic
+  - state_space
+  - event_driven
+targets:
+  - point
+  - interval
+  - quantile
+  - class
+  - ranking
+horizons:
+  - intraday
+  - daily
+  - weekly
+  - monthly
+  - multi_horizon
+maturity:
+  - experimental
+  - beta
+  - production
+complexity:
+  - low
+  - medium
+  - high
