@@ -18,6 +18,9 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field, ValidationError
 
+from worker_training.adapters.base import AdapterCapability
+from worker_training.adapters.registry import AdapterRegistry
+
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 logger = logging.getLogger("worker-training")
 
@@ -63,6 +66,10 @@ class TrainingRunRequest(BaseModel):
     epochs: int = 1
     learning_rate: float = 0.001
     seed: int = 7
+    model_family: str = "statistical"
+    task: str = "forecasting"
+    subtask: str = "univariate"
+    data_type: str = "timeseries_float"
 
 
 class DatasetLookupResponse(BaseModel):
@@ -107,6 +114,8 @@ class AdapterExecutionError(RuntimeError):
 
 class TrainingAdapter:
     name = "base"
+    model_family = "base"
+    capabilities: tuple[AdapterCapability, ...] = ()
 
     def run(self, request: TrainingRunRequest) -> AdapterOutput:
         raise NotImplementedError
@@ -114,6 +123,8 @@ class TrainingAdapter:
 
 class ArimaAdapter(TrainingAdapter):
     name = "arima"
+    model_family = "statistical"
+    capabilities = (AdapterCapability(task="forecasting", subtask="univariate", data_type="timeseries_float"),)
 
     def run(self, request: TrainingRunRequest) -> AdapterOutput:
         coeff = round(0.8 + request.learning_rate, 5)
@@ -127,6 +138,8 @@ class ArimaAdapter(TrainingAdapter):
 
 class KalmanFilterAdapter(TrainingAdapter):
     name = "kalman_filter"
+    model_family = "state_space"
+    capabilities = (AdapterCapability(task="forecasting", subtask="univariate", data_type="timeseries_float"),)
 
     def run(self, request: TrainingRunRequest) -> AdapterOutput:
         q = round(request.learning_rate * 0.5, 6)
@@ -140,6 +153,11 @@ class KalmanFilterAdapter(TrainingAdapter):
 
 class TorchNNTimeSeriesAdapter(TrainingAdapter):
     name = "torch_nn_timeseries"
+    model_family = "neural"
+    capabilities = (
+        AdapterCapability(task="forecasting", subtask="univariate", data_type="timeseries_float"),
+        AdapterCapability(task="forecasting", subtask="multivariate", data_type="timeseries_float"),
+    )
 
     def run(self, request: TrainingRunRequest) -> AdapterOutput:
         if request.epochs <= 0:
@@ -161,6 +179,7 @@ ADAPTERS: dict[str, TrainingAdapter] = {
     "kalman_filter": KalmanFilterAdapter(),
     "torch_nn_timeseries": TorchNNTimeSeriesAdapter(),
 }
+ADAPTER_REGISTRY = AdapterRegistry(adapters_by_family={adapter.model_family: adapter for adapter in ADAPTERS.values()})
 
 
 async def run_worker() -> None:
@@ -323,13 +342,7 @@ async def ensure_data_ready(envelope: JobEnvelope) -> None:
 def write_mock_artifacts(envelope: JobEnvelope, request: TrainingRunRequest) -> ArtifactResult:
     run_dir = ARTIFACT_ROOT / "training" / str(envelope.job_id)
     run_dir.mkdir(parents=True, exist_ok=True)
-    adapter = ADAPTERS.get(request.model_name)
-    if adapter is None:
-        raise AdapterExecutionError(
-            code="adapter_not_found",
-            message=f"no adapter registered for model '{request.model_name}'",
-            diagnostics={"model_name": request.model_name, "available_adapters": sorted(ADAPTERS)},
-        )
+    adapter = ADAPTER_REGISTRY.resolve(request)
     output = adapter.run(request)
 
     model_path = run_dir / "model.bin"

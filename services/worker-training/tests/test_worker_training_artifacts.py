@@ -17,7 +17,7 @@ def test_training_artifact_written(monkeypatch, tmp_path: Path) -> None:
         payload={},
         queued_at=datetime.now(UTC),
     )
-    request = TrainingRunRequest.model_validate({"model_name": "arima"})
+    request = TrainingRunRequest.model_validate({"model_name": "arima", "model_family": "statistical"})
 
     artifact = write_mock_artifacts(envelope, request)
 
@@ -37,7 +37,10 @@ def test_adapter_contract_artifacts(monkeypatch, tmp_path: Path, adapter_name: s
         payload={},
         queued_at=datetime.now(UTC),
     )
-    request = TrainingRunRequest.model_validate({"model_name": adapter_name, "epochs": 3, "learning_rate": 0.01})
+    family_by_adapter = {name: adapter.model_family for name, adapter in ADAPTERS.items()}
+    request = TrainingRunRequest.model_validate(
+        {"model_name": adapter_name, "model_family": family_by_adapter[adapter_name], "epochs": 3, "learning_rate": 0.01}
+    )
     artifact = write_mock_artifacts(envelope, request)
     metadata = json.loads(artifact.metadata_path.read_text(encoding="utf-8"))
     diagnostics = json.loads(artifact.diagnostics_path.read_text(encoding="utf-8"))
@@ -53,7 +56,9 @@ def test_deterministic_smoke_for_arima(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setattr("worker_training.main.ARTIFACT_ROOT", tmp_path)
     envelope_a = JobEnvelope(job_id=uuid4(), trace_id="trace-a", job_type="training", payload={}, queued_at=datetime.now(UTC))
     envelope_b = JobEnvelope(job_id=uuid4(), trace_id="trace-b", job_type="training", payload={}, queued_at=datetime.now(UTC))
-    request = TrainingRunRequest.model_validate({"model_name": "arima", "epochs": 2, "learning_rate": 0.01, "seed": 99})
+    request = TrainingRunRequest.model_validate(
+        {"model_name": "arima", "model_family": "statistical", "epochs": 2, "learning_rate": 0.01, "seed": 99}
+    )
 
     a = write_mock_artifacts(envelope_a, request)
     b = write_mock_artifacts(envelope_b, request)
