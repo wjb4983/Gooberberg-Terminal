@@ -25,6 +25,9 @@ def test_training_artifact_written(monkeypatch, tmp_path: Path) -> None:
     assert (artifact.metadata_path.parent / "model.bin").exists()
     assert artifact.diagnostics_path.exists()
     assert artifact.ref.startswith("file://")
+    metadata = json.loads(artifact.metadata_path.read_text(encoding="utf-8"))
+    assert "split_manifest" in metadata
+    assert set(metadata["split_manifest"]["counts"]) == {"train", "val", "test"}
 
 
 @pytest.mark.parametrize("adapter_name", sorted(ADAPTERS))
