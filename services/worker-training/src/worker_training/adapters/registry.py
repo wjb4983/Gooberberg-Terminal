@@ -35,9 +35,13 @@ class AdapterRegistry:
                 return adapter
 
         err = CapabilityValidationError(request.model_family, request.task, request.subtask, request.data_type)
+        supported_pairs = sorted({(c.task, c.subtask, c.data_type) for c in adapter.capabilities})
+        supported_hint = "; ".join(
+            f"task='{task}', subtask='{subtask}', data_type='{data_type}'" for task, subtask, data_type in supported_pairs
+        )
         raise AdapterExecutionError(
             code="unsupported_capability",
-            message=str(err),
+            message=f"{err}. supported capabilities: {supported_hint}",
             diagnostics={
                 "model_family": request.model_family,
                 "requested": {"task": request.task, "subtask": request.subtask, "data_type": request.data_type},

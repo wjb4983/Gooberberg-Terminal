@@ -35,3 +35,4 @@ def test_registry_fails_fast_for_unsupported_capability() -> None:
         assert exc.code == "unsupported_capability"
         assert "state_space" in str(exc)
         assert "classification" in str(exc)
+        assert "supported capabilities:" in str(exc)

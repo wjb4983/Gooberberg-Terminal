@@ -126,9 +126,10 @@ class TrainingAdapter:
 
 
 from worker_training.adapters.phase1 import PHASE1_ADAPTERS
+from worker_training.adapters.phase2 import PHASE2_ADAPTERS
 
 
-ADAPTERS: dict[str, TrainingAdapter] = dict(PHASE1_ADAPTERS)
+ADAPTERS: dict[str, TrainingAdapter] = {**PHASE1_ADAPTERS, **PHASE2_ADAPTERS}
 ADAPTER_REGISTRY = AdapterRegistry(adapters_by_family={adapter.model_family: adapter for adapter in ADAPTERS.values()})
 
 
