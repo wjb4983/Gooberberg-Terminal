@@ -17,6 +17,8 @@ class HealthResponse(BaseModel):
 
 class QueueHealthResponse(BaseModel):
     status: str
+    backend_type: str
+    probe_latency_ms: float | None = None
     queue_depth: int | None = None
     worker_heartbeat_at: str | None = None
     worker_heartbeat_age_seconds: float | None = None
