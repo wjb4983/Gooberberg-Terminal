@@ -25,4 +25,5 @@ def test_consumer_processes_intent_and_publishes_decision() -> None:
     assert len(client.published) == 1
     _, decision_payload = client.published[0]
     parsed = json.loads(decision_payload)
-    assert parsed["execution_status"] == "not_submitted"
+    assert parsed["execution_status"] == "created"
+    assert parsed["order_lifecycle"][-1] == "filled"
