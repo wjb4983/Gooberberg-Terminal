@@ -71,6 +71,43 @@ For heavy outputs or artifacts:
 - `POST /api/v1/risk/overrides`
 - `GET /api/v1/risk/decisions/recent`
 
+## Run-creation lineage contract
+
+`POST /api/v1/training-runs` and `POST /api/v1/backtest-runs` require either:
+
+1. a full `lineage` object (`LineageSpec`), or
+2. a `lineage_ref` object resolvable into lineage before enqueue.
+
+If neither is provided, the API rejects with `422` and reason code
+`LINEAGE_VALIDATION_FAILED`.
+
+Accepted (reference-driven) example:
+
+```json
+{
+  "lineage_ref": {
+    "dataset_fingerprint_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "code_git_commit_sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "code_dirty": false,
+    "seed": 7
+  }
+}
+```
+
+Failure example:
+
+```json
+{
+  "detail": {
+    "message": "lineage validation failed",
+    "reason_code": "LINEAGE_VALIDATION_FAILED",
+    "errors": [
+      { "field": "lineage|lineage_ref", "message": "either lineage or lineage_ref must be provided" }
+    ]
+  }
+}
+```
+
 ### WebSocket
 
 - `GET ws://<host>/ws`

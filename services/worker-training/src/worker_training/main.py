@@ -18,7 +18,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field, ValidationError
 
-from gb_core.lineage import LineageSpec
+from gb_core.lineage import LineageReference, LineageSpec, resolve_lineage_spec
 
 from worker_training.adapters.base import AdapterCapability
 from worker_training.adapters.registry import AdapterRegistry
@@ -65,7 +65,8 @@ class JobEnvelope(BaseModel):
 
 
 class TrainingRunRequest(BaseModel):
-    lineage: LineageSpec
+    lineage: LineageSpec | None = None
+    lineage_ref: LineageReference | None = None
     dataset_id: str | None = None
     model_name: str = "placeholder-model"
     dataset_ref: str = "dataset://placeholder"
@@ -236,6 +237,7 @@ def write_error_artifact(envelope: JobEnvelope, request: TrainingRunRequest, exc
 
 async def ensure_data_ready(envelope: JobEnvelope) -> None:
     request = TrainingRunRequest.model_validate(envelope.payload)
+    request.lineage = resolve_lineage_spec(lineage=request.lineage, lineage_ref=request.lineage_ref, config_payload=envelope.payload)
     if not request.dataset_id:
         return
 

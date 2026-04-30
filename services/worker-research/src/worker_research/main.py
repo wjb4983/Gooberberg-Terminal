@@ -16,6 +16,7 @@ from typing import Any
 from uuid import UUID
 
 from pydantic import BaseModel, Field, ValidationError
+from gb_core.lineage import LineageReference, LineageSpec, resolve_lineage_spec
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 logger = logging.getLogger("worker-research")
@@ -57,6 +58,8 @@ class JobEnvelope(BaseModel):
 
 
 class BacktestRequest(BaseModel):
+    lineage: LineageSpec | None = None
+    lineage_ref: LineageReference | None = None
     strategy_id: str = "placeholder-strategy"
     universe: list[str] = Field(default_factory=lambda: ["SPY"])
     start_date: str = "2024-01-01"
@@ -187,7 +190,9 @@ def write_legacy_artifacts(envelope: JobEnvelope, request: BacktestRequest) -> A
 
 
 def validate_request(envelope: JobEnvelope) -> BacktestRequest:
-    return BacktestRequest.model_validate(envelope.payload)
+    request = BacktestRequest.model_validate(envelope.payload)
+    request.lineage = resolve_lineage_spec(lineage=request.lineage, lineage_ref=request.lineage_ref, config_payload=envelope.payload)
+    return request
 
 
 def load_inputs(request: BacktestRequest) -> dict[str, Any]:
