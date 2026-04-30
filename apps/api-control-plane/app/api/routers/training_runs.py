@@ -21,6 +21,7 @@ from app.domain.model_configs.compatibility import (
 from app.domain.model_configs.service import ModelConfigService
 from app.domain.training_runs import Service as TrainingRunService
 from app.domain.training_runs.dataset_qualification import QualificationContext, qualify_dataset_for_training
+from app.domain.task_definitions import get_task_subtask_definition
 from app.domain.training_runs.validation_profiles import resolve_validation_profile
 from app.jobs.models import JobEnvelope, JobLifecycleEvent, JobStatus
 from app.jobs.store import job_state_store, job_submission_store
@@ -110,20 +111,27 @@ def _build_validation_response(
 ) -> TrainingRunValidationResponse:
     warnings: list[str] = []
     errors: list[str] = []
+    warning_details: list[dict[str, str]] = []
+    error_details: list[dict[str, str]] = []
     compatible = True
+    model_spec = None
+    qualification_result = None
 
     model_config = model_config_service.get(payload.model_config_id)
     if model_config is None:
         errors.append("model config not found")
+        error_details.append({"code": "model_config_not_found", "message": "model config not found"})
         compatible = False
 
     dataset_id = payload.dataset_id.strip()
     if dataset_id != payload.dataset_id:
         warnings.append("dataset_id was normalized by trimming surrounding whitespace")
+        warning_details.append({"code": "dataset_id_normalized", "message": "dataset_id was normalized by trimming surrounding whitespace"})
 
     dataset = market_data_service.lookup_dataset(dataset_id)
     if dataset is None:
         errors.append("dataset not found; ingest data and retry")
+        error_details.append({"code": "dataset_not_found", "message": "dataset not found; ingest data and retry"})
         compatible = False
 
     if model_config is not None and dataset is not None:
@@ -135,7 +143,9 @@ def _build_validation_response(
         )
         if compatibility_errors:
             compatible = False
-            errors.extend(f"compatibility: {error}" for error in compatibility_errors)
+            for error in compatibility_errors:
+                errors.append(f"compatibility: {error}")
+                error_details.append({"code": "compatibility_error", "message": error})
 
         model_config_payload = model_config.get("config")
         qualification_result = qualify_dataset_for_training(
@@ -151,10 +161,12 @@ def _build_validation_response(
         )
         if qualification_result.errors:
             compatible = False
-            errors.extend(f"qualification[{issue.code}]: {issue.message}" for issue in qualification_result.errors)
-        warnings.extend(
-            f"qualification[{issue.code}]: {issue.message}" for issue in qualification_result.warnings
-        )
+            for issue in qualification_result.errors:
+                errors.append(f"qualification[{issue.code}]: {issue.message}")
+                error_details.append({"code": f"qualification_{issue.code}", "message": issue.message})
+        for issue in qualification_result.warnings:
+            warnings.append(f"qualification[{issue.code}]: {issue.message}")
+            warning_details.append({"code": f"qualification_{issue.code}", "message": issue.message})
 
     normalized_payload = TrainingRunCreateRequest(
         task_type=payload.task_type,
@@ -173,6 +185,11 @@ def _build_validation_response(
         subtask_type=normalized_payload.subtask_type.value,
         requested_profile=payload.validation_profile,
     )
+    task_definition = get_task_subtask_definition(
+        task_type=normalized_payload.task_type,
+        subtask_type=normalized_payload.subtask_type,
+    )
+    metric_bundle = list(task_definition.default_metric_bundle)
     training_intent = TrainingIntent(
         task_type=normalized_payload.task_type,
         subtask_type=normalized_payload.subtask_type,
@@ -183,11 +200,32 @@ def _build_validation_response(
         validation_profile=validation_profile,
         override_parameters=dict(normalized_payload.parameters),
     )
+    dataset_qualification_report = {
+        "status": "passed" if qualification_result is not None and qualification_result.errors == () else "failed",
+        "errors": [{"code": issue.code, "message": issue.message} for issue in (qualification_result.errors if qualification_result else ())],
+        "warnings": [{"code": issue.code, "message": issue.message} for issue in (qualification_result.warnings if qualification_result else ())],
+    } if model_config is not None and dataset is not None else {"status": "not_evaluated", "errors": [], "warnings": []}
+
+    selected_adapter_capability = {
+        "model_family": model_family,
+        "supported_data_kinds": list(getattr(model_spec, "supported_data_kinds", ())) if model_config is not None else [],
+        "required_index": getattr(model_spec, "required_index", None) if model_config is not None else None,
+        "target_type": getattr(model_spec, "target_type", None) if model_config is not None else None,
+    }
+
     return TrainingRunValidationResponse(
         normalized_payload=normalized_payload,
         training_intent=training_intent,
+        resolved_task_head=task_definition.target_schema,
+        resolved_validation_profile=validation_profile,
+        dataset_qualification_report=dataset_qualification_report,
+        selected_adapter_capability=selected_adapter_capability,
+        expected_artifacts=["trained_model", "training_metrics", "run_metadata"],
+        metric_bundle=metric_bundle,
         warnings=warnings,
         errors=errors,
+        warning_details=warning_details,
+        error_details=error_details,
         compatible=compatible,
         valid=len(errors) == 0,
     )
