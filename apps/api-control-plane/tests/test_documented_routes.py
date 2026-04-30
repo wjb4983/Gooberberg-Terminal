@@ -26,6 +26,9 @@ DOCUMENTED_HTTP_ROUTES = {
     "/api/v1/parameter-sets/{set_id}/versions",
     "/api/v1/testing-runs",
     "/api/v1/testing-runs/{run_id}",
+    "/api/v1/runs/{run_id}/lineage",
+    "/api/v1/runs/{run_id}/artifacts",
+    "/api/v1/runs/{run_id}/replay",
 }
 
 

@@ -279,6 +279,57 @@ def test_success_gate_forces_failed_status_when_mandatory_artifact_missing() -> 
         assert "success gate failed" in response.json()["detail"]
 
 
+def test_runs_lineage_artifacts_and_replay_endpoints() -> None:
+    with TestClient(create_app()) as client:
+        dataset = client.post(
+            "/api/v1/market-data/ingestions",
+            json={"source": "test-fixture", "symbols": ["AAPL"], "timeframe": "1d", "start_date": "2025-01-01", "end_date": "2025-12-31"},
+        ).json()
+        model_config = client.post(
+            "/api/v1/model-configs",
+            json={"model_family": "arima", "config": {"task_type": "forecasting", "data_type": "time_series_univariate", "p": 1, "d": 1, "q": 1}},
+        ).json()
+        run = client.post(
+            "/api/v1/training-runs",
+            json={
+                "model_config_id": model_config["id"],
+                "dataset_id": dataset["request_id"],
+                "parameters": {"epochs": 1},
+                "lineage": {"lineage_id": "ln-1", "dataset_fingerprint": "data-v1", "code_hash": "a" * 40, "config_digest": "cfg-v1", "seed": 7},
+            },
+        ).json()
+        client.post(
+            f"/api/v1/jobs/{run['job_id']}/events",
+            json={
+                "status": "success",
+                "detail": "training run completed",
+                "progress_pct": 100,
+                "message": "done",
+                "result_ref": "s3://gooberberg/runs/model.tar.gz",
+                "artifact_checksum": "sha256:aaaa1234bbbb5678",
+                "artifact_size_bytes": 128,
+                "artifact_manifest": [{"role": "trained_model", "artifact_ref": "s3://gooberberg/runs/model.tar.gz", "checksum": "sha256:aaaa1234bbbb5678", "size_bytes": 128}],
+                "lineage": {"lineage_id": "ln-1", "dataset_fingerprint": "data-v1", "code_hash": "a" * 40, "config_digest": "cfg-v1", "seed": 7},
+            },
+        )
+
+        lineage_response = client.get(f"/api/v1/runs/{run['id']}/lineage")
+        assert lineage_response.status_code == 200
+        assert lineage_response.json()["schema_version"] == "v1"
+        assert lineage_response.json()["lineage"]["dataset_fingerprint"] == "data-v1"
+
+        artifacts_response = client.get(f"/api/v1/runs/{run['id']}/artifacts")
+        assert artifacts_response.status_code == 200
+        assert len(artifacts_response.json()["manifest_entries"]) >= 1
+        assert artifacts_response.json()["integrity_metadata"][0]["checksum"] == "sha256:aaaa1234bbbb5678"
+
+        replay_response = client.get(f"/api/v1/runs/{run['id']}/replay")
+        assert replay_response.status_code == 200
+        replay_payload = replay_response.json()
+        assert replay_payload["replay_bundle"]["dataset_reference"] == dataset["request_id"]
+        assert replay_payload["replay_bundle"]["seed"] == 7
+
+
 def test_success_gate_allows_success_with_valid_backtest_manifest_and_seed() -> None:
     with TestClient(create_app()) as client:
         backtest = client.post(
