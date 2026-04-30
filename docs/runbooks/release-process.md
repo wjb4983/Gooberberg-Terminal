@@ -50,3 +50,34 @@ PUSH_IMAGES=true timeout 90m scripts/release/build-push-server-images.sh "$VERSI
 - No infrastructure mutation.
 
 This runbook intentionally stops at validated build artifacts and registry push readiness.
+
+## Deployment release gates (required)
+
+Before any deployment promotion, all gates below must pass:
+
+1. **Schema compatibility gate**
+   - Validate backward/forward compatibility for changed event and API schemas.
+   - Block deployment on any breaking change without explicit migration and rollout plan.
+
+2. **Replay parity gate**
+   - Execute deterministic replay parity suite for impacted pipelines.
+   - Require zero unresolved parity mismatches.
+
+3. **Risk test gate**
+   - Run risk policy regression tests and scenario checks.
+   - Require pass status for all critical decision-policy cases.
+
+Recommended quick-start order for implementers:
+
+1. Run schema compatibility checks.
+2. Run replay parity validation.
+3. Run risk regression suite.
+4. Proceed to artifact build and deployment only after all three pass.
+
+Example gate commands:
+
+```bash
+timeout 5m pytest apps/api-control-plane/tests/test_lineage_governance_schema.py
+timeout 10m pytest apps/api-control-plane/tests/test_replay_parity_faults.py
+timeout 5m pytest apps/api-control-plane/tests/test_risk.py
+```
