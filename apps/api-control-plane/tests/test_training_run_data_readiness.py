@@ -256,6 +256,41 @@ def test_training_run_create_persists_training_intent_in_run_metadata() -> None:
     assert run_metadata["training_intent"]["dataset_id"] == DATASET_ID
     assert run_metadata["training_intent"]["validation_profile"] == "walk_forward"
 
+def test_training_templates_can_be_created_and_applied_with_preflight() -> None:
+    market_data_service = StubMarketDataService(
+        coverage=MarketDataCacheCoverageResponse(
+            symbol="AAPL",
+            timeframe="1d",
+            available_start=date(2025, 1, 1),
+            available_end=date(2025, 1, 2),
+            coverage_pct=100.0,
+        )
+    )
+    with _test_client(market_data_service) as client:
+        created = client.post(
+            "/api/v1/training-runs/templates",
+            json={
+                "name": "fast-arima",
+                "task_type": "time_series_momentum",
+                "subtask_type": "ranking",
+                "validation_profile": "walk_forward",
+                "dataset_constraints": {"data_kind": "time_series"},
+                "parameter_preset": {"name": "fast", "parameters": {"epochs": 4, "seed": 7}},
+            },
+        )
+        assert created.status_code == 201
+        template_id = created.json()["id"]
+        applied = client.post(
+            f"/api/v1/training-runs/templates/{template_id}/apply",
+            json=_training_payload(),
+        )
+    assert applied.status_code == 200
+    body = applied.json()
+    assert body["valid"] is True
+    assert body["normalized_payload"]["parameters"]["epochs"] == 1
+    assert body["training_intent"]["validation_profile"] == "walk_forward"
+
+
 def test_training_run_compatibility_reports_missing_dataset() -> None:
     market_data_service = StubMarketDataService(
         coverage=MarketDataCacheCoverageResponse(

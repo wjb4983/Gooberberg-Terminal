@@ -90,6 +90,8 @@ from app.schemas.training_runs import (
     TrainingRunResponse,
     TrainingRunValidationRequest,
     TrainingRunValidationResponse,
+    TrainingTemplate,
+    TrainingTemplateCreateRequest,
 )
 
 __all__ = [
@@ -172,6 +174,8 @@ __all__ = [
     "TrainingRunResponse",
     "TrainingRunValidationRequest",
     "TrainingRunValidationResponse",
+    "TrainingTemplate",
+    "TrainingTemplateCreateRequest",
     "TransactionCostModel",
     "ExecutionDelayModel",
     "WebSocketContractEnvelope",
