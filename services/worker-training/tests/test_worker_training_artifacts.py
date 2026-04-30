@@ -42,8 +42,17 @@ def test_adapter_contract_artifacts(monkeypatch, tmp_path: Path, adapter_name: s
         queued_at=datetime.now(UTC),
     )
     family_by_adapter = {name: adapter.model_family for name, adapter in ADAPTERS.items()}
+    capability = ADAPTERS[adapter_name].capabilities[0]
     request = TrainingRunRequest.model_validate(
-        {"model_name": adapter_name, "model_family": family_by_adapter[adapter_name], "epochs": 3, "learning_rate": 0.01}
+        {
+            "model_name": adapter_name,
+            "model_family": family_by_adapter[adapter_name],
+            "epochs": 3,
+            "learning_rate": 0.01,
+            "task": capability.task,
+            "subtask": capability.subtask,
+            "data_type": capability.data_type,
+        }
     )
     artifact = write_mock_artifacts(envelope, request)
     metadata = json.loads(artifact.metadata_path.read_text(encoding="utf-8"))
@@ -73,3 +82,32 @@ def test_deterministic_smoke_for_arima(monkeypatch, tmp_path: Path) -> None:
 
     assert m_a["metrics_payload"] == m_b["metrics_payload"]
     assert m_a["model_checksum_sha256"] == m_b["model_checksum_sha256"]
+
+
+def test_phase3_artifact_includes_compute_profile_and_resource_warnings(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setattr("worker_training.main.ARTIFACT_ROOT", tmp_path)
+    envelope = JobEnvelope(
+        job_id=uuid4(),
+        trace_id="trace-phase3",
+        job_type="training",
+        payload={},
+        queued_at=datetime.now(UTC),
+    )
+    request = TrainingRunRequest.model_validate(
+        {
+            "model_name": "deep_cross_asset_transformer",
+            "model_family": "deep_cross_asset_transformer",
+            "epochs": 6,
+            "learning_rate": 0.02,
+            "task": "return_forecast",
+            "subtask": "default",
+            "data_type": "timeseries_float",
+        }
+    )
+
+    artifact = write_mock_artifacts(envelope, request)
+    diagnostics = json.loads(artifact.diagnostics_path.read_text(encoding="utf-8"))
+
+    assert "compute_profile" in diagnostics
+    assert "resource_warnings" in diagnostics
+    assert diagnostics["resource_warnings"]
