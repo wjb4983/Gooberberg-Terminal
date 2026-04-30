@@ -223,3 +223,7 @@ When backend contracts change:
 - Put large/binary/tabular data behind `*_ref` links.
 - Enforce risk gate before execution transitions.
 - Prefer explicit, versioned event contracts over implicit payload assumptions.
+
+## Lineage enforcement rollout
+
+For phased lineage gate rollout, acceptance criteria, required dashboards, and migration communication milestones, see `docs/runbooks/lineage-enforcement-rollout.md`.
