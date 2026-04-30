@@ -49,6 +49,9 @@ jobs:
       - name: Unit tests
         run: timeout 15m scripts/test-all.sh
 
+      - name: Training metadata consistency
+        run: timeout 3m python scripts/check-training-model-metadata-consistency.py
+
       - name: Connectivity layered smoke
         run: timeout 15m scripts/test-connectivity-layered.sh
 
