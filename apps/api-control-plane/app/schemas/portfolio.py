@@ -2,6 +2,8 @@ from datetime import UTC, datetime
 
 from pydantic import BaseModel, Field
 
+from app.schemas.graph import PipelineResponseMetadata
+
 
 class Position(BaseModel):
     symbol: str = Field(min_length=1)
@@ -24,3 +26,4 @@ class PortfolioSnapshot(BaseModel):
     unrealized_pnl: float
     realized_pnl: float
     positions: list[Position] = Field(default_factory=list)
+    response_metadata: PipelineResponseMetadata | None = None

@@ -5,6 +5,8 @@ from math import cos, pi, sin
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from app.api.dependencies import get_graph_service
+from app.core.config import get_settings
+from app.core.pipeline_observability import PipelineResponseMeta, observe_pipeline_stage
 from app.domain.graph_domain import Service as GraphService
 from app.schemas import (
     GraphLayoutProductsResponse,
@@ -23,7 +25,12 @@ router = APIRouter(prefix="/graph", tags=["graph"])
 
 @router.get("/topology", response_model=GraphTopologyResponse)
 def get_graph_topology(service: GraphService = Depends(get_graph_service)) -> GraphTopologyResponse:
-    return service.get_topology()
+    settings = get_settings()
+    fallback_reason = None if settings.graph_prod_topology_enabled else "prod_path_disabled"
+    with observe_pipeline_stage(stage="graph", fingerprint_source={"route":"graph.topology","prod":settings.graph_prod_topology_enabled}, fallback_reason=fallback_reason) as fingerprint:
+        response = service.get_topology()
+    response.response_metadata = PipelineResponseMeta(version=settings.deterministic_pipeline_response_meta_version, deterministic=True, stage="graph", fingerprint=fingerprint, fallback_reason=fallback_reason)
+    return response
 
 
 @router.get("/layout-products", response_model=GraphLayoutProductsResponse)

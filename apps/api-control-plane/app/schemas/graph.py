@@ -28,9 +28,18 @@ class GraphEdge(BaseModel):
     label: str | None = None
 
 
+class PipelineResponseMetadata(BaseModel):
+    version: str
+    deterministic: bool
+    stage: str
+    fingerprint: str
+    fallback_reason: str | None = None
+
+
 class GraphTopologyResponse(BaseModel):
     nodes: list[GraphNode]
     edges: list[GraphEdge]
+    response_metadata: PipelineResponseMetadata | None = None
 
 
 class GraphNeighborhoodRequest(BaseModel):
@@ -60,6 +69,7 @@ class GraphLayoutProductsResponse(BaseModel):
     viewport_width: float
     viewport_height: float
     nodes: list[GraphNodePosition]
+    response_metadata: PipelineResponseMetadata | None = None
 
 
 class TimeSeriesPoint(BaseModel):
@@ -78,3 +88,4 @@ class GraphTimeSeriesTilesResponse(BaseModel):
     window_start: str
     window_end: str
     tiles: list[TimeSeriesTile]
+    response_metadata: PipelineResponseMetadata | None = None

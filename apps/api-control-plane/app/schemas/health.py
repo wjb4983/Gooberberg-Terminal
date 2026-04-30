@@ -1,5 +1,7 @@
 from pydantic import BaseModel
 
+from app.schemas.graph import PipelineResponseMetadata
+
 
 class DependencyStatus(BaseModel):
     configured: bool
@@ -13,6 +15,7 @@ class HealthResponse(BaseModel):
     version: str
     postgres: DependencyStatus
     redis: DependencyStatus
+    response_metadata: PipelineResponseMetadata | None = None
 
 
 class QueueHealthResponse(BaseModel):
