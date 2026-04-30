@@ -49,6 +49,12 @@ jobs:
       - name: Unit tests
         run: timeout 15m scripts/test-all.sh
 
+      - name: Timeout wrapper policy
+        run: timeout 60s python scripts/check-ci-timeout-wrappers.py
+
+      - name: Replay and fault-injection tests
+        run: timeout 15m scripts/test-replay-faults.sh
+
       - name: Training metadata consistency
         run: timeout 3m python scripts/check-training-model-metadata-consistency.py
 
