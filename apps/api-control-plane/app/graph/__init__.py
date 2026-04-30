@@ -1,3 +1,4 @@
-from app.graph.mock_provider import get_mock_topology
+"""Graph helpers package.
 
-__all__ = ['get_mock_topology']
+Mock topology providers are test-only and should not be imported from live request paths.
+"""

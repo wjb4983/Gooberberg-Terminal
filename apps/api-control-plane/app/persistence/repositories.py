@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import UTC, date, timedelta
 from hashlib import sha256
+import logging
 from uuid import UUID, uuid4
 
 from sqlalchemy import delete, func, select
@@ -379,7 +380,13 @@ class GraphSqlRepository:
             self._session.add(GraphEdgeRow(id=edge.id, source=edge.source, target=edge.target, label=edge.label))
         self._session.commit()
 
-    def ensure_seeded_from_entities(self) -> None:
+    def ensure_seeded_from_entities(
+        self,
+        *,
+        allow_mock_fallback: bool = True,
+        force_mock_topology: bool = False,
+        environment: str = "development",
+    ) -> None:
         node_count = self._session.scalar(select(func.count()).select_from(GraphNodeRow)) or 0
         if node_count > 0:
             return
@@ -398,17 +405,33 @@ class GraphSqlRepository:
             edges.append(GraphEdgeRow(id=f"edge:{rid}:{sid}", source=rid, target=sid, label="executes"))
             if row.model_config_id:
                 mid=f"model:{row.model_config_id}"
-                edges.append(GraphEdgeRow(id=f"edge:{sid}:{mid}", source=sid, target=mid, label="uses"))
+                edges.append(GraphEdgeRow(id=f"edge:{sid}:{mid}:uses", source=sid, target=mid, label="uses"))
+
+        if force_mock_topology:
+            if environment.lower() not in {"test", "testing"}:
+                logging.getLogger(__name__).warning(
+                    "Mock graph topology was forced with GB_GRAPH_MOCK_TOPOLOGY_ENABLED=true "
+                    "outside test environment=%s.",
+                    environment,
+                )
+            if allow_mock_fallback:
+                from app.graph.mock_provider import get_mock_topology
+
+                self.ensure_seeded(get_mock_topology())
+                return
 
         dedup={}
         for n in nodes: dedup[n.id]=n
-        for n in dedup.values(): self._session.merge(n)
-        for e in edges: self._session.merge(e)
+        for node_id in sorted(dedup.keys()):
+            self._session.merge(dedup[node_id])
+        for edge in sorted(edges, key=lambda edge: (edge.source, edge.target, edge.label, edge.id)):
+            edge.id = self._stable_edge_id(edge.source, edge.target, edge.label)
+            self._session.merge(edge)
         self._session.commit()
 
     def get_topology(self) -> GraphTopologyResponse:
-        nodes = self._session.execute(select(GraphNodeRow)).scalars().all()
-        edges = self._session.execute(select(GraphEdgeRow)).scalars().all()
+        nodes = self._session.execute(select(GraphNodeRow).order_by(GraphNodeRow.type, GraphNodeRow.group, GraphNodeRow.label, GraphNodeRow.id)).scalars().all()
+        edges = self._session.execute(select(GraphEdgeRow).order_by(GraphEdgeRow.source, GraphEdgeRow.target, GraphEdgeRow.label, GraphEdgeRow.id)).scalars().all()
         return GraphTopologyResponse(
             nodes=[
                 GraphNode(
@@ -422,6 +445,11 @@ class GraphSqlRepository:
             ],
             edges=[GraphEdge(id=edge.id, source=edge.source, target=edge.target, label=edge.label) for edge in edges],
         )
+
+    @staticmethod
+    def _stable_edge_id(source: str, target: str, label: str) -> str:
+        digest = sha256(f"{source}|{target}|{label}".encode("utf-8")).hexdigest()[:16]
+        return f"edge:{digest}"
 
 
 class MarketDataSqlRepository:

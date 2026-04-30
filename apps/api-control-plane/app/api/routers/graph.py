@@ -137,7 +137,7 @@ def get_graph_neighborhood(
         current_depth = distances[node_id]
         if current_depth >= payload.depth:
             continue
-        for neighbor in adjacency[node_id]:
+        for neighbor in sorted(adjacency[node_id]):
             if neighbor in visited:
                 continue
             visited.add(neighbor)
@@ -149,8 +149,13 @@ def get_graph_neighborhood(
         for node_id in visited
         if allowed_types is None or by_id[node_id].type in allowed_types or node_id == payload.seed_node_id
     }
-
-    nodes = [by_id[node_id] for node_id in selected_ids]
-    edges = [edge for edge in topology.edges if edge.source in selected_ids and edge.target in selected_ids]
+    sorted_selected_ids = sorted(selected_ids)
+    nodes = [by_id[node_id] for node_id in sorted_selected_ids]
+    edges = [
+        edge
+        for edge in topology.edges
+        if edge.source in selected_ids and edge.target in selected_ids
+    ]
+    edges.sort(key=lambda edge: (edge.source, edge.target, edge.label, edge.id))
 
     return GraphNeighborhoodResponse(seed_node_id=payload.seed_node_id, depth=payload.depth, nodes=nodes, edges=edges)

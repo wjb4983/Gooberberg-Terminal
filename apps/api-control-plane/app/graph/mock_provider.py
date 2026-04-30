@@ -1,3 +1,9 @@
+"""Deprecated mock topology provider.
+
+Keep this module only for tests/fixtures. Live request paths should use
+entity-backed topology via GraphSqlRepository.ensure_seeded_from_entities.
+"""
+
 from app.schemas import GraphEdge, GraphNode, GraphNodeType, GraphTopologyResponse
 
 
