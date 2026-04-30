@@ -72,7 +72,7 @@ class OrderEvent(BaseEvent):
     event_type: Literal["OrderEvent"]
     order_id: UUID = Field(default_factory=uuid4)
     intent_id: UUID
-    status: Literal["accepted", "rejected", "sent", "cancelled"]
+    status: Literal["submitted", "ack", "rejected", "canceled"]
     symbol: str = Field(min_length=1)
     side: Literal["buy", "sell"]
     quantity: float = Field(gt=0)
@@ -86,6 +86,7 @@ class FillEvent(BaseEvent):
     side: Literal["buy", "sell"]
     quantity: float = Field(gt=0)
     price: float = Field(gt=0)
+    fill_status: Literal["partial", "full"] = "full"
 
 
 class PositionEvent(BaseEvent):
