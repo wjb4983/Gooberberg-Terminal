@@ -9,6 +9,7 @@ import asyncio
 import pytest
 
 from worker_training.main import JobEnvelope, JobStatus, handle_with_timeout, process_job
+from worker_training.pipeline import _strict_pipeline_enabled_for_family
 
 
 class _RedisStub:
@@ -95,3 +96,18 @@ def test_handle_with_timeout_marks_failed_when_attempts_exceeded(monkeypatch: py
     asyncio.run(handle_with_timeout(client, envelope))  # type: ignore[arg-type]
 
     assert emitted == [JobStatus.FAILED]
+
+
+def test_strict_mode_disabled_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("GB_TRAINING_PIPELINE_STRICT_MODE", raising=False)
+    monkeypatch.delenv("GB_TRAINING_PIPELINE_STRICT_MODEL_FAMILIES", raising=False)
+
+    assert _strict_pipeline_enabled_for_family("arima") is False
+
+
+def test_strict_mode_can_be_targeted_to_model_families(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("GB_TRAINING_PIPELINE_STRICT_MODE", "true")
+    monkeypatch.setenv("GB_TRAINING_PIPELINE_STRICT_MODEL_FAMILIES", "arima,torch_nn_timeseries")
+
+    assert _strict_pipeline_enabled_for_family("arima") is True
+    assert _strict_pipeline_enabled_for_family("hmm_regime_switching") is False
