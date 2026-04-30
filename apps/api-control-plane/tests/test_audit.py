@@ -3,6 +3,7 @@ from uuid import uuid4
 from fastapi.testclient import TestClient
 
 from app.main import create_app
+from app.persistence.audit_access_log import audit_access_log
 
 
 client = TestClient(create_app())
@@ -42,3 +43,15 @@ def test_audit_events_and_replay_endpoints() -> None:
     assert replay_payload["provenance"]["strategy_version"]
     assert replay_payload["risk_outcome"]["policy"]
     assert replay_payload["execution"]["exchange_latency_ms"] >= 0
+
+
+def test_sensitive_audit_queries_are_written_to_immutable_access_log() -> None:
+    baseline_count = len(audit_access_log.snapshot())
+    response = client.get("/api/v1/audit/events", params={"filters": "entity:order-123"})
+    assert response.status_code == 200
+
+    snapshot_after = audit_access_log.snapshot()
+    assert len(snapshot_after) == baseline_count + 1
+    latest = snapshot_after[-1]
+    assert latest.endpoint == "/audit/events"
+    assert latest.filters == "entity:order-123"

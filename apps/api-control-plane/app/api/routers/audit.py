@@ -1,8 +1,10 @@
 from datetime import UTC, datetime
 from uuid import UUID
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, Request
 from pydantic import BaseModel, Field
+
+from app.persistence.audit_access_log import audit_access_log
 
 router = APIRouter(prefix="/audit", tags=["audit"])
 
@@ -104,34 +106,53 @@ def _build_audit_envelope(entity_type: str, entity_id: str) -> AuditEnvelope:
     )
 
 
+def _append_access_log(request: Request, *, endpoint: str, filters: str) -> None:
+    audit_access_log.append(
+        token_id=getattr(request.state, "auth_token_id", "anonymous"),
+        scope=getattr(request.state, "auth_scope", "unknown"),
+        endpoint=endpoint,
+        filters=filters,
+    )
+
+
 @router.get("/decisions/{decision_id}", response_model=AuditEnvelope)
-async def get_audit_decision(decision_id: UUID) -> AuditEnvelope:
+async def get_audit_decision(decision_id: UUID, request: Request) -> AuditEnvelope:
+    _append_access_log(request, endpoint="/audit/decisions/{decision_id}", filters="")
     return _build_audit_envelope("decision", str(decision_id))
 
 
 @router.get("/orders/{order_id}", response_model=AuditEnvelope)
-async def get_audit_order(order_id: UUID) -> AuditEnvelope:
+async def get_audit_order(order_id: UUID, request: Request) -> AuditEnvelope:
+    _append_access_log(request, endpoint="/audit/orders/{order_id}", filters="")
     return _build_audit_envelope("order", str(order_id))
 
 
 @router.get("/fills/{fill_id}", response_model=AuditEnvelope)
-async def get_audit_fill(fill_id: UUID) -> AuditEnvelope:
+async def get_audit_fill(fill_id: UUID, request: Request) -> AuditEnvelope:
+    _append_access_log(request, endpoint="/audit/fills/{fill_id}", filters="")
     return _build_audit_envelope("fill", str(fill_id))
 
 
 @router.get("/traces/{trace_id}", response_model=AuditEnvelope)
-async def get_audit_trace(trace_id: UUID) -> AuditEnvelope:
+async def get_audit_trace(trace_id: UUID, request: Request) -> AuditEnvelope:
+    _append_access_log(request, endpoint="/audit/traces/{trace_id}", filters="")
     return _build_audit_envelope("trace", str(trace_id))
 
 
 @router.get("/events")
-async def list_audit_events(filters: str = Query(default="")) -> dict[str, object]:
+async def list_audit_events(request: Request, filters: str = Query(default="")) -> dict[str, object]:
+    _append_access_log(request, endpoint="/audit/events", filters=filters)
     event = _build_audit_envelope("event", "event-0001")
     return {"filters": filters, "events": [event.model_dump(mode="json")]}
 
 
 @router.get("/replay")
-async def get_audit_replay(trace_id: UUID | None = None, order_id: UUID | None = None) -> dict[str, object]:
+async def get_audit_replay(request: Request, trace_id: UUID | None = None, order_id: UUID | None = None) -> dict[str, object]:
+    _append_access_log(
+        request,
+        endpoint="/audit/replay",
+        filters=f"trace_id={trace_id},order_id={order_id}",
+    )
     replay_target = str(trace_id or order_id or "replay-session")
     envelope = _build_audit_envelope("replay", replay_target)
     return {
