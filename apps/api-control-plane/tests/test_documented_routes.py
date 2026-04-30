@@ -5,6 +5,12 @@ from app.main import create_app
 
 DOCUMENTED_HTTP_ROUTES = {
     "/api/v1/health",
+    "/api/v1/audit/decisions/{decision_id}",
+    "/api/v1/audit/orders/{order_id}",
+    "/api/v1/audit/fills/{fill_id}",
+    "/api/v1/audit/traces/{trace_id}",
+    "/api/v1/audit/events",
+    "/api/v1/audit/replay",
     "/api/v1/alerts",
     "/api/v1/alerts/{alert_id}/ack",
     "/api/v1/jobs",
