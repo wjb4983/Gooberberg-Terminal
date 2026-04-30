@@ -55,6 +55,14 @@ interface TrainingRunValidationResponse {
   compatible: boolean;
   valid: boolean;
 }
+interface TrainingTemplate {
+  id: string;
+  name: string;
+  task_type: TaskType;
+  subtask_type: SubtaskType;
+  validation_profile: string;
+  parameter_preset: { name: string; parameters: Record<string, unknown> };
+}
 type TrainingPreset = 'safe' | 'balanced' | 'aggressive';
 
 interface DatasetCreateForm {
@@ -121,16 +129,21 @@ export function ParameterizationPage({ baseUrl }: ParameterizationPageProps): JS
     featurePackEnabled: true,
   });
   const [datasetCreateNotice, setDatasetCreateNotice] = useState<string | null>(null);
+  const [templates, setTemplates] = useState<TrainingTemplate[]>([]);
+  const [templateName, setTemplateName] = useState('My Template');
+  const [selectedTemplateId, setSelectedTemplateId] = useState('');
 
   const load = useCallback(async (): Promise<void> => {
     setPageError(null);
     try {
-      const [configsPayload, runsPayload] = await Promise.all([
+      const [configsPayload, runsPayload, templatePayload] = await Promise.all([
         requestJson<ModelConfigItem[]>(baseUrl, '/api/v1/model-configs'),
         requestJson<TrainingRunItem[]>(baseUrl, '/api/v1/training-runs'),
+        requestJson<TrainingTemplate[]>(baseUrl, '/api/v1/training-runs/templates'),
       ]);
       setModelConfigs(configsPayload);
       setTrainingRuns(runsPayload);
+      setTemplates(templatePayload);
       if (!modelConfigId && configsPayload.length > 0) {
         setModelConfigId(configsPayload[0].id);
       }
@@ -372,12 +385,71 @@ export function ParameterizationPage({ baseUrl }: ParameterizationPageProps): JS
     }
   };
 
+  const createTemplate = async (): Promise<void> => {
+    try {
+      const parsed = JSON.parse(parametersJson) as Record<string, unknown>;
+      await requestJson<TrainingTemplate>(baseUrl, '/api/v1/training-runs/templates', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: templateName,
+          task_type: taskType,
+          subtask_type: subtaskType,
+          validation_profile: 'standard',
+          dataset_constraints: {},
+          parameter_preset: { name: selectedPreset, parameters: parsed },
+        }),
+      });
+      setLaunchNotice('Template saved.');
+      await load();
+    } catch (submitError) {
+      setPageError(submitError instanceof Error ? submitError.message : 'Failed creating template.');
+    }
+  };
+
+  const applyTemplate = async (): Promise<void> => {
+    if (!selectedTemplateId || !datasetId.trim() || !modelConfigId) return;
+    const payload = await requestJson<TrainingRunValidationResponse>(baseUrl, `/api/v1/training-runs/templates/${selectedTemplateId}/apply`, {
+      method: 'POST',
+      body: JSON.stringify({
+        task_type: taskType,
+        subtask_type: subtaskType,
+        model_config_id: modelConfigId,
+        dataset_id: datasetId.trim(),
+        parameters: {},
+      }),
+    });
+    setTaskType(payload.normalized_payload.task_type);
+    setSubtaskType(payload.normalized_payload.subtask_type);
+    setParametersJson(JSON.stringify(payload.normalized_payload.parameters, null, 2));
+    setPreflightWarnings(payload.warnings);
+    setPreflightErrors(payload.errors);
+    setPreflightPayloadJson(JSON.stringify(payload.normalized_payload, null, 2));
+  };
+
   return (
     <section>
       <h2>Parameterization</h2>
       <p className="muted">Guide training launches through a 4-step flow: tasking, dataset, compatible model config, then run submission.</p>
       <p style={{ marginTop: 0 }}><Link to="/model-catalog">Browse model catalog</Link> to compare metadata while selecting compatible configs.</p>
       {pageError ? <p className="error">{pageError}</p> : null}
+      <div className="card" style={{ marginBottom: '1rem' }}>
+        <h3>Reusable templates</h3>
+        <div style={{ display: 'grid', gap: '0.5rem', gridTemplateColumns: '2fr 1fr 1fr' }}>
+          <label>
+            Template name
+            <input value={templateName} onChange={(event) => setTemplateName(event.target.value)} />
+          </label>
+          <button type="button" onClick={() => void createTemplate()}>Save template</button>
+          <label>
+            Apply existing
+            <select value={selectedTemplateId} onChange={(event) => setSelectedTemplateId(event.target.value)}>
+              <option value="">Select template</option>
+              {templates.map((template) => <option key={template.id} value={template.id}>{template.name}</option>)}
+            </select>
+          </label>
+        </div>
+        <button type="button" onClick={() => void applyTemplate()} disabled={!selectedTemplateId || !datasetId.trim() || !modelConfigId}>Apply + preflight</button>
+      </div>
 
       <div className="card" style={{ marginBottom: '1rem' }}>
         <h3>1) Select task + subtask</h3>

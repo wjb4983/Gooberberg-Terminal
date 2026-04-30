@@ -32,11 +32,33 @@ from app.schemas import (
     TrainingRunResponse,
     TrainingRunValidationRequest,
     TrainingRunValidationResponse,
+    TrainingTemplate,
+    TrainingTemplateCreateRequest,
 )
 from app.schemas.run_constraints import attach_constraints_to_parameters
 
 router = APIRouter(prefix="/training-runs", tags=["training-runs"])
 logger = logging.getLogger(__name__)
+_training_templates: dict[str, TrainingTemplate] = {}
+
+
+@router.get("/templates", response_model=list[TrainingTemplate])
+def list_training_templates() -> list[TrainingTemplate]:
+    return sorted(_training_templates.values(), key=lambda item: item.created_at, reverse=True)
+
+
+@router.post("/templates", response_model=TrainingTemplate, status_code=status.HTTP_201_CREATED)
+def create_training_template(payload: TrainingTemplateCreateRequest) -> TrainingTemplate:
+    template = TrainingTemplate(
+        name=payload.name,
+        task_type=payload.task_type,
+        subtask_type=payload.subtask_type,
+        validation_profile=payload.validation_profile,
+        dataset_constraints=payload.dataset_constraints,
+        parameter_preset=payload.parameter_preset,
+    )
+    _training_templates[str(template.id)] = template
+    return template
 
 
 def _resolve_required_window(dataset_metadata: dict[str, object]) -> tuple[date, date] | None:
@@ -255,6 +277,34 @@ def preflight_training_run(
 ) -> TrainingRunValidationResponse:
     return _build_validation_response(
         payload,
+        request=request,
+        model_config_service=model_config_service,
+        market_data_service=market_data_service,
+    )
+
+
+@router.post("/templates/{template_id}/apply", response_model=TrainingRunValidationResponse)
+def apply_training_template(
+    template_id: UUID,
+    payload: TrainingRunValidationRequest,
+    request: Request,
+    model_config_service: ModelConfigService = Depends(get_model_config_service),
+    market_data_service: MarketDataService = Depends(get_market_data_service),
+) -> TrainingRunValidationResponse:
+    template = _training_templates.get(str(template_id))
+    if template is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="template not found")
+    merged = TrainingRunValidationRequest(
+        task_type=template.task_type,
+        subtask_type=template.subtask_type,
+        model_config_id=payload.model_config_id,
+        dataset_id=payload.dataset_id,
+        validation_profile=template.validation_profile,
+        parameters={**template.parameter_preset.parameters, **payload.parameters},
+        constraints=payload.constraints,
+    )
+    return _build_validation_response(
+        merged,
         request=request,
         model_config_service=model_config_service,
         market_data_service=market_data_service,

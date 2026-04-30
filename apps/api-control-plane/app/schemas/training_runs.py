@@ -67,6 +67,36 @@ class TrainingRunValidationRequest(TaskSubtypeValidatedModel):
     validation_profile: ValidationProfile | None = None
 
 
+class TrainingTemplateDatasetConstraints(BaseModel):
+    data_kind: str | None = None
+    required_fields: list[str] = Field(default_factory=list)
+
+
+class TrainingTemplateParameterPreset(BaseModel):
+    name: str = Field(min_length=1)
+    parameters: dict[str, Any] = Field(default_factory=dict)
+
+
+class TrainingTemplate(BaseModel):
+    id: UUID = Field(default_factory=uuid4)
+    name: str = Field(min_length=1)
+    task_type: TaskType
+    subtask_type: SubtaskType
+    validation_profile: ValidationProfile
+    dataset_constraints: TrainingTemplateDatasetConstraints = Field(default_factory=TrainingTemplateDatasetConstraints)
+    parameter_preset: TrainingTemplateParameterPreset
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+
+class TrainingTemplateCreateRequest(TaskSubtypeValidatedModel):
+    name: str = Field(min_length=1)
+    task_type: TaskType = TaskType.TIME_SERIES_MOMENTUM
+    subtask_type: SubtaskType = SubtaskType.RANKING
+    validation_profile: ValidationProfile
+    dataset_constraints: TrainingTemplateDatasetConstraints = Field(default_factory=TrainingTemplateDatasetConstraints)
+    parameter_preset: TrainingTemplateParameterPreset
+
+
 class TrainingIntent(TaskSubtypeValidatedModel):
     task_type: TaskType
     subtask_type: SubtaskType
