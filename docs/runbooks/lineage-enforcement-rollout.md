@@ -7,12 +7,77 @@ This runbook defines the recommended rollout order for lineage enforcement flags
 - lineage schema version compatibility.
 
 ## Quick-start tasks (recommended order)
-1. **Baseline observability first**: ship counters/dashboards before any blocking behavior.
-2. **Enable Observe mode** in all non-prod and canary prod slices.
-3. **Promote to Soft gate** after Observe acceptance criteria are met.
-4. **Promote to Hard gate** after Soft gate error-rate and migration targets are met.
-5. **Enable legacy cutoff date block** for deprecated lineage versions.
-6. **Remove deprecated lineage write paths** after cutoff soak window.
+1. **Define canonical lineage schema + shared validator module**.
+   - Checklist:
+     - [ ] Finalize canonical lineage field contract and required/optional taxonomy.
+     - [ ] Publish a shared validator module used by API, worker, and terminal success gates.
+     - [ ] Lock reason-code vocabulary for all gate failures.
+   - Owner: **Platform Schema + API Domain**
+   - Estimated effort: **3 engineering days**
+   - Release dependency: **None (entry step)**
+
+2. **Add DB migrations (new columns/tables + indexes + constraints staged safely)**.
+   - Checklist:
+     - [ ] Add additive columns/tables for lineage and artifact governance.
+     - [ ] Add indexes for retrieval and dashboard queries.
+     - [ ] Stage constraints as non-blocking/backfill-safe before hard enforcement.
+   - Owner: **Persistence/DBA + API Platform**
+   - Estimated effort: **2 engineering days**
+   - Release dependency: **Step 1 complete**
+
+3. **Wire API request validation and persistence of lineage fields**.
+   - Checklist:
+     - [ ] Apply shared validator in create-run APIs.
+     - [ ] Persist normalized lineage/artifact fields in write path.
+     - [ ] Emit structured reason codes in API error payloads and logs.
+   - Owner: **API Control Plane**
+   - Estimated effort: **3 engineering days**
+   - Release dependency: **Step 2 complete**
+
+4. **Add worker preflight gate and completion artifact validation**.
+   - Checklist:
+     - [ ] Gate job start on required lineage preflight checks.
+     - [ ] Validate completion artifact manifest roles and integrity metadata.
+     - [ ] Emit worker-side validation telemetry aligned with API reason codes.
+   - Owner: **Worker Training/Research**
+   - Estimated effort: **3 engineering days**
+   - Release dependency: **Step 3 complete**
+
+5. **Add terminal success gate logic shared across training/backtest paths**.
+   - Checklist:
+     - [ ] Reuse one terminal success evaluator across training and backtest domains.
+     - [ ] Enforce identical pass/fail criteria for lineage + artifact completeness.
+     - [ ] Persist terminal gate outcome and reason taxonomy for auditability.
+   - Owner: **Run Orchestration + Domain Services**
+   - Estimated effort: **2 engineering days**
+   - Release dependency: **Step 4 complete**
+
+6. **Expose lineage/artifact retrieval APIs and replay bundle support**.
+   - Checklist:
+     - [ ] Add read APIs for lineage snapshots and artifact manifests.
+     - [ ] Add replay bundle endpoint/packaging with integrity markers.
+     - [ ] Document response contracts for downstream consumers.
+   - Owner: **API Control Plane + Client Integrations**
+   - Estimated effort: **2 engineering days**
+   - Release dependency: **Step 5 complete**
+
+7. **Add phased rollout flags, dashboards, and operational runbooks**.
+   - Checklist:
+     - [ ] Ship observe/soft/hard/cutoff flags with environment defaults.
+     - [ ] Publish dashboards with acceptance-criteria-aligned SLO views.
+     - [ ] Update on-call runbooks for top reason-code triage paths.
+   - Owner: **SRE/Observability + API Platform**
+   - Estimated effort: **2 engineering days**
+   - Release dependency: **Step 6 complete**
+
+8. **Backfill legacy runs and enable hard enforcement phase**.
+   - Checklist:
+     - [ ] Run legacy lineage/artifact backfill and verify data quality thresholds.
+     - [ ] Confirm migration completion by producer and clear exception list.
+     - [ ] Promote flags to hard enforcement and monitor rollback guardrails.
+   - Owner: **Data Migration + Service Owners**
+   - Estimated effort: **4 engineering days**
+   - Release dependency: **Step 7 complete**
 
 ---
 
