@@ -81,8 +81,16 @@ class TrainingIntent(TaskSubtypeValidatedModel):
 class TrainingRunValidationResponse(BaseModel):
     normalized_payload: TrainingRunCreateRequest
     training_intent: TrainingIntent
+    resolved_task_head: str = Field(min_length=1)
+    resolved_validation_profile: ValidationProfile
+    dataset_qualification_report: dict[str, Any] = Field(default_factory=dict)
+    selected_adapter_capability: dict[str, Any] = Field(default_factory=dict)
+    expected_artifacts: list[str] = Field(default_factory=list)
+    metric_bundle: list[str] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
     errors: list[str] = Field(default_factory=list)
+    warning_details: list[dict[str, str]] = Field(default_factory=list)
+    error_details: list[dict[str, str]] = Field(default_factory=list)
     compatible: bool = False
     valid: bool = False
 
