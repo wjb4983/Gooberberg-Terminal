@@ -142,7 +142,7 @@ def resolve_lineage_spec(
         lineage_version=1,
         dataset_fingerprint={"hash": lineage_ref.dataset_fingerprint_hash},
         code_hash={"git_commit_sha": lineage_ref.code_git_commit_sha, "dirty": lineage_ref.code_dirty},
-        config_digest={"digest": sha256(canonical.encode(\"utf-8\")).hexdigest()},
+        config_digest={"digest": sha256(canonical.encode("utf-8")).hexdigest()},
         seed=lineage_ref.seed,
         artifact_manifest=[{"uri": "pending://artifacts", "size_bytes": 0, "hash": "0" * 64, "media_type": "application/json", "role": "placeholder"}],
     )
