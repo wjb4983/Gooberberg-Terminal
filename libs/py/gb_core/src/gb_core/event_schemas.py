@@ -41,6 +41,12 @@ class DecisionEvent(BaseEvent):
     decision: Literal["buy", "sell", "hold"]
     symbol: str = Field(min_length=1)
     rationale: str = Field(min_length=1)
+    go_no_go: bool = True
+    reasons: list[str] = Field(default_factory=list)
+    confidence: float = Field(default=0.5, ge=0, le=1)
+    feature_snapshot_ref: str | None = None
+    rationale_kind: Literal["rule", "model"] = "rule"
+    rationale_metadata: dict[str, Any] = Field(default_factory=dict)
 
 
 class OrderIntentEvent(BaseEvent):
