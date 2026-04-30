@@ -2,9 +2,14 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { fetchModelCatalogItem, fetchModelCatalogList, type ModelCatalogItem } from '../api/modelCatalog';
 import { VirtualizedCatalogGrid } from '../components/model-catalog/VirtualizedCatalogGrid';
+import { pruneCompareFamilies, recoverSelectedFamily } from './modelCatalogState';
 
 interface ModelCatalogPageProps {
   baseUrl: string;
+}
+
+function isNotFoundError(error: unknown): boolean {
+  return error instanceof Error && /\(404\)/.test(error.message);
 }
 
 export function ModelCatalogPage({ baseUrl }: ModelCatalogPageProps): JSX.Element {
@@ -18,6 +23,8 @@ export function ModelCatalogPage({ baseUrl }: ModelCatalogPageProps): JSX.Elemen
   const [compareFamilies, setCompareFamilies] = useState<string[]>(() => (searchParams.get('compare') ?? '').split(',').map((v) => v.trim()).filter(Boolean).slice(0, 4));
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [selectionNotice, setSelectionNotice] = useState<string | null>(null);
+  const [detailError, setDetailError] = useState<string | null>(null);
 
   useEffect(() => {
     setLoading(true);
@@ -25,16 +32,28 @@ export function ModelCatalogPage({ baseUrl }: ModelCatalogPageProps): JSX.Elemen
     void fetchModelCatalogList(baseUrl)
       .then((items) => {
         setCatalog(items);
-        if (!selectedFamily) {
-          const firstFamily = items[0]?.model_family ?? '';
-          setSelectedFamily(firstFamily);
-        }
       })
       .catch((loadError) => {
         setError(loadError instanceof Error ? loadError.message : 'Failed to load model catalog.');
       })
       .finally(() => setLoading(false));
-  }, [baseUrl, selectedFamily]);
+  }, [baseUrl]);
+
+  useEffect(() => {
+    const { nextFamily, invalidFamily } = recoverSelectedFamily(selectedFamily, catalog);
+    if (invalidFamily) {
+      setSelectionNotice(`Model family "${invalidFamily}" is unavailable and was reset.`);
+      setSelectedFamily(nextFamily);
+      return;
+    }
+    if (!selectedFamily && nextFamily) {
+      setSelectedFamily(nextFamily);
+    }
+  }, [catalog, selectedFamily]);
+
+  useEffect(() => {
+    setCompareFamilies((previous) => pruneCompareFamilies(previous, catalog));
+  }, [catalog]);
 
   useEffect(() => {
     const nextParams = new URLSearchParams();
@@ -83,15 +102,22 @@ export function ModelCatalogPage({ baseUrl }: ModelCatalogPageProps): JSX.Elemen
   }, [compareFamilies, query, searchParams, selectedFamily, sortBy, tagFilter]);
 
   useEffect(() => {
-    if (!selectedFamily) {
+    if (!selectedFamily || !catalog.some((entry) => entry.model_family === selectedFamily)) {
       setSelectedItem(null);
+      setDetailError(null);
       return;
     }
+    setDetailError(null);
     void fetchModelCatalogItem(baseUrl, selectedFamily)
       .then((item) => setSelectedItem(item))
-      .catch(() => {
+      .catch((fetchError) => {
         const fallback = catalog.find((entry) => entry.model_family === selectedFamily) ?? null;
         setSelectedItem(fallback);
+        if (isNotFoundError(fetchError)) {
+          setDetailError(`Details for "${selectedFamily}" were not found (404).`);
+          return;
+        }
+        setDetailError(`Unable to load details for "${selectedFamily}" due to a network/authentication error.`);
       });
   }, [baseUrl, catalog, selectedFamily]);
 
@@ -169,6 +195,8 @@ export function ModelCatalogPage({ baseUrl }: ModelCatalogPageProps): JSX.Elemen
         <Link to={selectedFamily ? `/models?family=${encodeURIComponent(selectedFamily)}` : '/models'}>Back to Models</Link> · <Link to="/parameterization">Go to Parameterization</Link>
       </p>
       {error ? <p className="error">{error}</p> : null}
+      {selectionNotice ? <p className="muted" role="status">{selectionNotice}</p> : null}
+      {detailError ? <p className="error" role="alert">{detailError}</p> : null}
 
       <div className="card catalog-toolbar" style={{ marginBottom: '1rem', maxWidth: '100%' }}>
         <input
