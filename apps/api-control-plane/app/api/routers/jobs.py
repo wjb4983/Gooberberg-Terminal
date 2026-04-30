@@ -8,6 +8,7 @@ from app.api.dependencies import get_job_runner_service
 from app.api.routers.ws import manager as ws_manager
 from app.core.logging import request_id_ctx_var
 from app.domain.job_runner import JobRunnerService
+from app.domain.run_success_gate import emit_gate_failure_metric, evaluate_success_gate
 from app.domain.training_runs.constraints import apply_constraints_to_metrics
 from app.jobs.models import JobEnvelope, JobLifecycleEvent, JobStatus
 from app.jobs.store import job_state_store, job_submission_store
@@ -230,7 +231,30 @@ async def publish_job_event(
             }
             model = mapping.get(run_type)
             if model:
-                RunSqlRepository(session, model).update_status(run_id, event.status.value)
+                forced_status = event.status
+                if event.status == JobStatus.SUCCESS and run_type in {"training", "backtest"}:
+                    run_row = session.get(model, str(run_id))
+                    if run_row is not None:
+                        gate_failure = evaluate_success_gate(run_type=run_type, run_row=run_row, event_update=event_update)
+                        if gate_failure is not None:
+                            forced_status = JobStatus.FAILED
+                            event = JobLifecycleEvent(
+                                job_id=event.job_id,
+                                trace_id=event.trace_id,
+                                status=JobStatus.FAILED,
+                                detail=f"success gate failed: {gate_failure.reason}",
+                                run_id=event.run_id,
+                                run_type=event.run_type,
+                                progress_pct=event.progress_pct,
+                                message=gate_failure.remediation,
+                                result_ref=event.result_ref,
+                                updated_at=datetime.now(UTC),
+                            )
+                            job_state_store.upsert(event)
+                            request.app.state.job_event_repository.persist_event(event)
+                            await _broadcast_job_event(event)
+                            emit_gate_failure_metric(category=gate_failure.category, run_type=run_type)
+                RunSqlRepository(session, model).update_status(run_id, forced_status.value)
 
     if event.status in {JobStatus.SUCCESS, JobStatus.FAILED} and event.run_id and event.run_type and event.result_ref:
         constraints = _resolve_run_constraints(request, run_id=event.run_id, run_type=event.run_type)

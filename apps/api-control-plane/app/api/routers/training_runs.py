@@ -391,6 +391,8 @@ async def create_training_run(
     model_config_version_tag = str(model_config_version_raw) if isinstance(model_config_version_raw, str) else "unknown"
     run_metadata_payload = attached_parameters.get("run_metadata")
     run_metadata = run_metadata_payload if isinstance(run_metadata_payload, dict) else {}
+    if "seed" not in run_metadata and isinstance(attached_parameters.get("seed"), int):
+        run_metadata["seed"] = attached_parameters["seed"]
     run_metadata["training_intent"] = training_intent.model_dump(mode="json")
     attached_parameters["run_metadata"] = run_metadata
     constraint_profile_version_raw = run_metadata.get("constraint_profile_version")
@@ -414,6 +416,7 @@ async def create_training_run(
             "task_type": normalized_payload.task_type.value,
             "subtask_type": normalized_payload.subtask_type.value,
             "constraint_profile_version": constraint_profile_version,
+            "seed": run_metadata.get("seed"),
             "parameters": attached_parameters,
             "status": "queued",
             "created_at": accepted_at,
