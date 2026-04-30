@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { Link } from 'react-router-dom';
 import { createDesktopApiClient } from '../api/client';
+import { findEquivalentModelConfig, isModelConfigCreateServerFailure } from '../api/modelConfigRecovery';
 import { requestJson } from '../api/requestJson';
 import { SUBTASK_TYPES, TASK_TYPES, type SubtaskType, type TaskType } from '../types/api';
 
@@ -480,17 +482,18 @@ export function BuildingModelsPage({ baseUrl }: BuildingModelsPageProps): JSX.El
 
     setError(null);
     setIsCreatingConfig(true);
+    const desiredConfig = {
+      model_family: selectedFamily,
+      config: selectedFamily === 'hmm_regime_switching'
+        ? buildHmmPayload(configForm, sharedConfig)
+        : selectedFamily === 'torch_nn_timeseries'
+          ? buildTorchPayload(torchForm, sharedConfig)
+          : buildKalmanPayload(kalmanForm, sharedConfig),
+    };
     try {
       const created = await requestJson<ModelConfigItem>(baseUrl, '/api/v1/model-configs', {
         method: 'POST',
-        body: JSON.stringify({
-          model_family: selectedFamily,
-          config: selectedFamily === 'hmm_regime_switching'
-            ? buildHmmPayload(configForm, sharedConfig)
-            : selectedFamily === 'torch_nn_timeseries'
-              ? buildTorchPayload(torchForm, sharedConfig)
-              : buildKalmanPayload(kalmanForm, sharedConfig),
-        }),
+        body: JSON.stringify(desiredConfig),
       });
       setModelConfigs((previous) => [created, ...previous]);
       setLaunchForm((previous) => ({ ...previous, modelConfigId: created.id }));
@@ -500,6 +503,22 @@ export function BuildingModelsPage({ baseUrl }: BuildingModelsPageProps): JSX.El
       setKalmanForm(defaultKalmanFormState);
       setConfigErrors({});
     } catch (submitError) {
+      if (isModelConfigCreateServerFailure(submitError)) {
+        try {
+          const refreshedConfigs = await requestJson<ModelConfigItem[]>(baseUrl, '/api/v1/model-configs');
+          setModelConfigs(refreshedConfigs);
+          const reusedConfig = findEquivalentModelConfig(refreshedConfigs, desiredConfig);
+          if (reusedConfig) {
+            setLaunchForm((previous) => ({ ...previous, modelConfigId: reusedConfig.id }));
+            setError('Create endpoint returned 500. Reused an equivalent saved model config from the registry.');
+            return;
+          }
+          setError('Create endpoint returned 500. Refreshed saved configs; select an existing config to continue.');
+          return;
+        } catch {
+          // Fall through to standard error display when refresh also fails.
+        }
+      }
       setError(submitError instanceof Error ? submitError.message : 'Failed to create model config.');
     } finally {
       setIsCreatingConfig(false);
@@ -725,6 +744,7 @@ export function BuildingModelsPage({ baseUrl }: BuildingModelsPageProps): JSX.El
     <section>
       <h2>Building Models</h2>
       <p>Create model configs, launch training, and manage queue lifecycle in one workspace.</p>
+      <p style={{ marginTop: 0 }}><Link to={`/model-catalog?family=${encodeURIComponent(selectedFamily)}`}>Explore model catalog</Link> before creating a new config.</p>
       {error ? <p className="muted">Error: {error}</p> : null}
 
       <div className="card" style={{ marginBottom: '1rem' }}>

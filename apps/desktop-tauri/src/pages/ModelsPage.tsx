@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
+import { findEquivalentModelConfig, isModelConfigCreateServerFailure } from '../api/modelConfigRecovery';
 import { requestJson } from '../api/requestJson';
 
 interface ModelsPageProps {
@@ -130,6 +131,8 @@ function FamilyConfigSection({ children }: { children: ReactNode }): JSX.Element
 }
 
 export function ModelsPage({ baseUrl }: ModelsPageProps): JSX.Element {
+  const [searchParams] = useSearchParams();
+  const requestedFamily = searchParams.get('family') ?? '';
   const [models, setModels] = useState<ModelConfigItem[]>([]);
   const [families, setFamilies] = useState<string[]>([]);
   const [selectedFamily, setSelectedFamily] = useState('hmm_regime_switching');
@@ -158,13 +161,18 @@ export function ModelsPage({ baseUrl }: ModelsPageProps): JSX.Element {
       ]);
       setModels(payload);
       setFamilies(familyPayload);
-      setSelectedFamily((previous) => (familyPayload.includes(previous) ? previous : (familyPayload[0] ?? 'hmm_regime_switching')));
+      setSelectedFamily((previous) => {
+        if (requestedFamily && familyPayload.includes(requestedFamily)) {
+          return requestedFamily;
+        }
+        return familyPayload.includes(previous) ? previous : (familyPayload[0] ?? 'hmm_regime_switching');
+      });
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : 'Failed to load model configs.');
     } finally {
       setLoading(false);
     }
-  }, [baseUrl]);
+  }, [baseUrl, requestedFamily]);
 
   useEffect(() => {
     void loadModels();
@@ -242,6 +250,7 @@ export function ModelsPage({ baseUrl }: ModelsPageProps): JSX.Element {
           initial_covariance_scale: Number(kalmanForm.initialCovarianceScale),
         };
     const payload = isEditing ? { config } : { model_family: selectedFamily, config };
+    const desiredConfig = { model_family: selectedFamily, config };
 
     setError(null);
     try {
@@ -259,6 +268,23 @@ export function ModelsPage({ baseUrl }: ModelsPageProps): JSX.Element {
       setSelectedId(saved.id);
       setIsEditing(true);
     } catch (submitError) {
+      if (!isEditing && isModelConfigCreateServerFailure(submitError)) {
+        try {
+          const refreshedConfigs = await requestJson<ModelConfigItem[]>(baseUrl, '/api/v1/model-configs');
+          setModels(refreshedConfigs);
+          const reusedConfig = findEquivalentModelConfig(refreshedConfigs, desiredConfig);
+          if (reusedConfig) {
+            setSelectedId(reusedConfig.id);
+            setIsEditing(true);
+            setError('Create endpoint returned 500. Reused an equivalent saved model config from the registry.');
+            return;
+          }
+          setError('Create endpoint returned 500. Refreshed saved configs; select an existing config to continue training/sweeps/backtests.');
+          return;
+        } catch {
+          // Fall through to standard error display when refresh also fails.
+        }
+      }
       setError(submitError instanceof Error ? submitError.message : 'Failed to save model config.');
     }
   };
@@ -267,7 +293,7 @@ export function ModelsPage({ baseUrl }: ModelsPageProps): JSX.Element {
     <section>
       <h2>Models</h2>
       <p>HMM regime-switching model configuration registry. Save once, reuse for async training/sweeps/backtests.</p>
-      <p style={{ marginTop: 0 }}><Link to="/model-catalog">Explore model catalog</Link> before creating a new config.</p>
+      <p style={{ marginTop: 0 }}><Link to={`/model-catalog?family=${encodeURIComponent(selectedFamily)}`}>Explore model catalog</Link> before creating a new config.</p>
       {error ? <p className="muted">Error: {error}</p> : null}
       <div className="card" style={{ marginBottom: '1rem' }}>
         <h3>{isEditing ? 'Edit model config' : 'Create model config'}</h3>
