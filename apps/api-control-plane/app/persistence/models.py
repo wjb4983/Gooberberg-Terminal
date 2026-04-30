@@ -40,6 +40,13 @@ class TrainingRunRow(Base):
     subtask_type: Mapped[str] = mapped_column(String(64), nullable=False)
     constraint_profile_version: Mapped[str] = mapped_column(String(64), nullable=False, default="v1")
     status: Mapped[str] = mapped_column(String(32), nullable=False)
+    lineage_version: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    dataset_fingerprint: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    code_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    config_digest: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    seed: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    lineage_status: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    lineage_error_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
     parameters: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
 
@@ -57,6 +64,13 @@ class ParameterSweepRunRow(Base):
     search_space: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False, default=dict)
     provenance_snapshot: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False, default=dict)
     status: Mapped[str] = mapped_column(String(32), nullable=False)
+    lineage_version: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    dataset_fingerprint: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    code_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    config_digest: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    seed: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    lineage_status: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    lineage_error_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
 
 
@@ -97,6 +111,13 @@ class BacktestRunRow(Base):
     resolved_config: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False, default=dict)
     environment_fingerprint: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False, default=dict)
     run_checksum: Mapped[str] = mapped_column(String(128), nullable=False, default="")
+    lineage_version: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    dataset_fingerprint: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    code_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    config_digest: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    seed: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    lineage_status: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    lineage_error_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
 
 
@@ -110,6 +131,13 @@ class TestingRunRow(Base):
     parameters: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False, default=dict)
     result_summary: Mapped[dict[str, object] | None] = mapped_column(JSON, nullable=True)
     status: Mapped[str] = mapped_column(String(32), nullable=False)
+    lineage_version: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    dataset_fingerprint: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    code_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    config_digest: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    seed: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    lineage_status: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    lineage_error_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
 
 
@@ -137,6 +165,9 @@ class RunArtifactRow(Base):
     run_type: Mapped[str] = mapped_column(String(32), nullable=False)
     job_id: Mapped[str] = mapped_column(String(36), index=True, nullable=False)
     artifact_ref: Mapped[str] = mapped_column(String(1024), nullable=False)
+    artifact_role: Mapped[str] = mapped_column(String(64), nullable=False, default="unspecified")
+    artifact_uri: Mapped[str] = mapped_column(String(1024), nullable=False, default="")
+    sha256: Mapped[str] = mapped_column(String(64), nullable=False, default="")
     checksum: Mapped[str] = mapped_column(String(128), index=True, nullable=False)
     signature: Mapped[str] = mapped_column(String(256), nullable=False, default="")
     size_bytes: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
@@ -145,6 +176,7 @@ class RunArtifactRow(Base):
     last_accessed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
     retention_class: Mapped[str] = mapped_column(String(32), nullable=False, default="standard")
     promotion_status: Mapped[str] = mapped_column(String(32), nullable=False, default="draft")
+    content_type: Mapped[str] = mapped_column(String(255), nullable=False, default="application/octet-stream")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
 
 
