@@ -3,6 +3,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.api.dependencies import get_model_config_service
+from app.api.error_mapping import execute_model_config_service_call
 from app.domain.model_configs import ModelConfigService
 from app.schemas import ModelConfigCreateRequest, ModelConfigResponse, ModelConfigUpdateRequest
 
@@ -14,7 +15,11 @@ def create_model_config(
     payload: ModelConfigCreateRequest,
     service: ModelConfigService = Depends(get_model_config_service),
 ) -> ModelConfigResponse:
-    created = service.create(payload.model_family, payload.config)
+    created = execute_model_config_service_call(
+        route_context="POST /api/v1/model-configs",
+        model_family=str(payload.model_family),
+        operation=lambda: service.create(payload.model_family, payload.config),
+    )
     return ModelConfigResponse.model_validate(created)
 
 
@@ -40,7 +45,16 @@ def update_model_config(
     payload: ModelConfigUpdateRequest,
     service: ModelConfigService = Depends(get_model_config_service),
 ) -> ModelConfigResponse:
-    item = service.update(model_config_id, payload.config)
+    existing = service.get(model_config_id)
+    if existing is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="model config not found")
+
+    model_family = str(existing["model_family"])
+    item = execute_model_config_service_call(
+        route_context=f"PUT /api/v1/model-configs/{model_config_id}",
+        model_family=model_family,
+        operation=lambda: service.update(model_config_id, payload.config),
+    )
     if item is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="model config not found")
     return ModelConfigResponse.model_validate(item)

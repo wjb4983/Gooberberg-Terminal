@@ -46,6 +46,41 @@ def test_model_config_route_rejects_invalid_contract_payload() -> None:
     assert response.status_code == 422
 
 
+def test_model_config_route_returns_404_for_unknown_model_family() -> None:
+    response = client.post(
+        "/api/v1/model-configs",
+        json={
+            "model_family": "unknown_family",
+            "config": {"anything": "goes"},
+        },
+    )
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "POST /api/v1/model-configs: unknown model_family='unknown_family'"
+
+
+def test_model_config_route_returns_422_for_malformed_known_family_payload_shape() -> None:
+    response = client.post(
+        "/api/v1/model-configs",
+        json={
+            "model_family": "hmm_regime_switching",
+            "config": {"n_states": "not-an-int", "lookback_window": "also-not-an-int"},
+        },
+    )
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == "POST /api/v1/model-configs: invalid config payload for model_family='hmm_regime_switching'"
+
+
+def test_model_config_update_unknown_id_remains_404() -> None:
+    response = client.put(
+        "/api/v1/model-configs/00000000-0000-0000-0000-000000000000",
+        json={"config": {"n_states": 3, "lookback_window": 64}},
+    )
+    assert response.status_code == 404
+    assert response.json()["detail"] == "model config not found"
+
+
 def test_model_config_route_accepts_new_model_families_with_strict_constraints() -> None:
     torch_response = client.post(
         "/api/v1/model-configs",

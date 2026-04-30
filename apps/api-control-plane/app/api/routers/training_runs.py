@@ -10,6 +10,7 @@ from app.api.dependencies import (
     get_model_config_service,
     get_training_run_service,
 )
+from app.api.error_mapping import execute_model_config_service_call
 from app.api.routers.jobs import _broadcast_job_event
 from app.core.logging import request_id_ctx_var
 from app.domain.market_data import Service as MarketDataService
@@ -157,7 +158,12 @@ def _build_validation_response(
         compatible = False
 
     if model_config is not None and dataset is not None:
-        model_spec = request.app.state.model_registry.require(str(model_config["model_family"]))
+        model_family = str(model_config["model_family"])
+        model_spec = execute_model_config_service_call(
+            route_context="POST /api/v1/training-runs/compatibility",
+            model_family=model_family,
+            operation=lambda: request.app.state.model_registry.require(model_family),
+        )
         dataset_profile = resolve_dataset_compatibility(dataset.metadata, dataset.timeframe)
         compatibility_errors = validate_model_dataset_compatibility(
             model_spec=model_spec,
