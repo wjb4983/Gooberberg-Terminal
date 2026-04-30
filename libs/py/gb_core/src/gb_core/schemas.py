@@ -44,6 +44,7 @@ class ExecutionDecision(BaseModel):
     intent_id: UUID
     approved: bool
     reason_code: str
+    failure_reason_codes: list[str] = Field(default_factory=list)
     detail: str
     evaluated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     applied_override_id: UUID | None = None

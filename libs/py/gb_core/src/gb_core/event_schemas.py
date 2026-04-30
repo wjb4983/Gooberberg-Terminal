@@ -64,6 +64,8 @@ class RiskCheckEvent(BaseEvent):
     passed: bool
     reason: str = Field(min_length=1)
     max_notional: float = Field(gt=0)
+    failure_reason_codes: list[str] = Field(default_factory=list)
+    rule_results: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class OrderEvent(BaseEvent):

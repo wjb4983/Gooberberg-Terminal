@@ -219,6 +219,7 @@ from typing import TYPE_CHECKING
 
 from gb_core.risk import RiskExecutionAuthority
 from gb_core.schemas import ExecutionDecision, StrategyIntent
+from gb_core.event_schemas import RiskCheckEvent, utc_now
 
 if TYPE_CHECKING:
     from redis.asyncio import Redis
@@ -275,6 +276,24 @@ async def _consume_intent_payload(client: "Redis", payload: str, state: ServiceS
             OrderState.FILLED,
         ],
         "authority_boundary": "risk-exec produces decisions only; order adapters are external",
+        "risk_check_event": RiskCheckEvent(
+            event_id=intent.intent_id,
+            trace_id=intent.trace_id,
+            schema_version="1.0.0",
+            event_type="RiskCheckEvent",
+            event_time=utc_now(),
+            ingest_time=utc_now(),
+            process_time=utc_now(),
+            producer="service-risk-exec",
+            strategy_version=intent.strategy_key or "unknown",
+            config_hash="risk-config-v1",
+            intent_id=intent.intent_id,
+            passed=decision.approved,
+            reason=decision.detail,
+            max_notional=authority.config.max_notional,
+            failure_reason_codes=decision.failure_reason_codes,
+            rule_results=authority.decision_audit_trail[-1].get("rule_results", []),
+        ).model_dump(mode="json"),
     }
     await client.publish(RISK_DECISION_CHANNEL, json.dumps(decision_payload, default=str))
 
