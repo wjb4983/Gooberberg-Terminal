@@ -1,3 +1,4 @@
+from gb_core.lineage import LineageSpec
 from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID, uuid4
@@ -8,6 +9,7 @@ from app.schemas.training_runs import RunStatus
 
 
 class BacktestRunCreateRequest(BaseModel):
+    lineage: LineageSpec
     strategy_key: str = Field(min_length=1)
     model_config_id: UUID | None = None
     window_start: datetime

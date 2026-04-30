@@ -18,6 +18,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field, ValidationError
 
+from gb_core.lineage import LineageSpec
+
 from worker_training.adapters.base import AdapterCapability
 from worker_training.adapters.registry import AdapterRegistry
 from worker_training.data.materializer import materialize_dataset_bundle
@@ -63,6 +65,7 @@ class JobEnvelope(BaseModel):
 
 
 class TrainingRunRequest(BaseModel):
+    lineage: LineageSpec
     dataset_id: str | None = None
     model_name: str = "placeholder-model"
     dataset_ref: str = "dataset://placeholder"

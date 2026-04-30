@@ -1,3 +1,4 @@
+from gb_core.lineage import LineageSpec
 from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Any
@@ -48,6 +49,7 @@ class TaskSubtypeValidatedModel(BaseModel):
 
 
 class TrainingRunCreateRequest(TaskSubtypeValidatedModel):
+    lineage: LineageSpec
     task_type: TaskType = TaskType.TIME_SERIES_MOMENTUM
     subtask_type: SubtaskType = SubtaskType.RANKING
     model_config_id: UUID
@@ -58,6 +60,7 @@ class TrainingRunCreateRequest(TaskSubtypeValidatedModel):
 
 
 class TrainingRunValidationRequest(TaskSubtypeValidatedModel):
+    lineage: LineageSpec
     task_type: TaskType = TaskType.TIME_SERIES_MOMENTUM
     subtask_type: SubtaskType = SubtaskType.RANKING
     model_config_id: UUID
