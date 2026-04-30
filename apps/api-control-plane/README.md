@@ -168,3 +168,30 @@ timeout 240s docker compose -f infra/compose/docker-compose.dev.yml up -d --buil
 timeout 30s docker compose -f infra/compose/docker-compose.dev.yml ps api-control-plane
 timeout 30s docker compose -f infra/compose/docker-compose.dev.yml logs --tail=200 api-control-plane
 ```
+
+## Domain production rollout flags
+
+All flags are prefixed with `GB_` and are **default-safe** (`false`) to keep production paths disabled until explicitly enabled.
+
+| Domain | Flag | Default | Disabled behavior |
+|---|---|---:|---|
+| Worker research | `GB_WORKER_RESEARCH_PROD_PIPELINE_ENABLED` | `false` | Return/record `degraded` + structured reason and deterministic fallback |
+| Portfolio state | `GB_PORTFOLIO_PROD_SNAPSHOT_ENABLED` | `false` | Return/record `degraded` + structured reason and deterministic fallback |
+| Graph domain | `GB_GRAPH_PROD_TOPOLOGY_ENABLED` | `false` | Return/record `degraded` + structured reason and deterministic fallback |
+| Health checks | `GB_HEALTH_PROD_DEPENDENCY_CHECKS_ENABLED` | `false` | Return/record `degraded` + structured reason and deterministic fallback |
+
+Structured reason contract and deterministic guarantees are documented in `docs/architecture/deterministic-pipelines.md`.
+
+## Recommended rollout order (quick start)
+
+Execute in this order for progressive rollout by environment:
+
+1. **Dev**
+   - Enable one domain flag at a time.
+   - Validate idempotency + reproducibility using deterministic test inputs.
+2. **Staging**
+   - Promote the same flag and verify monotonic status progression (`queued -> running -> degraded|succeeded|failed`).
+   - Confirm schema/version compatibility with downstream consumers.
+3. **Prod**
+   - Enable only after staging soak and degraded fallback telemetry checks are green.
+   - Keep remaining domains disabled until prior domain is stable.
