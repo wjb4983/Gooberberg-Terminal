@@ -3,9 +3,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
+from uuid import UUID, uuid4
 
 from pydantic import BaseModel, Field
 
+from gb_core.event_schemas import AlertEvent
 from gb_core.schemas import ExecutionDecision, RiskOverride, StrategyIntent
 
 
@@ -19,6 +21,14 @@ class RiskConfig(BaseModel):
     max_trades_per_minute: int = Field(default=120, gt=0)
     allowed_instruments: set[str] = Field(default_factory=lambda: {"equity"})
     allowed_session_windows_utc: list[tuple[int, int]] = Field(default_factory=lambda: [(13, 20)])
+    max_daily_drawdown_pct: float = Field(default=5.0, gt=0)
+    max_rolling_drawdown_pct: float = Field(default=8.0, gt=0)
+    max_loss_per_symbol: float = Field(default=10_000.0, gt=0)
+    max_loss_per_strategy: float = Field(default=50_000.0, gt=0)
+    max_symbol_concentration_pct: float = Field(default=35.0, gt=0, le=100)
+    max_strategy_concentration_pct: float = Field(default=60.0, gt=0, le=100)
+    high_vol_regime_threshold: float = Field(default=30.0, gt=0)
+    vol_regime_throttle_scale: float = Field(default=0.5, gt=0, le=1)
 
 
 @dataclass
@@ -35,6 +45,131 @@ class RiskExecutionAuthority:
         self._decision_events: list[ExecutionDecision] = []
         self.override_audit_trail: list[dict[str, Any]] = []
         self.decision_audit_trail: list[dict[str, Any]] = []
+        self.alert_events: list[AlertEvent] = []
+        self.policy_action_audit_trail: list[dict[str, Any]] = []
+
+    def evaluate_continuous_monitors(self, *, monitor_input: dict[str, Any], trace_id: UUID | None = None) -> list[AlertEvent]:
+        alerts: list[AlertEvent] = []
+        event_trace_id = trace_id or uuid4()
+
+        def _emit(
+            *,
+            rule: str,
+            severity: str,
+            policy_action: str,
+            message: str,
+            context: dict[str, Any],
+        ) -> None:
+            now = datetime.now(UTC)
+            alert = AlertEvent(
+                event_id=uuid4(),
+                trace_id=event_trace_id,
+                schema_version="1.0.0",
+                event_type="AlertEvent",
+                event_time=now,
+                ingest_time=now,
+                process_time=now,
+                producer="risk-execution-authority",
+                strategy_version="risk-monitor-v1",
+                config_hash="risk-monitor-config",
+                severity=severity,
+                message=message,
+                category="risk",
+            )
+            alerts.append(alert)
+            self.alert_events.append(alert)
+            self.policy_action_audit_trail.append(
+                {
+                    "alert_event_id": str(alert.event_id),
+                    "trace_id": str(alert.trace_id),
+                    "rule": rule,
+                    "policy_action": policy_action,
+                    "severity": severity,
+                    "message": message,
+                    "context": context,
+                    "recorded_at": now.isoformat(),
+                }
+            )
+
+        daily_drawdown_pct = float(monitor_input.get("daily_drawdown_pct", 0.0))
+        if daily_drawdown_pct >= self.config.max_daily_drawdown_pct:
+            _emit(
+                rule="daily_drawdown",
+                severity="critical",
+                policy_action="halt",
+                message=f"daily drawdown breach: {daily_drawdown_pct:.2f}% >= {self.config.max_daily_drawdown_pct:.2f}%",
+                context={"daily_drawdown_pct": daily_drawdown_pct, "limit_pct": self.config.max_daily_drawdown_pct},
+            )
+
+        rolling_drawdown_pct = float(monitor_input.get("rolling_drawdown_pct", 0.0))
+        if rolling_drawdown_pct >= self.config.max_rolling_drawdown_pct:
+            _emit(
+                rule="rolling_drawdown",
+                severity="critical",
+                policy_action="halt",
+                message=f"rolling drawdown breach: {rolling_drawdown_pct:.2f}% >= {self.config.max_rolling_drawdown_pct:.2f}%",
+                context={"rolling_drawdown_pct": rolling_drawdown_pct, "limit_pct": self.config.max_rolling_drawdown_pct},
+            )
+
+        symbol_losses = monitor_input.get("symbol_losses", {})
+        for symbol, loss in symbol_losses.items():
+            if abs(float(loss)) >= self.config.max_loss_per_symbol:
+                _emit(
+                    rule="max_loss_per_symbol",
+                    severity="critical",
+                    policy_action="halt",
+                    message=f"symbol loss breach: {symbol} loss={loss}",
+                    context={"symbol": symbol, "loss": loss, "limit": self.config.max_loss_per_symbol},
+                )
+
+        strategy_loss = abs(float(monitor_input.get("strategy_loss", 0.0)))
+        if strategy_loss >= self.config.max_loss_per_strategy:
+            _emit(
+                rule="max_loss_per_strategy",
+                severity="critical",
+                policy_action="halt",
+                message=f"strategy loss breach: loss={strategy_loss}",
+                context={"strategy_loss": strategy_loss, "limit": self.config.max_loss_per_strategy},
+            )
+
+        symbol_concentration = monitor_input.get("symbol_concentration_pct", {})
+        for symbol, pct in symbol_concentration.items():
+            if float(pct) >= self.config.max_symbol_concentration_pct:
+                _emit(
+                    rule="symbol_concentration",
+                    severity="warning",
+                    policy_action="throttle",
+                    message=f"symbol concentration breach: {symbol} at {pct}%",
+                    context={"symbol": symbol, "concentration_pct": pct, "limit_pct": self.config.max_symbol_concentration_pct},
+                )
+
+        strategy_concentration_pct = float(monitor_input.get("strategy_concentration_pct", 0.0))
+        if strategy_concentration_pct >= self.config.max_strategy_concentration_pct:
+            _emit(
+                rule="strategy_concentration",
+                severity="warning",
+                policy_action="throttle",
+                message=f"strategy concentration breach: {strategy_concentration_pct}%",
+                context={"strategy_concentration_pct": strategy_concentration_pct, "limit_pct": self.config.max_strategy_concentration_pct},
+            )
+
+        vol_regime = float(monitor_input.get("volatility_regime", 0.0))
+        if vol_regime >= self.config.high_vol_regime_threshold:
+            _emit(
+                rule="volatility_regime",
+                severity="info",
+                policy_action="warn",
+                message=(
+                    f"high-vol regime detected: {vol_regime:.2f}; apply throttle scale {self.config.vol_regime_throttle_scale:.2f}"
+                ),
+                context={
+                    "volatility_regime": vol_regime,
+                    "threshold": self.config.high_vol_regime_threshold,
+                    "throttle_scale": self.config.vol_regime_throttle_scale,
+                },
+            )
+
+        return alerts
 
     def consume_intent(self, intent: StrategyIntent) -> ExecutionDecision:
         self._intent_events.append(IntentEventRecord(intent=intent, received_at=datetime.now(UTC)))
