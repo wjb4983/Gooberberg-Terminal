@@ -15,6 +15,15 @@ class AlertSeverity(StrEnum):
 class AlertStatus(StrEnum):
     ACTIVE = "active"
     ACKNOWLEDGED = "acknowledged"
+    ESCALATED = "escalated"
+    RESOLVED = "resolved"
+
+
+class AlertLifecycleType(StrEnum):
+    TRIGGERED = "triggered"
+    ACKNOWLEDGED = "acknowledged"
+    ESCALATED = "escalated"
+    RESOLVED = "resolved"
 
 
 class AlertEvent(BaseModel):
@@ -32,6 +41,13 @@ class AlertEvent(BaseModel):
 class AlertAcknowledgeResponse(BaseModel):
     alert: AlertEvent
     detail: str
+
+
+class AlertLifecycleEvent(BaseModel):
+    alert_id: UUID
+    event_type: AlertLifecycleType
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    details: dict[str, Any] = Field(default_factory=dict)
 
 
 class LogLevel(StrEnum):

@@ -11,6 +11,8 @@ from app.schemas.backtest_runs import (
 from app.schemas.events import (
     AlertAcknowledgeResponse,
     AlertEvent,
+    AlertLifecycleEvent,
+    AlertLifecycleType,
     AlertSeverity,
     AlertStatus,
     LogEvent,
@@ -99,6 +101,8 @@ from app.schemas.training_runs import (
 __all__ = [
     "AlertAcknowledgeResponse",
     "AlertEvent",
+    "AlertLifecycleEvent",
+    "AlertLifecycleType",
     "AlertSeverity",
     "AlertStatus",
     "ArtifactDetailResponse",
