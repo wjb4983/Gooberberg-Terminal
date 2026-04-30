@@ -5,6 +5,9 @@
 - `tailscale-connectivity.md`: Tailnet exposure, client validation, and connectivity troubleshooting.
 - `incident-response.md`: Incident severity, triage, mitigation, and recovery playbooks.
 - `release-process.md`: Versioning policy and scripted release flow.
+- `slo-and-latency-objectives.md`: SLO definitions for event loss, audit latency, decision-loop budget, and MTTA/MTTR.
+- `safe-restart.md`: Ordered low-risk restart procedure with validation and rollback criteria.
+- `backfill-and-replay-verification.md`: Backfill workflow and deterministic replay parity validation.
 - `desktop-cannot-connect.md`: Triage and mitigation for desktop-to-backend reachability failures.
 - `auth-token-rejected.md`: Diagnose and fix auth token validation failures.
 - `ws-reconnect-storm.md`: Investigate and stabilize repeated WebSocket reconnect loops.
