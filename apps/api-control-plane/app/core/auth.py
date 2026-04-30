@@ -24,6 +24,11 @@ _READ_SCOPES = frozenset(
 _MUTATING_SCOPES = frozenset({"control-plane:write", "control-plane:full", "control-plane:admin"})
 _ADMIN_SCOPES = frozenset({"control-plane:admin", "control-plane:full"})
 _ADMIN_PATH_PREFIXES = ("/api/v1/model-configs",)
+_ROLE_SCOPE_ALIASES = {
+    "viewer": "control-plane:read",
+    "operator": "control-plane:write",
+    "admin": "control-plane:admin",
+}
 logger = logging.getLogger(__name__)
 
 
@@ -131,7 +136,13 @@ class BearerTokenAuthMiddleware(BaseHTTPMiddleware):
 
 def _normalize_scopes(scope_config: str) -> set[str]:
     tokens: Iterable[str] = scope_config.split(",") if scope_config else ()
-    return {token.strip() for token in tokens if token.strip()}
+    normalized: set[str] = set()
+    for token in tokens:
+        cleaned = token.strip()
+        if not cleaned:
+            continue
+        normalized.add(_ROLE_SCOPE_ALIASES.get(cleaned, cleaned))
+    return normalized
 
 
 def _required_scope_for_request(request: Request) -> tuple[str, frozenset[str]]:
