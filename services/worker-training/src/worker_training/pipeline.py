@@ -8,6 +8,7 @@ import logging
 import os
 import time
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Awaitable, Callable
 
 from worker_training.main import (
@@ -35,6 +36,7 @@ class PipelineStage:
 
 STAGES = {
     "load_intent": PipelineStage("load_intent", 10.0, "training worker accepted job"),
+    "preflight": PipelineStage("preflight", 15.0, "validating deterministic lineage preflight"),
     "qualify_dataset": PipelineStage("qualify_dataset", 20.0, "qualifying dataset"),
     "materialize_splits": PipelineStage("materialize_splits", 45.0, "materializing data splits"),
     "fit_predict": PipelineStage("fit_predict", 70.0, "running adapter fit/predict"),
@@ -42,6 +44,48 @@ STAGES = {
     "persist_artifacts": PipelineStage("persist_artifacts", 95.0, "persisting training artifacts"),
     "emit_lifecycle": PipelineStage("emit_lifecycle", 100.0, "training run completed"),
 }
+REQUIRED_ARTIFACT_ROLES = ("model", "metadata", "diagnostics", "metrics_parquet")
+
+
+def _sha256_bytes(content: bytes) -> str:
+    return hashlib.sha256(content).hexdigest()
+
+
+def _sha256_json(payload: dict[str, Any]) -> str:
+    canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+    return _sha256_bytes(canonical)
+
+
+def _resolve_runtime_code_hash() -> str:
+    return os.getenv("GB_RUNTIME_CODE_SHA", "0" * 40).strip().lower()
+
+
+def _build_expected_manifest() -> list[dict[str, Any]]:
+    return [
+        {"role": role, "uri": "pending://artifact", "algorithm": "sha256", "hash": "0" * 64, "size_bytes": 0}
+        for role in REQUIRED_ARTIFACT_ROLES
+    ]
+
+
+def _preflight_lineage(envelope: JobEnvelope, request: TrainingRunRequest) -> tuple[bool, str, dict[str, Any] | None]:
+    lineage = request.lineage
+    if lineage is None:
+        return False, "deterministic_gate_error: missing lineage", {"error_code": "missing_lineage"}
+    if "seed" not in envelope.payload:
+        return False, "deterministic_gate_error: explicit seed missing", {"error_code": "missing_seed"}
+
+    runtime_dataset_fingerprint = _sha256_json({"dataset_ref": request.dataset_ref, "dataset_id": request.dataset_id, "seed": request.seed})
+    runtime_code_hash = _resolve_runtime_code_hash()
+    runtime_config_digest = _sha256_json(request.model_dump(mode="json"))
+    if lineage.dataset_fingerprint.hash != runtime_dataset_fingerprint:
+        return False, "deterministic_gate_error: dataset fingerprint mismatch", {"error_code": "dataset_fingerprint_mismatch"}
+    if lineage.code_hash.git_commit_sha != runtime_code_hash:
+        return False, "deterministic_gate_error: code hash mismatch", {"error_code": "code_hash_mismatch"}
+    if lineage.config_digest.digest != runtime_config_digest:
+        return False, "deterministic_gate_error: config digest mismatch", {"error_code": "config_digest_mismatch"}
+    if lineage.seed != request.seed:
+        return False, "deterministic_gate_error: seed mismatch", {"error_code": "seed_mismatch"}
+    return True, "", None
 
 
 def _strict_pipeline_enabled_for_family(model_family: str) -> bool:
@@ -98,6 +142,11 @@ async def run_training_pipeline(
     await _emit("load_intent")
     request = TrainingRunRequest.model_validate(envelope.payload)
     strict_mode = _strict_pipeline_enabled_for_family(request.model_family)
+    await _emit("preflight")
+    success, gate_message, gate_metrics = _preflight_lineage(envelope, request)
+    if not success:
+        await emit(JobStatus.FAILED, 100.0, gate_message, None, gate_metrics)
+        return
 
     await _emit("qualify_dataset")
     await ensure_data_ready(envelope=envelope)
@@ -134,4 +183,32 @@ async def run_training_pipeline(
 
     await _emit("evaluate")
     await _emit("persist_artifacts")
-    await _emit("emit_lifecycle", status=JobStatus.SUCCESS, result_ref=artifact.ref, metric_bundle=artifact.metric_bundle)
+    artifact_paths: dict[str, Path | None] = {
+        "metadata": artifact.metadata_path,
+        "model": artifact.metadata_path.parent / "model.bin",
+        "diagnostics": artifact.diagnostics_path,
+        "metrics_parquet": artifact.sample_path,
+    }
+    manifest = _build_expected_manifest()
+    missing_roles = [role for role, path in artifact_paths.items() if path is None or not path.exists()]
+    if missing_roles:
+        await emit(
+            JobStatus.FAILED,
+            100.0,
+            "deterministic_gate_error: required artifact set incomplete",
+            artifact.ref,
+            {"error_code": "artifact_set_incomplete", "missing_roles": missing_roles},
+        )
+        return
+    finalized_manifest: list[dict[str, Any]] = []
+    for entry in manifest:
+        role = entry["role"]
+        path = artifact_paths[role]
+        assert path is not None
+        content = path.read_bytes()
+        finalized_manifest.append(
+            {**entry, "uri": f"file://{path}", "size_bytes": len(content), "hash": _sha256_bytes(content)}
+        )
+    completion_metrics = dict(artifact.metric_bundle or {})
+    completion_metrics["artifact_manifest"] = finalized_manifest
+    await _emit("emit_lifecycle", status=JobStatus.SUCCESS, result_ref=artifact.ref, metric_bundle=completion_metrics)
