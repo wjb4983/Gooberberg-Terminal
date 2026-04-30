@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+import hashlib
+import json
 from pathlib import Path
 from uuid import uuid4
 
@@ -9,6 +11,32 @@ import asyncio
 import pytest
 
 from worker_training.main import JobEnvelope, JobStatus, handle_with_timeout, process_job
+
+
+def _payload_with_lineage(seed: int = 7) -> dict:
+    payload = {"model_name": "arima", "model_family": "statistical", "seed": seed, "dataset_ref": "dataset://placeholder"}
+    config_digest = hashlib.sha256(
+        json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+    ).hexdigest()
+    dataset_fingerprint = hashlib.sha256(
+        json.dumps(
+            {"dataset_ref": payload["dataset_ref"], "dataset_id": payload.get("dataset_id"), "seed": payload["seed"]},
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=False,
+        ).encode("utf-8")
+    ).hexdigest()
+    payload["lineage"] = {
+        "lineage_version": 1,
+        "dataset_fingerprint": {"hash": dataset_fingerprint},
+        "code_hash": {"git_commit_sha": "0" * 40, "dirty": False},
+        "config_digest": {"digest": config_digest},
+        "seed": seed,
+        "artifact_manifest": [
+            {"uri": "pending://artifact", "size_bytes": 0, "hash": "0" * 64, "media_type": "application/json", "role": "placeholder"}
+        ],
+    }
+    return payload
 from worker_training.pipeline import _strict_pipeline_enabled_for_family
 
 
@@ -36,7 +64,7 @@ def test_process_job_emits_running_then_success(monkeypatch: pytest.MonkeyPatch,
         job_id=uuid4(),
         trace_id="trace",
         job_type="training",
-        payload={"model_name": "arima"},
+        payload=_payload_with_lineage(),
         queued_at=datetime.now(UTC),
     )
     client = _RedisStub()
@@ -69,7 +97,7 @@ def test_process_job_uses_family_fallback_for_unknown_adapter(monkeypatch: pytes
         job_id=uuid4(),
         trace_id="trace",
         job_type="training",
-        payload={"model_name": "missing_adapter"},
+        payload={**_payload_with_lineage(), "model_name": "missing_adapter"},
         queued_at=datetime.now(UTC),
     )
     client = _RedisStub()
