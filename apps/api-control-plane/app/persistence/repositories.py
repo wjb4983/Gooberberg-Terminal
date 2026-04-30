@@ -137,6 +137,8 @@ class RunSqlRepository:
                     "subtask_type": row.subtask_type,
                     "constraint_profile_version": row.constraint_profile_version,
                     "parameters": dict(row.parameters or {}),
+                    "deterministic_mode": row.deterministic_mode,
+                    "scenario_id": row.scenario_id,
                 }
             )
         elif isinstance(row, ParameterSweepRunRow):
@@ -159,6 +161,19 @@ class RunSqlRepository:
                     "window_start": row.window_start,
                     "window_end": row.window_end,
                     "parameters": dict(row.parameters or {}),
+                    "deterministic_mode": row.deterministic_mode,
+                    "scenario_id": row.scenario_id,
+                    "git_sha": row.git_sha,
+                    "config_hash": row.config_hash,
+                    "data_snapshot_id": row.data_snapshot_id,
+                    "random_seed": row.random_seed,
+                    "engine_version": row.engine_version,
+                    "feature_set_version": row.feature_set_version,
+                    "timezone": row.timezone,
+                    "calendar_id": row.calendar_id,
+                    "resolved_config": dict(row.resolved_config or {}),
+                    "environment_fingerprint": dict(row.environment_fingerprint or {}),
+                    "run_checksum": row.run_checksum,
                 }
             )
         else:
@@ -167,6 +182,8 @@ class RunSqlRepository:
                     "mode": row.mode,
                     "target_refs": list(row.target_refs or []),
                     "parameters": dict(row.parameters or {}),
+                    "deterministic_mode": row.deterministic_mode,
+                    "scenario_id": row.scenario_id,
                     "result_summary": dict(row.result_summary) if row.result_summary is not None else None,
                 }
             )
