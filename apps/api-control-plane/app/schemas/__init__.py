@@ -5,6 +5,8 @@ from app.schemas.backtest_runs import (
     BacktestRunPreflightResponse,
     BacktestRunResponse,
     BacktestStatusResponse,
+    BacktestReplayValidationRequest,
+    BacktestReplayValidationResponse,
 )
 from app.schemas.events import (
     AlertAcknowledgeResponse,
@@ -107,6 +109,8 @@ __all__ = [
     "BacktestRunPreflightResponse",
     "BacktestRunResponse",
     "BacktestStatusResponse",
+    "BacktestReplayValidationRequest",
+    "BacktestReplayValidationResponse",
     "DependencyStatus",
     "GraphEdge",
     "GraphLayoutProductsResponse",
