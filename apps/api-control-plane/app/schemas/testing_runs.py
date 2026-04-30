@@ -1,3 +1,4 @@
+from gb_core.lineage import LineageSpec
 from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Any
@@ -34,6 +35,7 @@ class TestingResultSummary(BaseModel):
 
 
 class TestingRunCreateRequest(BaseModel):
+    lineage: LineageSpec
     mode: TestingRunMode
     target_refs: list[TestingTargetReference] = Field(default_factory=list)
     parameters: dict[str, Any] = Field(default_factory=dict)
