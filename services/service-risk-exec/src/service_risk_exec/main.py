@@ -7,6 +7,152 @@ import json
 import logging
 import os
 from dataclasses import dataclass
+from enum import StrEnum
+from random import Random
+
+
+class OrderState(StrEnum):
+    CREATED = "created"
+    SENT = "sent"
+    ACKNOWLEDGED = "acknowledged"
+    PARTIALLY_FILLED = "partially_filled"
+    FILLED = "filled"
+    CANCELED = "canceled"
+    EXPIRED = "expired"
+
+
+@dataclass(frozen=True)
+class MarketEvent:
+    symbol: str
+    displayed_qty: float
+    observed_spread: float | None = None
+
+
+@dataclass(frozen=True)
+class OrderRequest:
+    symbol: str
+    qty: float
+    aggressive: bool
+    participation: float
+
+
+@dataclass(frozen=True)
+class FillResult:
+    fill_qty: float
+    state: OrderState
+    fee_amt: float
+    spread_cost: float
+    impact_cost: float
+    delay_cost: float
+
+
+class FeeModel:
+    def fee_amount(self, order: OrderRequest, fill_qty: float) -> float:
+        raise NotImplementedError
+
+
+class SlippageModel:
+    def slippage_bps(self, participation: float) -> float:
+        raise NotImplementedError
+
+
+class SpreadModel:
+    def spread(self, event: MarketEvent) -> float:
+        raise NotImplementedError
+
+
+class LatencyModel:
+    def latency_ms(self) -> float:
+        raise NotImplementedError
+
+
+class FillModel:
+    def max_fill_qty(self, order: OrderRequest, event: MarketEvent) -> float:
+        raise NotImplementedError
+
+
+@dataclass(frozen=True)
+class FixedBpsFeeModel(FeeModel):
+    fixed_fee: float = 0.0
+    maker_bps: float = 0.0
+    taker_bps: float = 0.0
+
+    def fee_amount(self, order: OrderRequest, fill_qty: float) -> float:
+        bps = self.taker_bps if order.aggressive else self.maker_bps
+        return self.fixed_fee + fill_qty * (bps / 10_000)
+
+
+@dataclass(frozen=True)
+class PowerLawSlippageModel(SlippageModel):
+    a: float = 0.0
+    b: float = 0.0
+    gamma: float = 1.0
+
+    def slippage_bps(self, participation: float) -> float:
+        bounded = min(max(participation, 0.0), 1.0)
+        return self.a + self.b * (bounded**self.gamma)
+
+
+@dataclass(frozen=True)
+class ObservedOrFallbackSpreadModel(SpreadModel):
+    fallback_by_symbol: dict[str, float]
+    default_spread: float = 0.01
+
+    def spread(self, event: MarketEvent) -> float:
+        if event.observed_spread is not None:
+            return event.observed_spread
+        return self.fallback_by_symbol.get(event.symbol, self.default_spread)
+
+
+@dataclass
+class BasePlusJitterLatencyModel(LatencyModel):
+    base_ms: float
+    jitter_ms: float
+    random: Random | None = None
+
+    def latency_ms(self) -> float:
+        rng = self.random or Random(0)
+        return self.base_ms + rng.uniform(0.0, self.jitter_ms)
+
+
+@dataclass(frozen=True)
+class ParticipationCapFillModel(FillModel):
+    participation_cap: float
+
+    def max_fill_qty(self, order: OrderRequest, event: MarketEvent) -> float:
+        cap = max(self.participation_cap, 0.0)
+        return min(order.qty, event.displayed_qty * cap)
+
+
+@dataclass
+class ExecutionEngine:
+    fee_model: FeeModel
+    slippage_model: SlippageModel
+    spread_model: SpreadModel
+    latency_model: LatencyModel
+    fill_model: FillModel
+
+    def process_fill(self, order: OrderRequest, event: MarketEvent) -> FillResult:
+        max_fill_qty = self.fill_model.max_fill_qty(order, event)
+        fill_qty = max(0.0, min(order.qty, max_fill_qty))
+
+        if fill_qty <= 0:
+            return FillResult(fill_qty=0.0, state=OrderState.ACKNOWLEDGED, fee_amt=0.0, spread_cost=0.0, impact_cost=0.0, delay_cost=0.0)
+
+        fill_state = OrderState.FILLED if fill_qty >= order.qty else OrderState.PARTIALLY_FILLED
+        spread = self.spread_model.spread(event)
+        impact_bps = self.slippage_model.slippage_bps(order.participation)
+        delay_ms = self.latency_model.latency_ms()
+
+        return FillResult(
+            fill_qty=fill_qty,
+            state=fill_state,
+            fee_amt=self.fee_model.fee_amount(order, fill_qty),
+            spread_cost=fill_qty * spread,
+            impact_cost=fill_qty * (impact_bps / 10_000),
+            delay_cost=fill_qty * (delay_ms / 1000),
+        )
+
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from threading import Thread
 from typing import TYPE_CHECKING
@@ -60,7 +206,14 @@ async def _consume_intent_payload(client: "Redis", payload: str, state: ServiceS
     decision_payload = {
         "intent": intent.model_dump(mode="json"),
         "decision": decision.model_dump(mode="json"),
-        "execution_status": "not_submitted",
+        "execution_status": OrderState.CREATED,
+        "order_lifecycle": [
+            OrderState.CREATED,
+            OrderState.SENT,
+            OrderState.ACKNOWLEDGED,
+            OrderState.PARTIALLY_FILLED,
+            OrderState.FILLED,
+        ],
         "authority_boundary": "risk-exec produces decisions only; order adapters are external",
     }
     await client.publish(RISK_DECISION_CHANNEL, json.dumps(decision_payload, default=str))
