@@ -70,6 +70,63 @@ For heavy outputs or artifacts:
 - `GET /api/v1/risk/overrides`
 - `POST /api/v1/risk/overrides`
 - `GET /api/v1/risk/decisions/recent`
+- `GET /api/v1/runs/{run_id}/lineage`
+- `GET /api/v1/runs/{run_id}/artifacts`
+- `GET /api/v1/runs/{run_id}/replay`
+
+## Run replay and integrity contracts
+
+### `GET /api/v1/runs/{run_id}/lineage`
+
+Returns a canonical lineage block plus lineage schema version:
+
+- `schema_version`: lineage payload schema identifier (currently `v1`).
+- `lineage`: immutable replay inputs (`dataset_fingerprint`, `code_hash`, `config_digest`, `seed`) and lineage processing status metadata.
+
+### `GET /api/v1/runs/{run_id}/artifacts`
+
+Returns:
+
+- `manifest_entries`: ordered artifact manifest records (`artifact_role`, refs, uris, creation time).
+- `integrity_metadata`: per-artifact checksums (`checksum`, `sha256`), signatures, and size bytes for independent verification.
+
+### `GET /api/v1/runs/{run_id}/replay`
+
+Replay helper payload includes:
+
+- `replay_bundle.dataset_reference`
+- `replay_bundle.code_hash`
+- `replay_bundle.normalized_config`
+- `replay_bundle.seed`
+- `integrity_attestations` (lineage version/status plus artifact cardinality)
+- `missing_prerequisites` list when replay-critical material is incomplete.
+
+## Contract guarantees for run durability
+
+### Immutable post-run fields
+
+After a run transitions into terminal status, these fields are treated as immutable for replay and audit:
+
+- `dataset_fingerprint`
+- `code_hash`
+- `config_digest`
+- `seed`
+- artifact integrity tuple (`checksum`, `sha256`, `size_bytes`, `signature`) per manifest entry
+
+### Independent artifact verification
+
+Clients verify artifacts by:
+
+1. Fetching artifact bytes from `artifact_ref` / `artifact_uri`.
+2. Recomputing digest (`sha256`) and checking returned `checksum`.
+3. Validating `size_bytes`.
+4. Optionally validating `signature` against client trust policy.
+
+### Lineage schema version evolution
+
+- `schema_version` is explicit on lineage responses.
+- Additive lineage fields are backwards-compatible within a schema version.
+- Breaking lineage shape changes require a new `schema_version` value and dual-read compatibility window in clients.
 
 ## Run-creation lineage contract
 

@@ -22,6 +22,7 @@ from app.api.routers.parameter_sweeps import router as parameter_sweeps_router
 from app.api.routers.parameter_sets import router as parameter_sets_router
 from app.api.routers.portfolio import router as portfolio_router
 from app.api.routers.risk import router as risk_router
+from app.api.routers.runs import router as runs_router
 from app.api.routers.ws import router as ws_router
 from app.api.routers.strategies import router as strategies_router
 from app.api.routers.testing_runs import router as testing_runs_router
@@ -146,6 +147,7 @@ def create_app() -> FastAPI:
     app.include_router(portfolio_router, prefix=settings.api_prefix)
     app.include_router(strategies_router, prefix=settings.api_prefix)
     app.include_router(risk_router, prefix=settings.api_prefix)
+    app.include_router(runs_router, prefix=settings.api_prefix)
     app.include_router(ws_router)
 
     @app.exception_handler(HTTPException)
