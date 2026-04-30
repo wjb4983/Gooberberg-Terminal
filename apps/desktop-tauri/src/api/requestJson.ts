@@ -58,6 +58,25 @@ function summarizeFailureBody(body: string): string {
   return `: ${trimmed.slice(0, maxLen)}`;
 }
 
+function summarizeCorrelatedFailure(body: string): string {
+  const trimmed = body.trim();
+  if (!trimmed) return '';
+  try {
+    const parsed = JSON.parse(trimmed) as Record<string, unknown>;
+    const requestId = typeof parsed.request_id === 'string' ? parsed.request_id : undefined;
+    const errorCode = typeof parsed.error_code === 'string' ? parsed.error_code : undefined;
+    const detail = typeof parsed.detail === 'string' ? parsed.detail : undefined;
+    const correlation = [requestId ? `request_id=${requestId}` : '', errorCode ? `error_code=${errorCode}` : '']
+      .filter(Boolean)
+      .join(', ');
+    const prefix = correlation ? ` [${correlation}]` : '';
+    const detailSuffix = detail?.trim() ? `: ${detail.trim().slice(0, 280)}` : '';
+    return `${prefix}${detailSuffix}`;
+  } catch {
+    return summarizeFailureBody(body);
+  }
+}
+
 export async function requestJson<T>(baseUrl: string, path: string, init?: RequestInit): Promise<T> {
   const headers = new Headers(init?.headers);
   if (!headers.has('Accept')) {
@@ -90,7 +109,7 @@ export async function requestJson<T>(baseUrl: string, path: string, init?: Reque
 
     if (response.status < 200 || response.status >= 300) {
       throw new Error(
-        `Request failed (${response.status}) for ${method.toUpperCase()} ${url}${summarizeFailureBody(response.body)}`,
+        `Request failed (${response.status}) for ${method.toUpperCase()} ${url}${summarizeCorrelatedFailure(response.body)}`,
       );
     }
 
@@ -106,7 +125,7 @@ export async function requestJson<T>(baseUrl: string, path: string, init?: Reque
     if (!response.ok) {
       const responseBody = await response.text();
       throw new Error(
-        `Request failed (${response.status}) for ${method.toUpperCase()} ${url}${summarizeFailureBody(responseBody)}`,
+        `Request failed (${response.status}) for ${method.toUpperCase()} ${url}${summarizeCorrelatedFailure(responseBody)}`,
       );
     }
 

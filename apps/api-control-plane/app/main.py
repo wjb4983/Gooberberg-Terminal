@@ -5,7 +5,10 @@ from collections.abc import Mapping
 from contextlib import AsyncExitStack, asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi import HTTPException, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from app.api.routers.alerts import router as alerts_router
 from app.api.routers.backtest_runs import router as backtest_runs_router
@@ -137,6 +140,29 @@ def create_app() -> FastAPI:
     app.include_router(risk_router, prefix=settings.api_prefix)
     app.include_router(ws_router)
 
+    @app.exception_handler(HTTPException)
+    async def http_exception_handler(request: Request, exc: HTTPException) -> JSONResponse:
+        return _error_envelope_response(request=request, status_code=exc.status_code, detail=exc.detail)
+
+    @app.exception_handler(RequestValidationError)
+    async def validation_exception_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
+        return _error_envelope_response(
+            request=request,
+            status_code=422,
+            detail="Request validation failed",
+            error_code="validation_error",
+        )
+
+    @app.exception_handler(Exception)
+    async def unexpected_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+        logger.exception("unhandled request exception", extra={"event": "unhandled_exception", "path": request.url.path})
+        return _error_envelope_response(
+            request=request,
+            status_code=500,
+            detail="Internal server error",
+            error_code="internal_error",
+        )
+
 
     @app.get("/healthz")
     def healthz() -> dict[str, str]:
@@ -151,3 +177,21 @@ def create_app() -> FastAPI:
 
 
 app = create_app()
+
+
+def _error_envelope_response(
+    *,
+    request: Request,
+    status_code: int,
+    detail: object,
+    error_code: str | None = None,
+) -> JSONResponse:
+    safe_detail = detail if isinstance(detail, str) else "Request failed"
+    body = {
+        "request_id": getattr(request.state, "request_id", "-"),
+        "error_code": error_code or f"http_{status_code}",
+        "detail": safe_detail,
+    }
+    response = JSONResponse(status_code=status_code, content=body)
+    response.headers["X-Request-ID"] = body["request_id"]
+    return response
