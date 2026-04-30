@@ -31,6 +31,12 @@ class Settings(BaseSettings):
     graph_mock_topology_enabled: bool = Field(default=False)
     portfolio_mock_snapshot_enabled: bool = Field(default=False)
 
+    # Explicit production-path rollout flags (default-safe: disabled).
+    worker_research_prod_pipeline_enabled: bool = Field(default=False)
+    portfolio_prod_snapshot_enabled: bool = Field(default=False)
+    graph_prod_topology_enabled: bool = Field(default=False)
+    health_prod_dependency_checks_enabled: bool = Field(default=False)
+
     model_config = SettingsConfigDict(env_prefix="GB_", extra="ignore")
 
 
