@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from dataclasses import dataclass
 from typing import Any, Awaitable, Callable
 
@@ -40,6 +41,18 @@ STAGES = {
 }
 
 
+def _strict_pipeline_enabled_for_family(model_family: str) -> bool:
+    strict_mode_enabled = os.getenv("GB_TRAINING_PIPELINE_STRICT_MODE", "0").strip().lower() in {"1", "true", "yes", "on"}
+    if not strict_mode_enabled:
+        return False
+
+    families_raw = os.getenv("GB_TRAINING_PIPELINE_STRICT_MODEL_FAMILIES", "")
+    enabled_families = {item.strip() for item in families_raw.split(",") if item.strip()}
+    if not enabled_families:
+        return True
+    return model_family in enabled_families
+
+
 async def run_training_pipeline(
     envelope: JobEnvelope,
     emit: StageEmitter,
@@ -69,6 +82,7 @@ async def run_training_pipeline(
 
     await _emit("load_intent")
     request = TrainingRunRequest.model_validate(envelope.payload)
+    strict_mode = _strict_pipeline_enabled_for_family(request.model_family)
 
     await _emit("qualify_dataset")
     await ensure_data_ready(envelope=envelope)
@@ -77,6 +91,26 @@ async def run_training_pipeline(
 
     await _emit("fit_predict")
     try:
+        if strict_mode:
+            logger.info(
+                "pipeline strict-mode routing",
+                extra={
+                    "job_id": str(envelope.job_id),
+                    "trace_id": envelope.trace_id,
+                    "model_family": request.model_family,
+                    "pipeline_mode": "strict",
+                },
+            )
+        else:
+            logger.info(
+                "pipeline compatibility-mode routing",
+                extra={
+                    "job_id": str(envelope.job_id),
+                    "trace_id": envelope.trace_id,
+                    "model_family": request.model_family,
+                    "pipeline_mode": "compatibility",
+                },
+            )
         artifact = write_mock_artifacts(envelope, request)
     except AdapterExecutionError as exc:
         error_ref = write_error_artifact(envelope, request, exc)
