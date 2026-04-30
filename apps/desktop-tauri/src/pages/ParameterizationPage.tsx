@@ -40,6 +40,20 @@ interface LaunchErrors {
   datasetId?: string;
   modelConfigId?: string;
   parametersJson?: string;
+  submit?: string;
+}
+interface TrainingRunValidationResponse {
+  normalized_payload: {
+    model_config_id: string;
+    dataset_id: string;
+    task_type: TaskType;
+    subtask_type: SubtaskType;
+    parameters: Record<string, unknown>;
+  };
+  warnings: string[];
+  errors: string[];
+  compatible: boolean;
+  valid: boolean;
 }
 type TrainingPreset = 'safe' | 'balanced' | 'aggressive';
 
@@ -91,6 +105,10 @@ export function ParameterizationPage({ baseUrl }: ParameterizationPageProps): JS
   const [datasetFormErrors, setDatasetFormErrors] = useState<DatasetFormErrors>({});
   const [pageError, setPageError] = useState<string | null>(null);
   const [launchNotice, setLaunchNotice] = useState<string | null>(null);
+  const [preflightWarnings, setPreflightWarnings] = useState<string[]>([]);
+  const [preflightErrors, setPreflightErrors] = useState<string[]>([]);
+  const [preflightPayloadJson, setPreflightPayloadJson] = useState<string>('');
+  const [warningConfirmationChecked, setWarningConfirmationChecked] = useState(false);
 
   const [showCreateDataset, setShowCreateDataset] = useState(false);
   const [datasetCreateForm, setDatasetCreateForm] = useState<DatasetCreateForm>({
@@ -159,12 +177,26 @@ export function ParameterizationPage({ baseUrl }: ParameterizationPageProps): JS
     () => modelConfigs.filter((item) => isModelCompatible(item, taskType)),
     [modelConfigs, taskType],
   );
+  const compatibleFamilies = useMemo(
+    () => Array.from(new Set(compatibleModelConfigs.map((item) => item.model_family))).sort((a, b) => a.localeCompare(b)),
+    [compatibleModelConfigs],
+  );
+  const [selectedModelFamily, setSelectedModelFamily] = useState('');
+  useEffect(() => {
+    if (!compatibleFamilies.includes(selectedModelFamily)) {
+      setSelectedModelFamily(compatibleFamilies[0] ?? '');
+    }
+  }, [compatibleFamilies, selectedModelFamily]);
+  const familyCompatibleConfigs = useMemo(
+    () => compatibleModelConfigs.filter((item) => item.model_family === selectedModelFamily),
+    [compatibleModelConfigs, selectedModelFamily],
+  );
 
   useEffect(() => {
-    if (!compatibleModelConfigs.some((item) => item.id === modelConfigId)) {
-      setModelConfigId(compatibleModelConfigs[0]?.id ?? '');
+    if (!familyCompatibleConfigs.some((item) => item.id === modelConfigId)) {
+      setModelConfigId(familyCompatibleConfigs[0]?.id ?? '');
     }
-  }, [compatibleModelConfigs, modelConfigId]);
+  }, [familyCompatibleConfigs, modelConfigId]);
 
   const selectedDatasetCoverage = useMemo(
     () => existingDatasetRows.find((item) => item.id === datasetId)?.coveragePct ?? null,
@@ -247,7 +279,7 @@ export function ParameterizationPage({ baseUrl }: ParameterizationPageProps): JS
     }
 
     try {
-      const created = await requestJson<TrainingRunItem>(baseUrl, '/api/v1/training-runs', {
+      const preflight = await requestJson<TrainingRunValidationResponse>(baseUrl, '/api/v1/training-runs/preflight', {
         method: 'POST',
         body: JSON.stringify({
           model_config_id: modelConfigId,
@@ -256,6 +288,21 @@ export function ParameterizationPage({ baseUrl }: ParameterizationPageProps): JS
           subtask_type: subtaskType,
           parameters: JSON.parse(parametersJson) as Record<string, unknown>,
         }),
+      });
+      setPreflightWarnings(preflight.warnings);
+      setPreflightErrors(preflight.errors);
+      setPreflightPayloadJson(JSON.stringify(preflight.normalized_payload, null, 2));
+      if (!preflight.valid) {
+        setLaunchErrors({ submit: preflight.errors.join(' ') || 'Preflight validation failed.' });
+        return;
+      }
+      if (preflight.warnings.length > 0 && !warningConfirmationChecked) {
+        setLaunchErrors({ submit: 'Preflight warnings detected. Confirm acknowledgement before launching.' });
+        return;
+      }
+      const created = await requestJson<TrainingRunItem>(baseUrl, '/api/v1/training-runs', {
+        method: 'POST',
+        body: JSON.stringify(preflight.normalized_payload),
       });
       setLaunchNotice(`Training run queued: ${created.id} (job ${created.job_id}).`);
       setTrainingRuns((previous) => [created, ...previous]);
@@ -344,7 +391,11 @@ export function ParameterizationPage({ baseUrl }: ParameterizationPageProps): JS
           <label>
             Subtask
             <select value={subtaskType} onChange={(event) => setSubtaskType(event.target.value as SubtaskType)}>
-              {SUBTASK_TYPES.map((item) => <option key={item} value={item}>{item}</option>)}
+              {SUBTASK_TYPES.map((item) => (
+                <option key={item} value={item} disabled={item === 'regime_state' && taskType !== 'regime_switching'}>
+                  {item}{item === 'regime_state' && taskType !== 'regime_switching' ? ' (requires regime_switching)' : ''}
+                </option>
+              ))}
             </select>
           </label>
         </div>
@@ -427,12 +478,19 @@ export function ParameterizationPage({ baseUrl }: ParameterizationPageProps): JS
 
       <div className="card" style={{ marginBottom: '1rem' }}>
         <h3>3) Select model config</h3>
+        <label>
+          Model family
+          <select value={selectedModelFamily} onChange={(event) => setSelectedModelFamily(event.target.value)} disabled={!datasetId.trim()}>
+            <option value="">Select compatible family</option>
+            {compatibleFamilies.map((family) => <option key={family} value={family}>{family}</option>)}
+          </select>
+        </label>
         <ModelConfigSelect
           value={modelConfigId}
-          options={compatibleModelConfigs}
+          options={familyCompatibleConfigs}
           onChange={setModelConfigId}
           emptyLabel="Select compatible model config"
-          hint={`Filtered by task compatibility (${taskType}).`}
+          hint={`Filtered by task (${taskType}) and model family (${selectedModelFamily || 'none'}).`}
         />
         {launchErrors.modelConfigId ? <small className="error">{launchErrors.modelConfigId}</small> : null}
       </div>
@@ -483,8 +541,28 @@ export function ParameterizationPage({ baseUrl }: ParameterizationPageProps): JS
         </label>
         {launchErrors.parametersJson ? <small className="error">{launchErrors.parametersJson}</small> : null}
         <div style={{ marginTop: '0.75rem' }}>
-          <button type="button" onClick={() => void launchTrainingRun()}>Launch training run</button>
+          <label style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginBottom: '0.5rem' }}>
+            <input type="checkbox" checked={warningConfirmationChecked} onChange={(event) => setWarningConfirmationChecked(event.target.checked)} />
+            Acknowledge preflight warnings (required only when warnings are present)
+          </label>
+          <button type="button" onClick={() => void launchTrainingRun()} disabled={!taskType || !datasetId.trim() || !subtaskType || !selectedModelFamily || !modelConfigId}>
+            Launch training run
+          </button>
         </div>
+        {launchErrors.submit ? <small className="error">{launchErrors.submit}</small> : null}
+        {(preflightWarnings.length > 0 || preflightErrors.length > 0 || preflightPayloadJson) ? (
+          <div style={{ marginTop: '0.75rem', border: '1px solid #2b3558', borderRadius: 8, padding: '0.75rem' }}>
+            <h4 style={{ marginTop: 0, marginBottom: '0.5rem' }}>Preflight plan</h4>
+            {preflightWarnings.length > 0 ? <p className="muted" style={{ margin: '0.25rem 0' }}><strong>Warnings:</strong> {preflightWarnings.join(' · ')}</p> : <p className="muted" style={{ margin: '0.25rem 0' }}>Warnings: none</p>}
+            {preflightErrors.length > 0 ? <p className="error" style={{ margin: '0.25rem 0' }}><strong>Errors:</strong> {preflightErrors.join(' · ')}</p> : <p className="muted" style={{ margin: '0.25rem 0' }}>Errors: none</p>}
+            {preflightPayloadJson ? (
+              <label>
+                Normalized launch payload
+                <textarea rows={6} readOnly value={preflightPayloadJson} />
+              </label>
+            ) : null}
+          </div>
+        ) : null}
         {launchNotice ? <p className="muted" style={{ marginTop: '0.75rem' }}>{launchNotice}</p> : null}
       </div>
     </section>
