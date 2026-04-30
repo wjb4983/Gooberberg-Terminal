@@ -13,6 +13,16 @@ class BacktestRunCreateRequest(BaseModel):
     window_start: datetime
     window_end: datetime
     parameters: dict[str, Any] = Field(default_factory=dict)
+    deterministic_mode: bool = False
+    scenario_id: str = Field(default="baseline", min_length=1)
+    git_sha: str = ""
+    data_snapshot_id: str = ""
+    random_seed: int = 0
+    engine_version: str = ""
+    feature_set_version: str = ""
+    timezone: str = "UTC"
+    calendar_id: str = ""
+    environment_fingerprint: dict[str, Any] = Field(default_factory=dict)
     confirmation_token: str | None = None
 
 
@@ -22,6 +32,8 @@ class BacktestRunPreflightRequest(BaseModel):
     window_start: datetime
     window_end: datetime
     parameters: dict[str, Any] = Field(default_factory=dict)
+    deterministic_mode: bool = False
+    scenario_id: str = Field(default="baseline", min_length=1)
 
 
 class BacktestRunPreflightResponse(BaseModel):
@@ -41,6 +53,19 @@ class BacktestRunResponse(BaseModel):
     window_start: datetime
     window_end: datetime
     parameters: dict[str, Any] = Field(default_factory=dict)
+    deterministic_mode: bool = False
+    scenario_id: str = "baseline"
+    git_sha: str = ""
+    config_hash: str = ""
+    data_snapshot_id: str = ""
+    random_seed: int = 0
+    engine_version: str = ""
+    feature_set_version: str = ""
+    timezone: str = "UTC"
+    calendar_id: str = ""
+    resolved_config: dict[str, Any] = Field(default_factory=dict)
+    environment_fingerprint: dict[str, Any] = Field(default_factory=dict)
+    run_checksum: str = ""
     job_id: UUID
     status: RunStatus = RunStatus.QUEUED
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))

@@ -1,4 +1,6 @@
 from datetime import UTC, datetime
+import hashlib
+import json
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
@@ -36,6 +38,8 @@ def _seeded_rows(prefix: str, run_id: UUID, total: int) -> list[dict[str, object
     return [
         {
             "id": f"{prefix}-{index}",
+            "run_id": str(run_id),
+            "scenario_id": "baseline",
             "timestamp": datetime.now(UTC).isoformat(),
             "detail": f"{prefix} detail {index} for run {base[:8]}",
             "value": round(((index * 13) % 97) / 10, 2),
@@ -116,6 +120,27 @@ async def create_backtest_run(
     job_id = uuid4()
     accepted_at = datetime.now(UTC)
     trace_id = request_id_ctx_var.get() or str(uuid4())
+    resolved_config = {
+        "strategy_key": payload.strategy_key,
+        "window_start": payload.window_start.isoformat(),
+        "window_end": payload.window_end.isoformat(),
+        "parameters": payload.parameters,
+        "deterministic_mode": payload.deterministic_mode,
+        "scenario_id": payload.scenario_id,
+    }
+    config_hash = hashlib.sha256(
+        json.dumps(resolved_config, sort_keys=True, default=str).encode("utf-8")
+    ).hexdigest()
+    run_checksum = hashlib.sha256(
+        json.dumps(
+            {
+                "inputs": resolved_config,
+                "fills": [str(run_id), payload.scenario_id],
+                "pnl": [payload.strategy_key, payload.random_seed],
+            },
+            sort_keys=True,
+        ).encode("utf-8")
+    ).hexdigest()
     created = service.create(
         {
             "id": str(run_id),
@@ -125,7 +150,20 @@ async def create_backtest_run(
             "window_start": payload.window_start,
             "window_end": payload.window_end,
             "parameters": payload.parameters,
+            "deterministic_mode": payload.deterministic_mode,
+            "scenario_id": payload.scenario_id,
             "status": "queued",
+            "git_sha": payload.git_sha,
+            "config_hash": config_hash,
+            "data_snapshot_id": payload.data_snapshot_id,
+            "random_seed": payload.random_seed,
+            "engine_version": payload.engine_version,
+            "feature_set_version": payload.feature_set_version,
+            "timezone": payload.timezone,
+            "calendar_id": payload.calendar_id,
+            "resolved_config": resolved_config,
+            "environment_fingerprint": payload.environment_fingerprint,
+            "run_checksum": run_checksum,
             "created_at": accepted_at,
         }
     )
@@ -212,6 +250,7 @@ def list_backtest_trades(
 def get_backtest_metrics(run_id: UUID) -> dict[str, object]:
     return {
         "run_id": str(run_id),
+        "scenario_id": "baseline",
         "metrics": {
             "sharpe": 1.42,
             "max_drawdown_pct": 8.7,
