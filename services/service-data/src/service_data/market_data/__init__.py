@@ -3,6 +3,7 @@
 from service_data.market_data.cache_repository import CacheRepository
 from service_data.market_data.catalog_repository import CatalogRepository
 from service_data.market_data.models import CanonicalBar, CoverageRecord, DatasetRef, MissingRange, TimeRange
+from service_data.market_data.ingest_adapter import AlertEvent, FeedIngestAdapter, IngestResult, MarketDataEvent
 from service_data.market_data.query_service import CoverageQuery, CoverageResponse, MarketDataQueryService
 
 __all__ = [
@@ -16,4 +17,8 @@ __all__ = [
     "CoverageQuery",
     "CoverageResponse",
     "MarketDataQueryService",
+    "FeedIngestAdapter",
+    "IngestResult",
+    "MarketDataEvent",
+    "AlertEvent",
 ]
