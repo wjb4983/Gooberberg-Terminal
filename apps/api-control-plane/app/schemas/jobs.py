@@ -63,6 +63,11 @@ class JobLifecycleUpdateRequest(BaseModel):
     artifact_checksum: str | None = Field(default=None, min_length=8, max_length=128)
     artifact_size_bytes: int | None = Field(default=None, ge=0)
     artifact_retention_class: str = Field(default="standard", min_length=1, max_length=32)
+    artifact_manifest: list[dict[str, Any]] = Field(default_factory=list)
+    lineage: dict[str, Any] = Field(default_factory=dict)
+    expected_runtime: dict[str, Any] = Field(default_factory=dict)
+    runtime_observed: dict[str, Any] = Field(default_factory=dict)
+    mismatch_policy: str = Field(default="strict", min_length=1, max_length=32)
 
 
 class JobProgressEventPayload(BaseModel):

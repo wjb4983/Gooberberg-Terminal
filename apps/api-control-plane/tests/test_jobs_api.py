@@ -245,3 +245,69 @@ def test_training_run_constraints_are_applied_to_artifact_metrics() -> None:
         else:
             os.environ[TOKEN_ENV] = previous_token
         _reset_settings()
+
+
+def test_success_gate_forces_failed_status_when_mandatory_artifact_missing() -> None:
+    with TestClient(create_app()) as client:
+        dataset = client.post(
+            "/api/v1/market-data/ingestions",
+            json={"source": "test-fixture", "symbols": ["AAPL"], "timeframe": "1d", "start_date": "2025-01-01", "end_date": "2025-12-31"},
+        ).json()
+        model_config = client.post(
+            "/api/v1/model-configs",
+            json={"model_family": "arima", "config": {"task_type": "forecasting", "data_type": "time_series_univariate", "p": 1, "d": 1, "q": 1}},
+        ).json()
+        run = client.post(
+            "/api/v1/training-runs",
+            json={"model_config_id": model_config["id"], "dataset_id": dataset["request_id"], "parameters": {"epochs": 1, "run_metadata": {"seed": 7}}},
+        ).json()
+        client.post(f"/api/v1/jobs/{run['job_id']}/events", json={"status": "running", "detail": "running"})
+        response = client.post(
+            f"/api/v1/jobs/{run['job_id']}/events",
+            json={
+                "status": "success",
+                "detail": "done",
+                "lineage": {"lineage_id": "abc", "dataset_fingerprint": "d1", "code_hash": "c1", "config_digest": "g1", "seed": 7},
+                "artifact_manifest": [{"role": "trained_model", "sha256": "a" * 64, "size_bytes": 10}],
+                "result_ref": "s3://artifact",
+                "artifact_checksum": "sha256:abcd1234efef5678",
+                "artifact_size_bytes": 12,
+            },
+        )
+        assert response.status_code == 200
+        assert response.json()["status"] == "failed"
+        assert "success gate failed" in response.json()["detail"]
+
+
+def test_success_gate_allows_success_with_valid_backtest_manifest_and_seed() -> None:
+    with TestClient(create_app()) as client:
+        backtest = client.post(
+            "/api/v1/backtest-runs",
+            json={
+                "strategy_key": "mean_reversion",
+                "window_start": "2025-01-01T00:00:00Z",
+                "window_end": "2025-01-31T00:00:00Z",
+                "parameters": {"run_metadata": {"seed": 11}},
+                "random_seed": 11,
+            },
+        ).json()
+        response = client.post(
+            f"/api/v1/jobs/{backtest['job_id']}/events",
+            json={
+                "status": "success",
+                "detail": "done",
+                "lineage": {"lineage_id": "xyz", "dataset_fingerprint": "d1", "code_hash": "c1", "config_digest": "g1", "seed": 11},
+                "artifact_manifest": [
+                    {"role": "backtest_metrics", "sha256": "b" * 64, "size_bytes": 100},
+                    {"role": "trade_log", "sha256": "c" * 64, "size_bytes": 100},
+                    {"role": "run_metadata", "sha256": "d" * 64, "size_bytes": 100},
+                ],
+                "runtime_observed": {"rows": 10},
+                "expected_runtime": {"rows": 10},
+                "result_ref": "s3://artifact",
+                "artifact_checksum": "sha256:abcd1234efef5678",
+                "artifact_size_bytes": 12,
+            },
+        )
+        assert response.status_code == 200
+        assert response.json()["status"] == "success"

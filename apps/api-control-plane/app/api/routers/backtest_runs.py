@@ -145,6 +145,12 @@ async def create_backtest_run(
         "deterministic_mode": payload.deterministic_mode,
         "scenario_id": payload.scenario_id,
     }
+    run_metadata_payload = payload.parameters.get("run_metadata") if isinstance(payload.parameters, dict) else None
+    run_metadata = run_metadata_payload if isinstance(run_metadata_payload, dict) else {}
+    if "seed" not in run_metadata:
+        run_metadata["seed"] = payload.random_seed
+    if isinstance(payload.parameters, dict):
+        payload.parameters["run_metadata"] = run_metadata
     config_hash = hashlib.sha256(canonicalize_config(resolved_config).encode("utf-8")).hexdigest()
     run_checksum = hashlib.sha256(
         json.dumps(
@@ -179,6 +185,7 @@ async def create_backtest_run(
             "resolved_config": resolved_config,
             "environment_fingerprint": payload.environment_fingerprint,
             "run_checksum": run_checksum,
+            "seed": payload.random_seed,
             "created_at": accepted_at,
         }
     )
