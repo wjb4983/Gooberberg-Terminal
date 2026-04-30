@@ -374,17 +374,36 @@ class GraphSqlRepository:
         if node_count > 0:
             return
         for node in topology.nodes:
-            self._session.add(
-                GraphNodeRow(
-                    id=node.id,
-                    type=node.type.value,
-                    label=node.label,
-                    group=node.group,
-                    metadata_json=dict(node.metadata),
-                )
-            )
+            self._session.add(GraphNodeRow(id=node.id, type=node.type.value, label=node.label, group=node.group, metadata_json=dict(node.metadata)))
         for edge in topology.edges:
             self._session.add(GraphEdgeRow(id=edge.id, source=edge.source, target=edge.target, label=edge.label))
+        self._session.commit()
+
+    def ensure_seeded_from_entities(self) -> None:
+        node_count = self._session.scalar(select(func.count()).select_from(GraphNodeRow)) or 0
+        if node_count > 0:
+            return
+        nodes: list[GraphNodeRow] = []
+        edges: list[GraphEdgeRow] = []
+
+        for row in self._session.execute(select(ModelConfigRow)).scalars().all():
+            nodes.append(GraphNodeRow(id=f"model:{row.id}", type="model", label=row.model_family, group="models", metadata_json={"config_id": row.id}))
+        for row in self._session.execute(select(MarketDataCatalogRow)).scalars().all():
+            nodes.append(GraphNodeRow(id=f"dataset:{row.dataset_id}", type="data_source", label=f"{row.symbol}:{row.timeframe}", group="datasets", metadata_json={"dataset_id": row.dataset_id, "source": row.source}))
+        for row in self._session.execute(select(BacktestRunRow)).scalars().all():
+            rid=f"run:{row.id}"
+            sid=f"strategy:{row.strategy_key}"
+            nodes.append(GraphNodeRow(id=rid, type="job", label=f"backtest {row.id[:8]}", group="runs", metadata_json={"run_id": row.id, "status": row.status}))
+            nodes.append(GraphNodeRow(id=sid, type="strategy", label=row.strategy_key, group="strategies", metadata_json={"strategy_key": row.strategy_key}))
+            edges.append(GraphEdgeRow(id=f"edge:{rid}:{sid}", source=rid, target=sid, label="executes"))
+            if row.model_config_id:
+                mid=f"model:{row.model_config_id}"
+                edges.append(GraphEdgeRow(id=f"edge:{sid}:{mid}", source=sid, target=mid, label="uses"))
+
+        dedup={}
+        for n in nodes: dedup[n.id]=n
+        for n in dedup.values(): self._session.merge(n)
+        for e in edges: self._session.merge(e)
         self._session.commit()
 
     def get_topology(self) -> GraphTopologyResponse:

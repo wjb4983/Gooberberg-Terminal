@@ -28,6 +28,8 @@ class Settings(BaseSettings):
     api_auth_revoked_token_ids: str = Field(default="")
     api_auth_rotation_interval_days: int = Field(default=30, ge=1, le=365)
     artifact_intermediate_retention_days: int = Field(default=14, ge=1, le=3650)
+    graph_mock_topology_enabled: bool = Field(default=False)
+    portfolio_mock_snapshot_enabled: bool = Field(default=False)
 
     model_config = SettingsConfigDict(env_prefix="GB_", extra="ignore")
 
