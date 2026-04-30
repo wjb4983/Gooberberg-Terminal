@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import json
 import re
+from hashlib import sha256
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
@@ -111,3 +113,36 @@ class LineageSpec(BaseModel):
         if len(uris) != len(set(uris)):
             raise ValueError("artifact_manifest entries must have unique uri/path values")
         return self
+
+
+class LineageReference(BaseModel):
+    dataset_fingerprint_hash: str = Field(min_length=64, max_length=64)
+    code_git_commit_sha: str = Field(min_length=40, max_length=40)
+    code_dirty: bool = False
+    seed: int
+
+
+def canonicalize_config(config: dict[str, Any]) -> str:
+    """Stable JSON canonicalization used for config hashing across API/workers."""
+    return json.dumps(config, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+
+
+def resolve_lineage_spec(
+    *,
+    lineage: LineageSpec | None,
+    lineage_ref: LineageReference | None,
+    config_payload: dict[str, Any],
+) -> LineageSpec:
+    if lineage is not None:
+        return lineage
+    if lineage_ref is None:
+        raise ValueError("either lineage or lineage_ref must be provided")
+    canonical = canonicalize_config(config_payload)
+    return LineageSpec(
+        lineage_version=1,
+        dataset_fingerprint={"hash": lineage_ref.dataset_fingerprint_hash},
+        code_hash={"git_commit_sha": lineage_ref.code_git_commit_sha, "dirty": lineage_ref.code_dirty},
+        config_digest={"digest": sha256(canonical.encode(\"utf-8\")).hexdigest()},
+        seed=lineage_ref.seed,
+        artifact_manifest=[{"uri": "pending://artifacts", "size_bytes": 0, "hash": "0" * 64, "media_type": "application/json", "role": "placeholder"}],
+    )

@@ -29,6 +29,7 @@ from app.schemas import (
     BacktestRunResponse,
     BacktestStatusResponse,
 )
+from gb_core.lineage import canonicalize_config, resolve_lineage_spec
 
 router = APIRouter(prefix="/backtest-runs", tags=["backtest-runs"])
 
@@ -75,6 +76,22 @@ async def create_backtest_run(
     model_config_service: ModelConfigService = Depends(get_model_config_service),
     market_data_service: MarketDataService = Depends(get_market_data_service),
 ) -> BacktestRunResponse:
+    try:
+        lineage = resolve_lineage_spec(
+            lineage=payload.lineage,
+            lineage_ref=payload.lineage_ref,
+            config_payload=payload.parameters,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={
+                "message": "lineage validation failed",
+                "reason_code": "LINEAGE_VALIDATION_FAILED",
+                "errors": [{"field": "lineage|lineage_ref", "message": str(exc)}],
+            },
+        ) from exc
+
     if not service.validate_confirmation_token(payload.model_dump(), payload.confirmation_token):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -128,9 +145,7 @@ async def create_backtest_run(
         "deterministic_mode": payload.deterministic_mode,
         "scenario_id": payload.scenario_id,
     }
-    config_hash = hashlib.sha256(
-        json.dumps(resolved_config, sort_keys=True, default=str).encode("utf-8")
-    ).hexdigest()
+    config_hash = hashlib.sha256(canonicalize_config(resolved_config).encode("utf-8")).hexdigest()
     run_checksum = hashlib.sha256(
         json.dumps(
             {
@@ -177,6 +192,7 @@ async def create_backtest_run(
         payload={
             "run_id": str(run_id),
             **payload.model_dump(mode="json", exclude={"confirmation_token"}),
+            "lineage": lineage.model_dump(mode="json"),
         },
         queued_at=accepted_at,
     )

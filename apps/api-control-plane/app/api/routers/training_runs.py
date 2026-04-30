@@ -37,6 +37,7 @@ from app.schemas import (
     TrainingTemplateCreateRequest,
 )
 from app.schemas.run_constraints import attach_constraints_to_parameters
+from gb_core.lineage import resolve_lineage_spec
 
 router = APIRouter(prefix="/training-runs", tags=["training-runs"])
 logger = logging.getLogger(__name__)
@@ -326,6 +327,22 @@ async def create_training_run(
     market_data_service: MarketDataService = Depends(get_market_data_service),
 ) -> TrainingRunResponse:
     """Create a training run, emit initial lifecycle events, and enqueue worker execution."""
+    try:
+        lineage = resolve_lineage_spec(
+            lineage=payload.lineage,
+            lineage_ref=payload.lineage_ref,
+            config_payload=payload.parameters,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={
+                "message": "lineage validation failed",
+                "reason_code": "LINEAGE_VALIDATION_FAILED",
+                "errors": [{"field": "lineage|lineage_ref", "message": str(exc)}],
+            },
+        ) from exc
+
     validation = _build_validation_response(
         TrainingRunValidationRequest(**payload.model_dump(mode="python")),
         request=request,
@@ -409,7 +426,7 @@ async def create_training_run(
         job_type="training",
         run_id=run_id,
         run_type="training",
-        payload={"run_id": str(run_id), **normalized_payload.model_dump(mode="json")},
+        payload={"run_id": str(run_id), **normalized_payload.model_dump(mode="json"), "lineage": lineage.model_dump(mode="json")},
         queued_at=accepted_at,
     )
     queued_event = JobLifecycleEvent(
