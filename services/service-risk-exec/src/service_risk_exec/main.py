@@ -25,6 +25,11 @@ class OrderState(StrEnum):
 class MarketEvent:
     symbol: str
     displayed_qty: float
+    venue_id: str = "lit-default"
+    book_level: int = 1
+    queue_estimate: float = 0.0
+    traded_qty_at_level: float = 0.0
+    canceled_qty_at_level: float = 0.0
     observed_spread: float | None = None
 
 
@@ -34,6 +39,12 @@ class OrderRequest:
     qty: float
     aggressive: bool
     participation: float
+    parent_order_id: str | None = None
+    child_order_id: str | None = None
+    schedule_start_ts: float | None = None
+    schedule_end_ts: float | None = None
+    min_slice_qty: float = 0.0
+    anti_gaming_cooldown_ms: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -44,6 +55,12 @@ class FillResult:
     spread_cost: float
     impact_cost: float
     delay_cost: float
+    venue_id: str
+    book_level: int
+    queue_remaining: float
+    implementation_shortfall: float
+    timing_cost: float
+    spread_capture: float
 
 
 class FeeModel:
@@ -68,6 +85,11 @@ class LatencyModel:
 
 class FillModel:
     def max_fill_qty(self, order: OrderRequest, event: MarketEvent) -> float:
+        raise NotImplementedError
+
+
+class RouterPolicy:
+    def score(self, order: OrderRequest, event: MarketEvent) -> float:
         raise NotImplementedError
 
 
@@ -124,6 +146,31 @@ class ParticipationCapFillModel(FillModel):
         return min(order.qty, event.displayed_qty * cap)
 
 
+@dataclass(frozen=True)
+class VenueAwareRouterPolicy(RouterPolicy):
+    fee_bps_by_venue: dict[str, float]
+    rebate_bps_by_venue: dict[str, float]
+    baseline_fill_prob_by_venue: dict[str, float]
+
+    def score(self, order: OrderRequest, event: MarketEvent) -> float:
+        fee_bps = self.fee_bps_by_venue.get(event.venue_id, 0.0)
+        rebate_bps = self.rebate_bps_by_venue.get(event.venue_id, 0.0)
+        fill_prob = min(max(self.baseline_fill_prob_by_venue.get(event.venue_id, 0.5), 0.0), 1.0)
+        queue_penalty = max(event.queue_estimate - (event.canceled_qty_at_level + event.traded_qty_at_level), 0.0)
+        return fill_prob - (fee_bps - rebate_bps) / 10_000 - min(queue_penalty / max(event.displayed_qty, 1.0), 1.0)
+
+
+@dataclass(frozen=True)
+class QueueAdvancementFillModel(FillModel):
+    participation_cap: float
+
+    def max_fill_qty(self, order: OrderRequest, event: MarketEvent) -> float:
+        cap = max(self.participation_cap, 0.0)
+        max_participation_fill = min(order.qty, event.displayed_qty * cap)
+        advanced_qty = max(event.canceled_qty_at_level + event.traded_qty_at_level - event.queue_estimate, 0.0)
+        return min(max_participation_fill, advanced_qty if not order.aggressive else max_participation_fill)
+
+
 @dataclass
 class ExecutionEngine:
     fee_model: FeeModel
@@ -131,13 +178,20 @@ class ExecutionEngine:
     spread_model: SpreadModel
     latency_model: LatencyModel
     fill_model: FillModel
+    router_policy: RouterPolicy | None = None
 
     def process_fill(self, order: OrderRequest, event: MarketEvent) -> FillResult:
+        if order.schedule_start_ts is not None and order.schedule_end_ts is not None and order.schedule_start_ts > order.schedule_end_ts:
+            return FillResult(0.0, OrderState.EXPIRED, 0.0, 0.0, 0.0, 0.0, event.venue_id, event.book_level, event.queue_estimate, 0.0, 0.0, 0.0)
+        if order.anti_gaming_cooldown_ms > 0 and event.book_level > 3:
+            return FillResult(0.0, OrderState.ACKNOWLEDGED, 0.0, 0.0, 0.0, 0.0, event.venue_id, event.book_level, event.queue_estimate, 0.0, 0.0, 0.0)
+        if self.router_policy and self.router_policy.score(order, event) < 0:
+            return FillResult(0.0, OrderState.ACKNOWLEDGED, 0.0, 0.0, 0.0, 0.0, event.venue_id, event.book_level, event.queue_estimate, 0.0, 0.0, 0.0)
         max_fill_qty = self.fill_model.max_fill_qty(order, event)
         fill_qty = max(0.0, min(order.qty, max_fill_qty))
 
         if fill_qty <= 0:
-            return FillResult(fill_qty=0.0, state=OrderState.ACKNOWLEDGED, fee_amt=0.0, spread_cost=0.0, impact_cost=0.0, delay_cost=0.0)
+            return FillResult(0.0, OrderState.ACKNOWLEDGED, 0.0, 0.0, 0.0, 0.0, event.venue_id, event.book_level, max(event.queue_estimate, 0.0), 0.0, 0.0, 0.0)
 
         fill_state = OrderState.FILLED if fill_qty >= order.qty else OrderState.PARTIALLY_FILLED
         spread = self.spread_model.spread(event)
@@ -151,6 +205,12 @@ class ExecutionEngine:
             spread_cost=fill_qty * spread,
             impact_cost=fill_qty * (impact_bps / 10_000),
             delay_cost=fill_qty * (delay_ms / 1000),
+            venue_id=event.venue_id,
+            book_level=event.book_level,
+            queue_remaining=max(event.queue_estimate - (event.canceled_qty_at_level + event.traded_qty_at_level), 0.0),
+            implementation_shortfall=fill_qty * ((impact_bps / 10_000) + spread),
+            timing_cost=fill_qty * (delay_ms / 1000),
+            spread_capture=fill_qty * max(spread - (impact_bps / 20_000), 0.0),
         )
 
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
