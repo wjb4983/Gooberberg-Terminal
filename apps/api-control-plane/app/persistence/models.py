@@ -138,11 +138,75 @@ class RunArtifactRow(Base):
     job_id: Mapped[str] = mapped_column(String(36), index=True, nullable=False)
     artifact_ref: Mapped[str] = mapped_column(String(1024), nullable=False)
     checksum: Mapped[str] = mapped_column(String(128), index=True, nullable=False)
+    signature: Mapped[str] = mapped_column(String(256), nullable=False, default="")
     size_bytes: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     metrics: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False, default=dict)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     last_accessed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
     retention_class: Mapped[str] = mapped_column(String(32), nullable=False, default="standard")
+    promotion_status: Mapped[str] = mapped_column(String(32), nullable=False, default="draft")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
+
+
+class ScenarioRegistryRow(Base):
+    __tablename__ = "scenario_registry"
+
+    id: Mapped[str] = mapped_column(String(128), primary_key=True)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    spread_multiplier: Mapped[float] = mapped_column(nullable=False, default=1.0)
+    latency_multiplier: Mapped[float] = mapped_column(nullable=False, default=1.0)
+    liquidity_haircut: Mapped[float] = mapped_column(nullable=False, default=0.0)
+    fee_change_bps: Mapped[float] = mapped_column(nullable=False, default=0.0)
+    params: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False, default=dict)
+    promotion_status: Mapped[str] = mapped_column(String(32), nullable=False, default="draft")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
+
+
+class ArtifactBlobRow(Base):
+    __tablename__ = "artifact_blobs"
+
+    content_hash: Mapped[str] = mapped_column(String(128), primary_key=True)
+    checksum: Mapped[str] = mapped_column(String(128), nullable=False)
+    signature: Mapped[str] = mapped_column(String(256), nullable=False, default="")
+    storage_uri: Mapped[str] = mapped_column(String(1024), nullable=False)
+    media_type: Mapped[str] = mapped_column(String(128), nullable=False, default="application/octet-stream")
+    size_bytes: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
+
+
+class LineageEntityRow(Base):
+    __tablename__ = "lineage_entities"
+
+    id: Mapped[str] = mapped_column(String(128), primary_key=True)
+    entity_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    immutable_ref: Mapped[str] = mapped_column(String(256), unique=True, nullable=False)
+    artifact_hash: Mapped[str | None] = mapped_column(String(128), ForeignKey("artifact_blobs.content_hash"), nullable=True)
+    metadata_json: Mapped[dict[str, object]] = mapped_column("metadata", JSON, nullable=False, default=dict)
+    promotion_status: Mapped[str] = mapped_column(String(32), nullable=False, default="draft")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
+
+
+class LineageEdgeRow(Base):
+    __tablename__ = "lineage_edges"
+
+    id: Mapped[str] = mapped_column(String(128), primary_key=True)
+    source_entity_id: Mapped[str] = mapped_column(String(128), ForeignKey("lineage_entities.id"), nullable=False, index=True)
+    target_entity_id: Mapped[str] = mapped_column(String(128), ForeignKey("lineage_entities.id"), nullable=False, index=True)
+    relation_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    metadata_json: Mapped[dict[str, object]] = mapped_column("metadata", JSON, nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
+
+
+class AuditReportRow(Base):
+    __tablename__ = "audit_reports"
+
+    id: Mapped[str] = mapped_column(String(128), primary_key=True)
+    subject_entity_id: Mapped[str] = mapped_column(String(128), ForeignKey("lineage_entities.id"), nullable=False, index=True)
+    assumptions: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False, default=dict)
+    validation_protocol: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False, default=dict)
+    leakage_checks: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False, default=dict)
+    sensitivity_outcomes: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False, default=dict)
+    promotion_status: Mapped[str] = mapped_column(String(32), nullable=False, default="draft")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
 
 
