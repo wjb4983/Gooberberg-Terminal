@@ -24,3 +24,8 @@ class PortfolioSnapshot(BaseModel):
     unrealized_pnl: float
     realized_pnl: float
     positions: list[Position] = Field(default_factory=list)
+    snapshot_version: str = Field(default="v2")
+    source_offsets: dict[str, str] = Field(default_factory=dict)
+    computation_timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    state_hash: str | None = None
+    error_counters: dict[str, int] = Field(default_factory=dict)
