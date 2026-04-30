@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 import logging
 import os
+import time
 from dataclasses import dataclass
 from typing import Any, Awaitable, Callable
 
@@ -59,6 +62,9 @@ async def run_training_pipeline(
 ) -> None:
     request: TrainingRunRequest | None = None
     artifact: ArtifactResult | None = None
+    strict_mode = False
+
+    stage_started_at = time.monotonic()
 
     async def _emit(
         stage_key: str,
@@ -67,7 +73,11 @@ async def run_training_pipeline(
         result_ref: str | None = None,
         metric_bundle: dict[str, Any] | None = None,
     ) -> None:
+        nonlocal stage_started_at
         stage = STAGES[stage_key]
+        now = time.monotonic()
+        duration_ms = (now - stage_started_at) * 1000
+        fingerprint = hashlib.sha256(json.dumps({"job_id": str(envelope.job_id), "stage": stage.name, "status": status}, sort_keys=True).encode("utf-8")).hexdigest()[:16]
         logger.info(
             "pipeline stage update",
             extra={
@@ -76,9 +86,14 @@ async def run_training_pipeline(
                 "stage": stage.name,
                 "status": status,
                 "progress_pct": stage.progress_pct,
+                "duration_ms": round(duration_ms, 3),
+                "success": status != JobStatus.FAILED,
+                "fingerprint": fingerprint,
+                "fallback_reason": None if strict_mode else "compatibility_mode",
             },
         )
         await emit(status, stage.progress_pct, stage.message, result_ref, metric_bundle)
+        stage_started_at = time.monotonic()
 
     await _emit("load_intent")
     request = TrainingRunRequest.model_validate(envelope.payload)

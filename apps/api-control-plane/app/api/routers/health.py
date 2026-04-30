@@ -7,6 +7,7 @@ from fastapi import APIRouter, Request
 from sqlalchemy import text
 
 from app.core.config import get_settings
+from app.core.pipeline_observability import PipelineResponseMeta, observe_pipeline_stage
 from app.schemas import DependencyStatus, HealthResponse, QueueHealthResponse
 
 router = APIRouter(prefix="/health", tags=["health"])
@@ -69,6 +70,7 @@ async def _redis_status(request: Request, *, timeout_seconds: float) -> Dependen
 async def health(request: Request) -> HealthResponse:
     settings = get_settings()
     probe_started = time.monotonic()
+    fallback_reason = None if settings.health_prod_dependency_checks_enabled else "prod_path_disabled"
 
     postgres = await _postgres_status(request, timeout_seconds=_DEPENDENCY_PROBE_TIMEOUT_SECONDS)
     remaining = _OVERALL_HEALTH_DEADLINE_SECONDS - (time.monotonic() - probe_started)
@@ -78,7 +80,9 @@ async def health(request: Request) -> HealthResponse:
         redis = await _redis_status(request, timeout_seconds=min(_DEPENDENCY_PROBE_TIMEOUT_SECONDS, remaining))
 
     status = "ok" if postgres.reachable and redis.reachable else "degraded"
-    return HealthResponse(service=settings.app_name, status=status, version=settings.app_version, postgres=postgres, redis=redis)
+    with observe_pipeline_stage(stage="health", fingerprint_source={"route":"health","dep_checks":settings.health_prod_dependency_checks_enabled,"status":status}, fallback_reason=fallback_reason) as fingerprint:
+        pass
+    return HealthResponse(service=settings.app_name, status=status, version=settings.app_version, postgres=postgres, redis=redis, response_metadata=PipelineResponseMeta(version=settings.deterministic_pipeline_response_meta_version, deterministic=True, stage="health", fingerprint=fingerprint, fallback_reason=fallback_reason))
 
 
 @router.get("/deep", response_model=HealthResponse)

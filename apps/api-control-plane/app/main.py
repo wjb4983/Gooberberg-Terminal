@@ -54,6 +54,13 @@ from app.portfolio import lifespan_portfolio_cache
 logger = logging.getLogger(__name__)
 
 
+def _enforce_deterministic_pipeline_compatibility(settings) -> None:
+    restricted_env = settings.environment.lower() in {"production", "prod", "staging", "restricted"}
+    mixed_graph_portfolio = settings.graph_prod_topology_enabled != settings.portfolio_prod_snapshot_enabled
+    if restricted_env and mixed_graph_portfolio and not settings.deterministic_pipeline_mixed_mode_allowed:
+        raise RuntimeError("ambiguous deterministic pipeline mode in restricted env; set GB_DETERMINISTIC_PIPELINE_MIXED_MODE_ALLOWED=true to override")
+
+
 def _parse_cors_allowed_origins(raw_origins: str) -> list[str]:
     return [origin.strip() for origin in raw_origins.split(",") if origin.strip()]
 
@@ -98,6 +105,7 @@ async def app_lifespan(app: FastAPI) -> AsyncIterator[None]:
 def create_app() -> FastAPI:
     settings = get_settings()
     configure_logging()
+    _enforce_deterministic_pipeline_compatibility(settings)
 
     app = FastAPI(
         title=settings.app_name,
