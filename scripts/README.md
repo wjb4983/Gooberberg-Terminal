@@ -137,3 +137,39 @@ These release scripts are intentionally cloud-agnostic and do not perform cloud 
 ## Scaffolding
 
 - `scripts/gen-model-adapter.py <model_id>`: generate a provider adapter class, validation stub, service-data unit test template, and docs entry under `docs/model-adapters/`.
+
+## Local deployed agent debug flow
+
+Use this sequence when a local deployed agent reports an API popup/error.
+
+1. **Verify health endpoints first** (server and routed endpoint):
+
+   ```bash
+   timeout 20s curl -fsS http://127.0.0.1:8000/healthz
+   timeout 20s curl -fsS http://127.0.0.1:8000/api/v1/health
+   timeout 20s curl -kfsS "https://<server>.<tailnet>.ts.net/healthz"
+   timeout 20s curl -kfsS "https://<server>.<tailnet>.ts.net/api/v1/health"
+   ```
+
+2. **Run bounded connectivity synthetic checks** (local topology first, then matrix if needed):
+
+   ```bash
+   timeout 8m ./scripts/ops/connectivity-synthetic-check.sh
+   timeout 15m ./scripts/ops/run-connectivity-smoke-matrix.sh
+   ```
+
+3. **Fetch relevant service logs with timeout** (focus API + backing services):
+
+   ```bash
+   timeout 45s docker compose --env-file config/env/.env -f infra/compose/docker-compose.prod.yml logs --tail=300 api-control-plane
+   timeout 45s docker compose --env-file config/env/.env -f infra/compose/docker-compose.prod.yml logs --tail=200 redis postgres
+   ```
+
+4. **Map client error to server request id**:
+   - Desktop popups now include optional correlation metadata like `request_id=<uuid>` and `error_code=<code>`.
+   - Search API logs by request id to reconstruct the exact request path/method/auth result and dependency failures.
+   - Example:
+
+   ```bash
+   timeout 20s docker compose --env-file config/env/.env -f infra/compose/docker-compose.prod.yml logs --tail=500 api-control-plane | rg "request_id=<paste-request-id>|\"request_id\":\"<paste-request-id>\""
+   ```

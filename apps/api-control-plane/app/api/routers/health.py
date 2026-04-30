@@ -1,4 +1,5 @@
 from datetime import UTC, datetime
+import logging
 
 from fastapi import APIRouter, Request
 
@@ -6,6 +7,7 @@ from app.core.config import get_settings
 from app.schemas import DependencyStatus, HealthResponse, QueueHealthResponse
 
 router = APIRouter(prefix="/health", tags=["health"])
+logger = logging.getLogger(__name__)
 
 
 @router.get("", response_model=HealthResponse)
@@ -34,7 +36,26 @@ def health() -> HealthResponse:
 @router.get("/queue", response_model=QueueHealthResponse)
 async def queue_health(request: Request) -> QueueHealthResponse:
     settings = get_settings()
-    queue_depth = await request.app.state.job_queue.depth()
+    try:
+        queue_depth = await request.app.state.job_queue.depth()
+    except Exception:
+        logger.exception(
+            "queue health dependency call failed",
+            extra={
+                "event": "dependency_failure",
+                "path": request.url.path,
+                "method": request.method.upper(),
+                "dependency": "job_queue",
+                "dependency_state": "unreachable",
+            },
+        )
+        return QueueHealthResponse(
+            status="degraded",
+            queue_depth=None,
+            worker_heartbeat_at=None,
+            worker_heartbeat_age_seconds=None,
+            detail="queue backend check failed",
+        )
     heartbeat_at: datetime | None = request.app.state.last_worker_heartbeat_at
     heartbeat_age_seconds = (datetime.now(UTC) - heartbeat_at).total_seconds() if heartbeat_at else None
 

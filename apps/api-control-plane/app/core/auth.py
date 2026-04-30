@@ -55,10 +55,12 @@ class BearerTokenAuthMiddleware(BaseHTTPMiddleware):
         request.state.auth_scope = settings.api_auth_scope
 
         if not credentials or request.url.path in self._health_paths or request.method.upper() == "OPTIONS":
+            request.state.auth_result = "skipped"
             return await call_next(request)
 
         auth_header = request.headers.get("Authorization", "")
         if not auth_header.startswith("Bearer "):
+            request.state.auth_result = "missing_header"
             _log_auth_failure(request, auth_result="missing_header")
             return _auth_error_response(detail="Unauthorized", status_code=401, auth_result="missing_header")
 
@@ -68,6 +70,7 @@ class BearerTokenAuthMiddleware(BaseHTTPMiddleware):
             None,
         )
         if matching_credential is None:
+            request.state.auth_result = "invalid_token"
             _log_auth_failure(request, auth_result="invalid_token")
             return _auth_error_response(detail="Unauthorized", status_code=401, auth_result="invalid_token")
 
@@ -75,6 +78,7 @@ class BearerTokenAuthMiddleware(BaseHTTPMiddleware):
         request.state.auth_token_id = matching_credential.token_id
 
         if matching_credential.token_id in revoked_token_ids:
+            request.state.auth_result = "revoked_token"
             _log_auth_failure(
                 request,
                 auth_result="revoked_token",
@@ -87,6 +91,7 @@ class BearerTokenAuthMiddleware(BaseHTTPMiddleware):
             )
 
         if matching_credential.expires_at is not None and datetime.now(tz=UTC) >= matching_credential.expires_at:
+            request.state.auth_result = "expired_token"
             _log_auth_failure(
                 request,
                 auth_result="expired_token",
@@ -100,6 +105,7 @@ class BearerTokenAuthMiddleware(BaseHTTPMiddleware):
 
         required_scope, allowed_scopes = _required_scope_for_request(request)
         if not matching_credential.scopes.intersection(allowed_scopes):
+            request.state.auth_result = "forbidden_scope"
             _log_auth_failure(
                 request,
                 auth_result="forbidden_scope",
@@ -116,6 +122,7 @@ class BearerTokenAuthMiddleware(BaseHTTPMiddleware):
                 },
             )
 
+        request.state.auth_result = "authorized"
         response = await call_next(request)
         if len(credentials) > 1:
             response.headers["X-Auth-Token-Mode"] = "dual-accept"
