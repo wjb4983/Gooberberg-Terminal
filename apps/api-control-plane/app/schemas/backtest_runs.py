@@ -87,3 +87,27 @@ class BacktestPagedResponse(BaseModel):
     offset: int
     limit: int
     next_offset: int | None
+
+
+class ReplayEvent(BaseModel):
+    type: str = Field(min_length=1)
+    order_id: str | None = None
+    symbol: str | None = None
+    side: str | None = None
+    quantity: float | None = None
+    price: float | None = None
+    fee: float | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class BacktestReplayValidationRequest(BaseModel):
+    strategy_version: str = Field(min_length=1)
+    config_hash: str = Field(min_length=1)
+    events: list[ReplayEvent] = Field(default_factory=list)
+    expected_outcomes: dict[str, Any] = Field(default_factory=dict)
+
+
+class BacktestReplayValidationResponse(BaseModel):
+    run_id: UUID
+    replay: dict[str, Any]
+    validation: dict[str, Any]

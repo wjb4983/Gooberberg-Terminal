@@ -56,3 +56,57 @@ def test_backtest_create_requires_confirmation_for_large_runs() -> None:
             },
         )
         assert confirmed.status_code == 201
+
+
+def test_backtest_replay_validation_detects_divergence() -> None:
+    with TestClient(create_app()) as client:
+        created = client.post(
+            "/api/v1/backtest-runs",
+            json={
+                "strategy_key": "mean_reversion",
+                "window_start": "2024-01-01T00:00:00Z",
+                "window_end": "2024-01-02T00:00:00Z",
+                "git_sha": "strategy-v1",
+                "parameters": {},
+            },
+        )
+        assert created.status_code == 201
+        run = created.json()
+
+        response = client.post(
+            f"/api/v1/backtest-runs/{run['id']}/replay-validation",
+            json={
+                "strategy_version": "strategy-v1",
+                "config_hash": run["config_hash"],
+                "events": [
+                    {"type": "decision", "metadata": {"signal": "buy"}},
+                    {
+                        "type": "order",
+                        "order_id": "o-1",
+                        "symbol": "AAPL",
+                        "side": "buy",
+                        "quantity": 10,
+                        "price": 100,
+                    },
+                    {
+                        "type": "fill",
+                        "order_id": "o-1",
+                        "symbol": "AAPL",
+                        "quantity": 10,
+                        "price": 101,
+                        "fee": 1,
+                    },
+                ],
+                "expected_outcomes": {
+                    "decisions": [],
+                    "orders": [],
+                    "positions": [],
+                    "pnl_state": {},
+                },
+            },
+        )
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["validation"]["pinning"]["matches"] is True
+    assert payload["validation"]["status"] == "diverged"
+    assert payload["validation"]["mismatch_count"] >= 1

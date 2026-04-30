@@ -13,6 +13,7 @@ from app.api.dependencies import (
 from app.api.routers.jobs import _broadcast_job_event
 from app.core.logging import request_id_ctx_var
 from app.domain.backtest_runs import Service as BacktestRunService
+from app.domain.backtest_runs.replay import replay_backtest, validate_replay
 from app.domain.market_data import Service as MarketDataService
 from app.domain.model_configs.compatibility import (
     resolve_dataset_compatibility,
@@ -28,6 +29,8 @@ from app.schemas import (
     BacktestRunPreflightResponse,
     BacktestRunResponse,
     BacktestStatusResponse,
+    BacktestReplayValidationRequest,
+    BacktestReplayValidationResponse,
 )
 from gb_core.lineage import canonicalize_config, resolve_lineage_spec
 
@@ -292,3 +295,30 @@ def list_backtest_equity_refs(run_id: UUID) -> dict[str, object]:
             f"s3://simulated-equity/{run_id}/drawdown.parquet",
         ],
     }
+
+
+@router.post("/{run_id}/replay-validation", response_model=BacktestReplayValidationResponse)
+def replay_validation_report(
+    run_id: UUID,
+    payload: BacktestReplayValidationRequest,
+    service: BacktestRunService = Depends(get_backtest_run_service),
+) -> BacktestReplayValidationResponse:
+    run = service.get(run_id)
+    if run is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="backtest run not found")
+
+    replay = replay_backtest([item.model_dump() for item in payload.events])
+    run_strategy_version = str(run.get("git_sha") or "")
+    result = validate_replay(
+        replay,
+        payload.expected_outcomes,
+        run_strategy_version=run_strategy_version,
+        run_config_hash=str(run.get("config_hash") or ""),
+        requested_strategy_version=payload.strategy_version,
+        requested_config_hash=payload.config_hash,
+    )
+    return BacktestReplayValidationResponse(
+        run_id=run_id,
+        replay=result.replay,
+        validation=result.validation,
+    )
