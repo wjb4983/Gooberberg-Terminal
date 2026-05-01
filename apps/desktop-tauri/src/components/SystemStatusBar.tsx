@@ -26,6 +26,11 @@ function normalizeBaseUrl(baseUrl: string): string {
   return baseUrl.replace(/\/$/, '');
 }
 
+function isHealthyStatus(value: string | undefined): boolean {
+  const normalized = value?.trim().toLowerCase();
+  return normalized === 'ok' || normalized === 'healthy';
+}
+
 async function probeLiveness(baseUrl: string): Promise<ProbeResult<{ status: string }>> {
   try {
     const response = await fetch(`${normalizeBaseUrl(baseUrl)}/healthz`, { headers: { Accept: 'application/json' } });
@@ -34,11 +39,11 @@ async function probeLiveness(baseUrl: string): Promise<ProbeResult<{ status: str
     }
 
     const payload = await response.json() as { status?: string };
-    if (payload.status !== 'ok') {
+    if (!isHealthyStatus(payload.status)) {
       return { ok: false, detail: `unexpected status: ${String(payload.status ?? 'unknown')}` };
     }
 
-    return { ok: true, data: { status: payload.status }, detail: 'liveness endpoint reachable' };
+    return { ok: true, data: { status: payload.status ?? 'healthy' }, detail: 'liveness endpoint reachable' };
   } catch (error) {
     return { ok: false, detail: error instanceof Error ? error.message : 'request failed' };
   }
@@ -52,7 +57,7 @@ async function probeApiHealth(baseUrl: string): Promise<ProbeResult<HealthRespon
     }
 
     const payload = await response.json() as Partial<HealthResponse>;
-    if (payload.status !== 'ok') {
+    if (!isHealthyStatus(payload.status)) {
       return { ok: false, detail: `unexpected status: ${String(payload.status ?? 'unknown')}` };
     }
 
@@ -139,14 +144,14 @@ function toIndicatorFromApiHealth(health?: HealthResponse): IndicatorState {
   if (!health) {
     return 'offline';
   }
-  return health.status === 'ok' ? 'healthy' : 'degraded';
+  return isHealthyStatus(health.status) ? 'healthy' : 'degraded';
 }
 
 function toIndicatorFromQueueHealth(health?: QueueHealthResponse): IndicatorState {
   if (!health) {
     return 'offline';
   }
-  if (health.status === 'ok') {
+  if (isHealthyStatus(health.status)) {
     return 'healthy';
   }
   return health.status === 'degraded' ? 'degraded' : 'offline';

@@ -313,9 +313,12 @@ function buildTorchPayload(form: TorchFormState, shared: SharedConfigFields): Re
   return {
     name: shared.name.trim(),
     version: shared.version.trim(),
-    task_type: shared.taskType,
+    task_type: 'forecasting',
     subtask_type: shared.subtaskType,
-    data_type: shared.dataProfile.trim() || 'time_series',
+    data_type: 'time_series',
+    ui_task_type: shared.taskType,
+    ui_subtask_type: shared.subtaskType,
+    ui_data_profile: shared.dataProfile.trim(),
     lookback_window: Number(form.lookbackWindow),
     horizon_steps: Number(form.horizonSteps),
     ...(form.mode === 'simple' ? presets[form.preset] : { architecture: form.architecture, ...advancedOptions }),
@@ -326,9 +329,12 @@ function buildKalmanPayload(form: KalmanFormState, shared: SharedConfigFields): 
   return {
     name: shared.name.trim(),
     version: shared.version.trim(),
-    task_type: shared.taskType,
+    task_type: 'filtering',
     subtask_type: shared.subtaskType,
-    data_type: shared.dataProfile.trim() || 'state_space_timeseries',
+    data_type: 'state_space_timeseries',
+    ui_task_type: shared.taskType,
+    ui_subtask_type: shared.subtaskType,
+    ui_data_profile: shared.dataProfile.trim(),
     transition_structure: form.transitionStructure,
     state_dimension: Number(form.stateDimension),
     observation_dimension: Number(form.observationDimension),
@@ -596,7 +602,7 @@ export function BuildingModelsPage({ baseUrl }: BuildingModelsPageProps): JSX.El
           setTorchForm(defaultTorchFormState);
           setKalmanForm(defaultKalmanFormState);
           setConfigErrors({});
-          setError('Recovered from create endpoint 500 using compatibility payload retry.');
+          setError(null);
           return;
         } catch (retryError) {
           compatibilityRetryError = retryError;
@@ -645,29 +651,35 @@ export function BuildingModelsPage({ baseUrl }: BuildingModelsPageProps): JSX.El
       setCompatibilityLoading(true);
       try {
         const responses = await Promise.all(modelConfigs.map(async (modelConfig) => {
-          const payload = await requestJson<TrainingRunValidationResponse>(baseUrl, '/api/v1/training-runs/compatibility', {
-            method: 'POST',
-            body: JSON.stringify({
-              model_config_id: modelConfig.id,
-              dataset_id: launchForm.datasetId.trim(),
-              task_type: launchForm.taskType,
-              subtask_type: launchForm.subtaskType,
-              parameters: {},
-            }),
-          });
-          return [modelConfig.id, {
-            modelConfigId: modelConfig.id,
-            compatible: payload.compatible,
-            warnings: payload.warnings,
-            errors: payload.errors,
-          }] as const;
+          try {
+            const payload = await requestJson<TrainingRunValidationResponse>(baseUrl, '/api/v1/training-runs/compatibility', {
+              method: 'POST',
+              body: JSON.stringify({
+                model_config_id: modelConfig.id,
+                dataset_id: launchForm.datasetId.trim(),
+                task_type: launchForm.taskType,
+                subtask_type: launchForm.subtaskType,
+                parameters: {},
+              }),
+            });
+            return [modelConfig.id, {
+              modelConfigId: modelConfig.id,
+              compatible: payload.compatible,
+              warnings: payload.warnings,
+              errors: payload.errors,
+            }] as const;
+          } catch (compatibilityError) {
+            const message = compatibilityError instanceof Error ? compatibilityError.message : 'Compatibility probe failed.';
+            return [modelConfig.id, {
+              modelConfigId: modelConfig.id,
+              compatible: false,
+              warnings: [],
+              errors: [message],
+            }] as const;
+          }
         }));
         if (!cancelled) {
           setCompatibilityStatuses(Object.fromEntries(responses));
-        }
-      } catch {
-        if (!cancelled) {
-          setCompatibilityStatuses({});
         }
       } finally {
         if (!cancelled) {
