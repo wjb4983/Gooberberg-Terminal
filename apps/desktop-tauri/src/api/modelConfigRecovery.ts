@@ -70,7 +70,11 @@ export function isModelConfigCreateServerFailure(error: unknown): boolean {
   if (!(error instanceof Error)) {
     return false;
   }
-  return error.message.includes('Request failed (500)') && error.message.includes('POST') && error.message.includes('/api/v1/model-configs');
+  const message = error.message;
+  const hasModelConfigsPath = /\/api\/v1\/model-configs(?:\b|[/?#])/i.test(message);
+  const hasPostMethod = /\bPOST\b/i.test(message);
+  const has500Status = /Request failed\s*\(500\)/i.test(message) || /\bstatus\s*500\b/i.test(message);
+  return hasModelConfigsPath && hasPostMethod && has500Status;
 }
 
 export function findEquivalentModelConfig<T extends ModelConfigWithId>(
