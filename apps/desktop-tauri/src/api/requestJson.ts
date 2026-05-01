@@ -5,6 +5,9 @@ interface NativeApiHttpResponse {
   status: number;
   body: string;
 }
+function clipText(value: string, maxLen = 3000): string {
+  return value.length <= maxLen ? value : `${value.slice(0, maxLen)}…[truncated ${value.length - maxLen} chars]`;
+}
 
 function isTauriRuntime(): boolean {
   return typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
@@ -77,6 +80,33 @@ function summarizeCorrelatedFailure(body: string): string {
   }
 }
 
+function buildVerboseHttpFailureMessage(args: {
+  status: number;
+  method: string;
+  url: string;
+  requestBody: string;
+  responseBody: string;
+  responseHeaders?: Headers;
+}): string {
+  const { status, method, url, requestBody, responseBody, responseHeaders } = args;
+  const headerBlock = responseHeaders
+    ? Array.from(responseHeaders.entries()).map(([name, value]) => `  - ${name}: ${value}`).join('\n')
+    : '  - (headers unavailable in this runtime)';
+  const correlatedSummary = summarizeCorrelatedFailure(responseBody);
+  return [
+    `HTTP request failed with status ${status} for ${method.toUpperCase()} ${url}${correlatedSummary}`,
+    `Request body (${requestBody ? `${requestBody.length} chars` : 'empty'}):`,
+    requestBody ? clipText(requestBody) : '(none)',
+    `Response body (${responseBody ? `${responseBody.length} chars` : 'empty'}):`,
+    responseBody ? clipText(responseBody) : '(none)',
+    'Response headers:',
+    headerBlock || '  - (none)',
+    'Debug hints:',
+    '  - 405 Method Not Allowed usually means wrong HTTP method or route mismatch at reverse proxy.',
+    '  - 500 Internal Server Error usually indicates a backend exception; inspect server logs using request_id/error_code if present above.',
+  ].join('\n');
+}
+
 export async function requestJson<T>(baseUrl: string, path: string, init?: RequestInit): Promise<T> {
   const headers = new Headers(init?.headers);
   if (!headers.has('Accept')) {
@@ -96,6 +126,7 @@ export async function requestJson<T>(baseUrl: string, path: string, init?: Reque
   const method = init?.method ?? 'GET';
   const authAttached = headers.has('Authorization');
   const browserUrl = shouldUseDevProxy(url) ? toDevProxyUrl(url) : url;
+  const requestBody = typeof init?.body === 'string' ? init.body : '';
 
   if (isTauriRuntime()) {
     const response = await invoke<NativeApiHttpResponse>('api_http_request', {
@@ -108,9 +139,13 @@ export async function requestJson<T>(baseUrl: string, path: string, init?: Reque
     });
 
     if (response.status < 200 || response.status >= 300) {
-      throw new Error(
-        `Request failed (${response.status}) for ${method.toUpperCase()} ${url}${summarizeCorrelatedFailure(response.body)}`,
-      );
+      throw new Error(buildVerboseHttpFailureMessage({
+        status: response.status,
+        method,
+        url,
+        requestBody,
+        responseBody: response.body,
+      }));
     }
 
     return JSON.parse(response.body) as T;
@@ -124,9 +159,14 @@ export async function requestJson<T>(baseUrl: string, path: string, init?: Reque
 
     if (!response.ok) {
       const responseBody = await response.text();
-      throw new Error(
-        `Request failed (${response.status}) for ${method.toUpperCase()} ${url}${summarizeCorrelatedFailure(responseBody)}`,
-      );
+      throw new Error(buildVerboseHttpFailureMessage({
+        status: response.status,
+        method,
+        url,
+        requestBody,
+        responseBody,
+        responseHeaders: response.headers,
+      }));
     }
 
     return (await response.json()) as T;
