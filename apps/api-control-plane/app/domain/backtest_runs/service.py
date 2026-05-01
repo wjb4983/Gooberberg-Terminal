@@ -1,10 +1,69 @@
 import hashlib
 import json
 from datetime import datetime
+from typing import Any
 from uuid import UUID
 
 from app.domain.backtest_runs.repository import Repository
 
+
+
+
+LEAKAGE_FAIL_CODES = {"fail", "error"}
+
+
+class LeakageDetectedError(ValueError):
+    def __init__(self, summary: dict[str, Any]) -> None:
+        super().__init__("backtest leakage checks failed")
+        self.summary = summary
+
+
+def run_leakage_checks(payload: dict[str, Any]) -> dict[str, Any]:
+    parameters = payload.get("parameters") if isinstance(payload.get("parameters"), dict) else {}
+    checks: list[dict[str, str]] = []
+
+    def record(name: str, status: str, detail: str) -> None:
+        checks.append({"name": name, "status": status, "detail": detail})
+
+    lookahead_enabled = bool(parameters.get("allow_lookahead", False))
+    if lookahead_enabled:
+        record("look_ahead", "fail", "parameters.allow_lookahead must be false")
+    else:
+        record("look_ahead", "pass", "look-ahead disabled")
+
+    point_in_time = parameters.get("point_in_time_constituents")
+    if point_in_time is False:
+        record("survivorship_bias", "fail", "point_in_time_constituents must be true")
+    elif point_in_time is True:
+        record("survivorship_bias", "pass", "point-in-time universe configured")
+    else:
+        record("survivorship_bias", "warn", "point_in_time_constituents not supplied")
+
+    event_ts = parameters.get("event_timestamp_field")
+    asof_ts = parameters.get("asof_timestamp_field")
+    if isinstance(event_ts, str) and isinstance(asof_ts, str) and event_ts == asof_ts:
+        record("timestamp_alignment", "pass", "event and as-of timestamps aligned")
+    else:
+        record("timestamp_alignment", "fail", "event_timestamp_field and asof_timestamp_field must match")
+
+    target_in_features = bool(parameters.get("target_in_features", False))
+    if target_in_features:
+        record("target_leakage", "fail", "target labels detected in feature inputs")
+    else:
+        record("target_leakage", "pass", "no target leakage markers detected")
+
+    has_failure = any(item["status"] in LEAKAGE_FAIL_CODES for item in checks)
+    return {
+        "status": "fail" if has_failure else "pass",
+        "is_valid": not has_failure,
+        "checked_at": datetime.utcnow().isoformat() + "Z",
+        "checks": checks,
+    }
+
+
+def assert_leakage_checks(summary: dict[str, Any]) -> None:
+    if summary.get("is_valid") is not True:
+        raise LeakageDetectedError(summary)
 
 class Service:
     OVERSIZED_THRESHOLD = 2500

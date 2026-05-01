@@ -110,3 +110,50 @@ def test_backtest_replay_validation_detects_divergence() -> None:
     assert payload["validation"]["pinning"]["matches"] is True
     assert payload["validation"]["status"] == "diverged"
     assert payload["validation"]["mismatch_count"] >= 1
+
+
+def test_backtest_create_fails_fast_on_leakage_checks() -> None:
+    with TestClient(create_app()) as client:
+        response = client.post(
+            "/api/v1/backtest-runs",
+            json={
+                "strategy_key": "mean_reversion",
+                "window_start": "2024-01-01T00:00:00Z",
+                "window_end": "2024-01-02T00:00:00Z",
+                "parameters": {
+                    "allow_lookahead": True,
+                    "point_in_time_constituents": True,
+                    "event_timestamp_field": "event_ts",
+                    "asof_timestamp_field": "event_ts",
+                    "target_in_features": False,
+                },
+            },
+        )
+    assert response.status_code == 422
+    payload = response.json()["detail"]
+    assert payload["reason_code"] == "BACKTEST_LEAKAGE_DETECTED"
+    assert payload["status"] == "invalid"
+    assert payload["summary"]["is_valid"] is False
+
+
+def test_backtest_create_persists_leakage_pass_summary() -> None:
+    with TestClient(create_app()) as client:
+        created = client.post(
+            "/api/v1/backtest-runs",
+            json={
+                "strategy_key": "mean_reversion",
+                "window_start": "2024-01-01T00:00:00Z",
+                "window_end": "2024-01-02T00:00:00Z",
+                "parameters": {
+                    "point_in_time_constituents": True,
+                    "event_timestamp_field": "event_ts",
+                    "asof_timestamp_field": "event_ts",
+                    "target_in_features": False,
+                },
+            },
+        )
+    assert created.status_code == 201
+    run = created.json()
+    leakage_summary = run["research_qa"]["leakage_checks"]
+    assert leakage_summary["status"] == "pass"
+    assert leakage_summary["is_valid"] is True

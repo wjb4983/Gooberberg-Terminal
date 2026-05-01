@@ -13,6 +13,7 @@ from app.api.dependencies import (
 from app.api.routers.jobs import _broadcast_job_event
 from app.core.logging import request_id_ctx_var
 from app.domain.backtest_runs import Service as BacktestRunService
+from app.domain.backtest_runs.service import LeakageDetectedError, assert_leakage_checks, run_leakage_checks
 from app.domain.backtest_runs.replay import replay_backtest, validate_replay
 from app.domain.market_data import Service as MarketDataService
 from app.domain.model_configs.compatibility import (
@@ -92,6 +93,21 @@ async def create_backtest_run(
                 "message": "lineage validation failed",
                 "reason_code": "LINEAGE_VALIDATION_FAILED",
                 "errors": [{"field": "lineage|lineage_ref", "message": str(exc)}],
+            },
+        ) from exc
+
+    leakage_summary = run_leakage_checks(payload.model_dump())
+    try:
+        assert_leakage_checks(leakage_summary)
+    except LeakageDetectedError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={
+                "message": "leakage checks failed",
+                "reason_code": "BACKTEST_LEAKAGE_DETECTED",
+                "run_valid": False,
+                "status": "invalid",
+                "summary": exc.summary,
             },
         ) from exc
 
@@ -190,6 +206,7 @@ async def create_backtest_run(
             "run_checksum": run_checksum,
             "seed": payload.random_seed,
             "created_at": accepted_at,
+            "research_qa": {"leakage_checks": leakage_summary},
         }
     )
 
@@ -203,6 +220,7 @@ async def create_backtest_run(
             "run_id": str(run_id),
             **payload.model_dump(mode="json", exclude={"confirmation_token"}),
             "lineage": lineage.model_dump(mode="json"),
+            "research_qa": {"leakage_checks": leakage_summary},
         },
         queued_at=accepted_at,
     )
