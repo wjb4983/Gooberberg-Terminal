@@ -1,0 +1,35 @@
+schema_snapshots:
+  - dataset_name: dataset.ohlcv.adjusted
+    schema_version: 1
+    columns:
+      symbol: str
+      timestamp: datetime
+      open: float
+      high: float
+      low: float
+      close: float
+      volume: float
+  - dataset_name: ohlcv.close
+    schema_version: 1
+    columns:
+      symbol: str
+      timestamp: datetime
+      close: float
+  - dataset_name: ohlcv.volume
+    schema_version: 1
+    columns:
+      symbol: str
+      timestamp: datetime
+      volume: float
+  - dataset_name: dataset.returns.windowed
+    schema_version: 1
+    columns:
+      symbol: str
+      timestamp: datetime
+      return: float
+  - dataset_name: returns.log
+    schema_version: 1
+    columns:
+      symbol: str
+      timestamp: datetime
+      log_return: float
