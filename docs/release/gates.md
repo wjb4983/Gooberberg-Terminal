@@ -79,11 +79,23 @@ No manual override is allowed without explicit risk-committee exception document
 ## Quick-Start Tasks (Recommended Order)
 
 1. Create/attach **experiment metadata** for the candidate build.
-2. Run validation and publish **QA report**.
+2. Run minimal release suite in this order and publish **QA report**:
+   1. data contracts
+   2. leakage checks
+   3. walk-forward stability
+   4. execution simulation sanity
+   5. risk-limit checks
 3. Update and publish **model card** with current metrics/limits.
 4. Obtain **risk sign-off** from required approvers.
 5. Finalize and test **rollback plan**.
 6. Execute stage-gate checklist and record pass/block decision.
+
+Hard timeout policy for the minimal release suite:
+
+- Every check must run with a hard timeout.
+- Timeout result is **FAIL**.
+- Any FAIL requires fix and rerun before promotion.
+- Attach the generated pass/fail report to the release candidate record.
 
 ## Audit Record Template
 

@@ -81,3 +81,30 @@ timeout 5m pytest apps/api-control-plane/tests/test_lineage_governance_schema.py
 timeout 10m pytest apps/api-control-plane/tests/test_replay_parity_faults.py
 timeout 5m pytest apps/api-control-plane/tests/test_risk.py
 ```
+
+
+## Minimal release-candidate suite (required)
+
+Run the minimal suite before attaching a release candidate for promotion.
+Each check has a hard timeout to prevent hung pipelines.
+A timeout is a **failure** and requires rerun after the underlying fix.
+
+Recommended quick-start order:
+
+1. Data contracts
+2. Leakage checks
+3. Walk-forward stability
+4. Execution simulation sanity
+5. Risk-limit checks
+
+Command:
+
+```bash
+timeout 30m scripts/release/run-release-candidate-suite.sh <candidate-id>
+```
+
+Default report artifact:
+
+- `dist/release/<candidate-id>-release-suite-report.json`
+
+The JSON report is the release-candidate pass/fail attachment.
