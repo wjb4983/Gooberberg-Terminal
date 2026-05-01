@@ -3,6 +3,7 @@ from typing import TypeVar
 
 from fastapi import HTTPException, status
 from pydantic import ValidationError
+from sqlalchemy.exc import SQLAlchemyError
 
 T = TypeVar("T")
 
@@ -17,6 +18,11 @@ def map_model_config_domain_error(*, route_context: str, model_family: str, erro
         return HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=f"{route_context}: invalid config payload for model_family='{model_family}'",
+        )
+    if isinstance(error, SQLAlchemyError):
+        return HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"{route_context}: model config could not be persisted for model_family='{model_family}'",
         )
     raise error
 

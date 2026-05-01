@@ -8,7 +8,7 @@ from app.domain.model_registry import ModelSpec
 
 
 class KalmanFilterConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="allow")
 
     task_type: Literal["filtering", "nowcasting"]
     data_type: Literal["state_space_timeseries"]

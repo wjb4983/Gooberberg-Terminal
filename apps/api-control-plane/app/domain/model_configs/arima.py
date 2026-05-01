@@ -8,7 +8,7 @@ from app.domain.model_registry import ModelSpec
 
 
 class ArimaConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="allow")
 
     task_type: Literal["forecasting"]
     data_type: Literal["time_series_univariate"]

@@ -1,6 +1,7 @@
 from collections.abc import Mapping
 from typing import Any
 from uuid import UUID
+from enum import Enum
 
 from app.domain.model_registry import ModelRegistry
 from app.domain.model_configs.repository import ModelConfigRepository
@@ -12,11 +13,12 @@ class ModelConfigService:
         self._model_registry = model_registry
 
     def create(self, model_family: str, config: Mapping[str, Any]) -> dict[str, object]:
-        spec = self._model_registry.require(model_family)
+        normalized_family = self._normalize_model_family(model_family)
+        spec = self._model_registry.require(normalized_family)
         validated_config = spec.validate_config(config)
         return self._repository.save(
             {
-                "model_family": model_family,
+                "model_family": normalized_family,
                 "config": dict(validated_config),
             }
         )
@@ -32,7 +34,17 @@ class ModelConfigService:
         if existing is None:
             return None
 
-        model_family = str(existing["model_family"])
+        model_family = self._normalize_model_family(existing["model_family"])
         spec = self._model_registry.require(model_family)
         validated_config = spec.validate_config(config)
         return self._repository.update(model_config_id, {"config": dict(validated_config)})
+
+    @staticmethod
+    def _normalize_model_family(value: Any) -> str:
+        if isinstance(value, str):
+            return value
+        if isinstance(value, Enum):
+            raw_value = value.value
+            if isinstance(raw_value, str):
+                return raw_value
+        return str(value)

@@ -13,5 +13,6 @@
     { "path": "../../libs/ts/@gb/api-client" },
     { "path": "../../libs/ts/@gb/ui-components" }
   ],
-  "include": ["src/**/*.ts", "src/**/*.tsx", "src/**/*.d.ts"]
+  "include": ["src/**/*.ts", "src/**/*.tsx", "src/**/*.d.ts"],
+  "exclude": ["src/**/*.test.ts", "src/**/*.test.tsx"]
 }

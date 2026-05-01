@@ -46,6 +46,33 @@ def test_model_config_route_rejects_invalid_contract_payload() -> None:
     assert response.status_code == 422
 
 
+def test_model_config_route_accepts_ui_metadata_passthrough_fields() -> None:
+    response = client.post(
+        "/api/v1/model-configs",
+        json={
+            "model_family": "hmm_regime_switching",
+            "config": {
+                "name": "hmm baseline",
+                "version": "v1",
+                "task_type": "time_series_momentum",
+                "subtask_type": "ranking",
+                "data_profile": "time_series",
+                "n_states": 3,
+                "lookback_window": 64,
+                "covariance_type": "diag",
+                "convergence_tol": 0.01,
+                "max_iterations": 250,
+            },
+        },
+    )
+
+    assert response.status_code == 201
+    payload = response.json()
+    assert payload["config"]["name"] == "hmm baseline"
+    assert payload["config"]["version"] == "v1"
+    assert payload["config"]["n_states"] == 3
+
+
 def test_model_config_route_returns_404_for_unknown_model_family() -> None:
     response = client.post(
         "/api/v1/model-configs",

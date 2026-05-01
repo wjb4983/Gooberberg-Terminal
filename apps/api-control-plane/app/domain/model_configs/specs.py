@@ -8,7 +8,7 @@ from app.domain.model_registry import ModelSpec
 
 
 class HmmRegimeSwitchingConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="allow")
 
     n_states: int = Field(ge=2, le=12)
     lookback_window: int = Field(ge=10, le=10000)
