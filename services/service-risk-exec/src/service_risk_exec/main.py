@@ -6,6 +6,7 @@ import asyncio
 import json
 import logging
 import os
+from pathlib import Path
 from dataclasses import dataclass
 from enum import StrEnum
 from random import Random
@@ -221,6 +222,8 @@ from gb_core.risk import RiskExecutionAuthority
 from gb_core.schemas import ExecutionDecision, StrategyIntent
 from gb_core.event_schemas import RiskCheckEvent, utc_now
 
+from service_risk_exec.guards import GuardAction, RuntimeRiskGuard
+
 if TYPE_CHECKING:
     from redis.asyncio import Redis
 
@@ -242,7 +245,24 @@ except Exception:  # pragma: no cover
 class ServiceState:
     processed_intents: int = 0
     approved_decisions: int = 0
+    blocked_by_runtime_guard: int = 0
+    derisk_events: int = 0
 
+
+
+_LIMITS_PATH = Path(__file__).resolve().parents[2] / "config" / "strategy_risk_limits.json"
+
+
+def _load_runtime_guard() -> RuntimeRiskGuard:
+    if not _LIMITS_PATH.exists():
+        return RuntimeRiskGuard({})
+    with _LIMITS_PATH.open("r", encoding="utf-8") as handle:
+        payload = json.load(handle)
+    if not isinstance(payload, dict):
+        return RuntimeRiskGuard({})
+    return RuntimeRiskGuard.from_config(payload)
+
+runtime_guard = _load_runtime_guard()
 
 def consume_strategy_intent(intent: StrategyIntent) -> ExecutionDecision:
     """Consume a strategy intent event and emit an execution decision."""
@@ -255,6 +275,23 @@ async def _consume_intent_payload(client: "Redis", payload: str, state: ServiceS
     state.processed_intents += 1
     if decision.approved:
         state.approved_decisions += 1
+
+    guard_decision = runtime_guard.evaluate(
+        strategy_key=intent.strategy_key or "unknown",
+        intraday_drawdown=float(getattr(intent, "intraday_drawdown", 0.0) or 0.0),
+        position_concentration=float(getattr(intent, "position_concentration", 0.0) or 0.0),
+        turnover_delta=abs(float(getattr(intent, "quantity", 0.0) or 0.0)),
+        slippage_deviation_bps=float(getattr(intent, "slippage_deviation_bps", 0.0) or 0.0),
+    )
+    if guard_decision.action != GuardAction.NONE:
+        decision.approved = False
+        decision.failure_reason_codes = list(set(decision.failure_reason_codes + guard_decision.breached_rules))
+        decision.reason_code = "RUNTIME_GUARD_BREACH"
+        decision.detail = f"runtime guard action={guard_decision.action}"
+        if guard_decision.action == GuardAction.BLOCK_NEW_ORDERS:
+            state.blocked_by_runtime_guard += 1
+        if guard_decision.action == GuardAction.DE_RISK:
+            state.derisk_events += 1
 
     logger.info(
         "risk decision emitted intent_id=%s approved=%s reason=%s trace_id=%s confidence=%s",
@@ -276,6 +313,7 @@ async def _consume_intent_payload(client: "Redis", payload: str, state: ServiceS
             OrderState.FILLED,
         ],
         "authority_boundary": "risk-exec produces decisions only; order adapters are external",
+        "runtime_guard": {"action": str(guard_decision.action), "breached_rules": guard_decision.breached_rules},
         "risk_check_event": RiskCheckEvent(
             event_id=intent.intent_id,
             trace_id=intent.trace_id,
@@ -333,6 +371,8 @@ class _HealthHandler(BaseHTTPRequestHandler):
             "consumes_from": STRATEGY_INTENT_CHANNEL,
             "processed_intents": self.state.processed_intents,
             "approved_decisions": self.state.approved_decisions,
+            "blocked_by_runtime_guard": self.state.blocked_by_runtime_guard,
+            "derisk_events": self.state.derisk_events,
             "order_placement": "not implemented in this service",
         }
         body = json.dumps(payload).encode("utf-8")
