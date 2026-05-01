@@ -17,7 +17,25 @@ Use this checklist as the reference block in every model-intake PR.
 - [ ] **Adapter scaffold stage complete**: scaffold generated and ownership assigned.
 - [ ] **Validation stage complete**: safety and quality gates pass, including all default QA scenarios.
 - [ ] **Rollout status stage complete**: rollout state is set and linked to monitoring.
+- [ ] **Model card complete and archived**: completed card includes research lead + risk reviewer sign-off and is saved in `docs/model_risk/cards/`.
 - [ ] **Required documentation attached**: all required fields and evidence links are included.
+
+
+## Promotion decision prerequisites
+
+Before **any** promotion decision (`paper-trading`, `staged`, or `production`), a fully completed model card is required.
+
+Required artifacts:
+
+- Completed template: `docs/model_risk/model_card_template.md`
+- Approval checklist completion, including:
+  - Research lead sign-off
+  - Risk reviewer sign-off
+- Archived signed card in: `docs/model_risk/cards/`
+
+Safety gate:
+
+- **Stop** promotion decision if the model card is incomplete, unsigned, or not archived in `docs/model_risk/cards/`.
 
 ## Required workflow
 
@@ -132,6 +150,7 @@ Required rollout status fields:
 Safety gates:
 
 - **Stop** production promotion without staged validation evidence.
+- **Stop** any promotion decision without a fully completed and archived model card (with research lead and risk reviewer sign-off).
 - **Stop** promotion to `staged` or `paper-trading` unless **all default QA scenarios pass**.
 - **Stop** state transition if monitoring and on-call ownership are missing.
 
