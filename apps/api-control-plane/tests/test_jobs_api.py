@@ -362,3 +362,38 @@ def test_success_gate_allows_success_with_valid_backtest_manifest_and_seed() -> 
         )
         assert response.status_code == 200
         assert response.json()["status"] == "success"
+
+
+def test_success_gate_blocks_final_candidate_without_required_metadata() -> None:
+    with TestClient(create_app()) as client:
+        dataset = client.post(
+            "/api/v1/market-data/ingestions",
+            json={"source": "test-fixture", "symbols": ["AAPL"], "timeframe": "1d", "start_date": "2025-01-01", "end_date": "2025-12-31"},
+        ).json()
+        model_config = client.post(
+            "/api/v1/model-configs",
+            json={"model_family": "arima", "config": {"task_type": "forecasting", "data_type": "time_series_univariate", "p": 1, "d": 1, "q": 1}},
+        ).json()
+        run = client.post(
+            "/api/v1/training-runs",
+            json={"model_config_id": model_config["id"], "dataset_id": dataset["request_id"], "parameters": {"epochs": 1, "run_metadata": {"seed": 7}}},
+        ).json()
+        response = client.post(
+            f"/api/v1/jobs/{run['job_id']}/events",
+            json={
+                "status": "success",
+                "detail": "done",
+                "lineage": {"lineage_id": "abc", "dataset_fingerprint": "d1", "code_hash": "c1", "config_digest": "g1", "seed": 7},
+                "artifact_manifest": [
+                    {"role": "trained_model", "sha256": "a" * 64, "size_bytes": 10, "promotion_status": "final_candidate"},
+                    {"role": "training_metrics", "sha256": "b" * 64, "size_bytes": 10, "promotion_status": "final_candidate"},
+                    {"role": "run_metadata", "sha256": "c" * 64, "size_bytes": 10, "promotion_status": "final_candidate"},
+                ],
+                "result_ref": "s3://artifact",
+                "artifact_checksum": "sha256:abcd1234efef5678",
+                "artifact_size_bytes": 12,
+            },
+        )
+        assert response.status_code == 200
+        assert response.json()["status"] == "failed"
+        assert "required run_metadata fields" in response.json()["detail"]

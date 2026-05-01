@@ -5,6 +5,7 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
+from app.domain.run_metadata_governance import missing_required_metadata
 from app.schemas.jobs import JobLifecycleUpdateRequest
 
 logger = logging.getLogger(__name__)
@@ -51,6 +52,25 @@ def evaluate_success_gate(*, run_type: str, run_row: Any, event_update: JobLifec
         )
 
     manifest = list(event_update.artifact_manifest or [])
+
+    run_metadata = {}
+    parameters = getattr(run_row, "parameters", None)
+    if isinstance(parameters, dict):
+        run_metadata_candidate = parameters.get("run_metadata")
+        if isinstance(run_metadata_candidate, dict):
+            run_metadata = run_metadata_candidate
+
+    final_candidate_roles = [
+        item for item in manifest if isinstance(item, dict) and str(item.get("promotion_status", "")).lower() == "final_candidate"
+    ]
+    if final_candidate_roles:
+        missing_metadata = missing_required_metadata(run_metadata)
+        if missing_metadata:
+            return GateFailure(
+                category="final_candidate_metadata_missing",
+                reason=f"cannot label final_candidate without required run_metadata fields: {', '.join(missing_metadata)}",
+                remediation="Populate run_metadata with the governance-required metadata fields before final candidate promotion.",
+            )
     mandatory_roles = {
         "training": {"trained_model", "training_metrics", "run_metadata"},
         "backtest": {"backtest_metrics", "trade_log", "run_metadata"},
@@ -82,12 +102,7 @@ def evaluate_success_gate(*, run_type: str, run_row: Any, event_update: JobLifec
             )
 
     seed = lineage.get("seed")
-    metadata_seed = None
-    parameters = getattr(run_row, "parameters", None)
-    if isinstance(parameters, dict):
-        run_metadata = parameters.get("run_metadata")
-        if isinstance(run_metadata, dict):
-            metadata_seed = run_metadata.get("seed")
+    metadata_seed = run_metadata.get("seed")
     persisted_seed = getattr(run_row, "seed", None)
     if persisted_seed is None and hasattr(run_row, "random_seed"):
         persisted_seed = getattr(run_row, "random_seed", None)
