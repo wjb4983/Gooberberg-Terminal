@@ -16,6 +16,8 @@ class EventRecord:
     trace_id: str | None
     decision_id: str | None
     order_id: str | None
+    run_id: str | None
+    strategy_id: str | None
     payload: dict[str, Any]
 
 
@@ -35,6 +37,8 @@ class EventQuery:
     trace_id: str | None = None
     decision_id: str | None = None
     order_id: str | None = None
+    run_id: str | None = None
+    strategy_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -68,6 +72,8 @@ class EventLogWriter:
             trace_id=_to_optional_str(payload.get("trace_id")),
             decision_id=_to_optional_str(payload.get("decision_id")),
             order_id=_to_optional_str(payload.get("order_id")),
+            run_id=_to_optional_str(payload.get("run_id")),
+            strategy_id=_to_optional_str(payload.get("strategy_id")),
             payload=payload,
         )
         self._records.append(record)
@@ -94,6 +100,10 @@ class EventLogWriter:
             result = [r for r in result if r.decision_id == q.decision_id]
         if q.order_id is not None:
             result = [r for r in result if r.order_id == q.order_id]
+        if q.run_id is not None:
+            result = [r for r in result if r.run_id == q.run_id]
+        if q.strategy_id is not None:
+            result = [r for r in result if r.strategy_id == q.strategy_id]
         return list(result)
 
     def apply_retention_and_archive(self, *, now: datetime | None = None) -> tuple[int, int]:
@@ -124,6 +134,8 @@ class EventLogWriter:
                     "trace_id": r.trace_id,
                     "decision_id": r.decision_id,
                     "order_id": r.order_id,
+                    "run_id": r.run_id,
+                    "strategy_id": r.strategy_id,
                 }
                 for r in part
             ]

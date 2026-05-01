@@ -34,6 +34,8 @@ def test_strategy_runner_emits_signal_and_auditable_decision() -> None:
         strategy_version="momentum.v2",
         config_hash="cfg-v2",
         rationale_store=store,
+        run_id="run-123",
+        strategy_id="momentum-aapl",
     )
 
     signal, decision = runner.run(_market_event(last=101.5))
@@ -43,6 +45,8 @@ def test_strategy_runner_emits_signal_and_auditable_decision() -> None:
     assert decision.go_no_go is True
     assert decision.confidence > 0
     assert decision.feature_snapshot_ref == f"signal:{signal.event_id}:features"
+    assert signal.run_id == "run-123"
+    assert decision.strategy_id == "momentum-aapl"
 
     metadata = store.by_decision_event_id(decision.event_id)
     assert metadata is not None
@@ -58,6 +62,8 @@ def test_strategy_runner_marks_hold_as_no_go() -> None:
         strategy_version="momentum.v2",
         config_hash="cfg-v2",
         rationale_store=store,
+        run_id="run-123",
+        strategy_id="momentum-aapl",
     )
 
     _, decision = runner.run(_market_event(last=100.52))

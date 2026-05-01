@@ -30,11 +30,13 @@ class InMemoryRationaleStore:
 
 
 class StrategyRunner:
-    def __init__(self, *, producer: str, strategy_version: str, config_hash: str, rationale_store: InMemoryRationaleStore):
+    def __init__(self, *, producer: str, strategy_version: str, config_hash: str, rationale_store: InMemoryRationaleStore, run_id: str, strategy_id: str):
         self._producer = producer
         self._strategy_version = strategy_version
         self._config_hash = config_hash
         self._rationale_store = rationale_store
+        self._run_id = run_id
+        self._strategy_id = strategy_id
 
     def run(self, market_data: MarketDataEvent) -> tuple[SignalEvent, DecisionEvent]:
         signal = self._build_signal_event(market_data)
@@ -71,6 +73,8 @@ class StrategyRunner:
             producer=self._producer,
             strategy_version=self._strategy_version,
             config_hash=self._config_hash,
+            run_id=self._run_id,
+            strategy_id=self._strategy_id,
             signal_name="micro-momentum",
             symbol=market_data.symbol,
             strength=round(strength, 5),
@@ -104,6 +108,8 @@ class StrategyRunner:
             producer=self._producer,
             strategy_version=self._strategy_version,
             config_hash=self._config_hash,
+            run_id=self._run_id,
+            strategy_id=self._strategy_id,
             decision=decision,
             symbol=signal.symbol,
             rationale=",".join(reasons),

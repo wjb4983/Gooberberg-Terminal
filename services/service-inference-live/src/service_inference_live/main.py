@@ -6,12 +6,14 @@ import asyncio
 import json
 import logging
 import os
+from datetime import UTC, datetime
 from dataclasses import dataclass
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from threading import Thread
 from typing import TYPE_CHECKING
 from uuid import UUID, uuid4
 
+from gb_core.event_log import EventLogPolicy, EventLogWriter, EventQuery
 from gb_core.schemas import OrderSide, StrategyIntent
 
 if TYPE_CHECKING:
@@ -34,6 +36,27 @@ except Exception:  # pragma: no cover
 class ServiceState:
     emitted_intents: int = 0
     last_trace_id: str | None = None
+    run_id: str = ""
+    strategy_id: str = ""
+    history: EventLogWriter | None = None
+
+
+def _emit_structured_log(*, service: str, severity: str, run_id: str, strategy_id: str, event_type: str, payload: dict[str, object]) -> None:
+    logger.log(
+        getattr(logging, severity.upper(), logging.INFO),
+        json.dumps(
+            {
+                "timestamp": datetime.now(UTC).isoformat(),
+                "service": service,
+                "severity": severity.upper(),
+                "run_id": run_id,
+                "strategy_id": strategy_id,
+                "event_type": event_type,
+                "payload": payload,
+            },
+            sort_keys=True,
+        ),
+    )
 
 
 def _active_strategy_instance_ids() -> list[UUID]:
@@ -83,14 +106,16 @@ async def _publish_intents(client: "Redis", state: ServiceState) -> None:
             await client.publish(STRATEGY_INTENT_CHANNEL, payload_json)
             state.emitted_intents += 1
             state.last_trace_id = str(intent.trace_id)
-            logger.info(
-                "intent emitted channel=%s intent_id=%s strategy_instance_id=%s trace_id=%s confidence=%.3f",
-                STRATEGY_INTENT_CHANNEL,
-                intent.intent_id,
-                strategy_instance_id,
-                intent.trace_id,
-                intent.confidence,
-            )
+            payload = {
+                "channel": STRATEGY_INTENT_CHANNEL,
+                "intent_id": str(intent.intent_id),
+                "strategy_instance_id": str(strategy_instance_id),
+                "trace_id": str(intent.trace_id),
+                "confidence": intent.confidence,
+            }
+            _emit_structured_log(service="service-inference-live", severity="info", run_id=state.run_id, strategy_id=state.strategy_id, event_type="intent_emitted", payload=payload)
+            if state.history is not None:
+                state.history.append(idempotency_key=f"{state.run_id}:{intent.intent_id}", payload={"event_type": "intent_emitted", "event_time": datetime.now(UTC).isoformat(), "trace_id": str(intent.trace_id), "run_id": state.run_id, "strategy_id": state.strategy_id, **payload})
             seq += 1
         await asyncio.sleep(PUBLISH_INTERVAL_SECONDS)
 
@@ -111,6 +136,9 @@ class _HealthHandler(BaseHTTPRequestHandler):
             "last_trace_id": self.state.last_trace_id,
             "publishes_to": STRATEGY_INTENT_CHANNEL,
             "execution_authority": "service-risk-exec",
+            "run_id": self.state.run_id,
+            "strategy_id": self.state.strategy_id,
+            "history_events": len(self.state.history.query(EventQuery())) if self.state.history else 0,
         }
         body = json.dumps(payload).encode("utf-8")
         self.send_response(200)
@@ -135,6 +163,9 @@ async def run() -> None:
     logging.basicConfig(level=os.getenv("GB_LOG_LEVEL", "INFO"))
     redis_dsn = os.getenv("GB_REDIS_DSN")
     state = ServiceState()
+    state.run_id = os.getenv("GB_RUN_ID", str(uuid4()))
+    state.strategy_id = os.getenv("GB_STRATEGY_ID", "momentum.v1")
+    state.history = EventLogWriter(policy=EventLogPolicy())
     health_server = _start_health_server(state)
 
     if not Redis or not redis_dsn:
