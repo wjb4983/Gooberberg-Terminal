@@ -177,6 +177,48 @@ This catalog defines the minimum production dashboards, KPI owners, thresholds, 
 - Repeated critical breaches (>=3 in 24h) open an incident and trigger postmortem requirements.
 - Ownership map should be mirrored in pager/on-call schedules and reviewed monthly.
 
+## Drift monitoring policy (core features + signal outputs)
+
+### Scope and configuration
+
+- Configure drift checks on all **core serving features** (tier-0 + tier-1) and all **production signal outputs** before enabling autonomous decision paths.
+- Use a fixed **reference window** (30d rolling baseline by default) and a **current window** (1h for features, 15m for signals).
+- Required detectors:
+  - Features: PSI + KS + training-serving skew.
+  - Signals: z-score shift + tail-mass shift + sign-flip rate.
+- Required dimensions:
+  - Global portfolio view.
+  - Per-model/version view.
+  - Per-region/venue (when applicable) to prevent localized blind spots.
+
+### Alert levels and response SLAs
+
+| Level | Trigger semantics | Ack SLA | Triage SLA | Mitigation SLA | Auto-escalation |
+|---|---|---|---|---|---|
+| Info | Early warning threshold crossed, no customer/business impact expected | 4h | 1 business day | Next planned release window | No paging; ticket only |
+| Warn | Sustained drift or multi-metric warning with potential model-quality impact | 30m | 2h | 1 business day | Escalate to backup if unacked at 30m |
+| Critical | Severe feature/signal drift or training-serving skew breach with active decision risk | 10m | 30m | Immediate containment (pause/guardrail/rollback) within 60m | Page primary on-call and backup contact simultaneously |
+
+### Routing requirements
+
+- **Info** alerts route to observability Slack channel + issue tracker.
+- **Warn** alerts route to primary on-call queue; backup receives passive notification.
+- **Critical** alerts route to:
+  1. Primary on-call pager.
+  2. Backup contact pager/SMS.
+  3. Incident channel bootstrap automation.
+- Critical alerts must include: detector, impacted model versions, top drifted features/signals, first-seen timestamp, and suggested containment action.
+
+### Synthetic drift validation (recommended execution order)
+
+1. Baseline check: verify detector jobs, metric exports, and alert routes are healthy.
+2. Inject **feature distribution drift** in staging (e.g., mean/variance shift on selected core features) and confirm expected info/warn transitions.
+3. Inject **training-serving skew** (offline/online mismatch) and confirm critical path + dual paging.
+4. Inject **signal output shift** (tail mass + sign-flip spike) and confirm warn/critical behavior.
+5. Run end-to-end alert delivery test to primary + backup contacts.
+6. Execute rollback test: clear injection and verify alert auto-resolution + incident notes closure.
+7. Promote to production only after two consecutive synthetic runs pass without routing or SLA misses.
+
 ## Governance notes
 
 - Thresholds are defaults and should be calibrated using 30-60 day historical distributions.
