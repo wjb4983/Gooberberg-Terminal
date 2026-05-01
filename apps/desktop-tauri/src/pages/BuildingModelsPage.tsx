@@ -115,6 +115,100 @@ interface LaunchPreflightState {
   valid: boolean;
 }
 
+interface ModelConfigCreatePayload {
+  model_family: string;
+  config: Record<string, unknown>;
+}
+
+const SUPPORTED_BUILDING_MODEL_FAMILIES = ['hmm_regime_switching', 'torch_nn_timeseries', 'kalman_filter'] as const;
+
+function pickConfigFields(config: Record<string, unknown>, keys: string[]): Record<string, unknown> {
+  const picked: Record<string, unknown> = {};
+  for (const key of keys) {
+    if (Object.prototype.hasOwnProperty.call(config, key)) {
+      picked[key] = config[key];
+    }
+  }
+  return picked;
+}
+
+function buildCompatibilityCreatePayload(desired: ModelConfigCreatePayload): ModelConfigCreatePayload {
+  if (desired.model_family === 'hmm_regime_switching') {
+    return {
+      model_family: desired.model_family,
+      config: pickConfigFields(desired.config, [
+        'n_states',
+        'lookback_window',
+        'covariance_type',
+        'convergence_tol',
+        'max_iterations',
+      ]),
+    };
+  }
+
+  if (desired.model_family === 'torch_nn_timeseries') {
+    return {
+      model_family: desired.model_family,
+      config: {
+        ...pickConfigFields(desired.config, [
+          'architecture',
+          'lookback_window',
+          'horizon_steps',
+          'hidden_size',
+          'num_layers',
+          'num_attention_heads',
+          'dropout',
+          'learning_rate',
+          'batch_size',
+          'loss_function',
+        ]),
+        task_type: 'forecasting',
+        data_type: 'time_series',
+      },
+    };
+  }
+
+  if (desired.model_family === 'kalman_filter') {
+    return {
+      model_family: desired.model_family,
+      config: {
+        ...pickConfigFields(desired.config, [
+          'transition_structure',
+          'state_dimension',
+          'observation_dimension',
+          'process_noise',
+          'measurement_noise',
+          'initial_covariance_scale',
+        ]),
+        task_type: 'filtering',
+        data_type: 'state_space_timeseries',
+      },
+    };
+  }
+
+  if (desired.model_family === 'arima') {
+    return {
+      model_family: desired.model_family,
+      config: {
+        ...pickConfigFields(desired.config, [
+          'p',
+          'd',
+          'q',
+          'seasonal_period',
+          'seasonal_p',
+          'seasonal_d',
+          'seasonal_q',
+          'trend',
+        ]),
+        task_type: 'forecasting',
+        data_type: 'time_series_univariate',
+      },
+    };
+  }
+
+  return desired;
+}
+
 const defaultModelConfigForm: ModelConfigFormState = {
   numRegimes: '3',
   lookbackWindow: '252',
@@ -308,6 +402,10 @@ export function BuildingModelsPage({ baseUrl }: BuildingModelsPageProps): JSX.El
 
   const selectedJob = useMemo(() => jobs.find((item) => item.id === selectedJobId) ?? null, [jobs, selectedJobId]);
   const selectedArtifact = selectedArtifactId ? artifactDetailsById[selectedArtifactId] : undefined;
+  const configurableModelFamilies = useMemo(
+    () => modelFamilies.filter((family) => SUPPORTED_BUILDING_MODEL_FAMILIES.includes(family as (typeof SUPPORTED_BUILDING_MODEL_FAMILIES)[number])),
+    [modelFamilies],
+  );
 
   const load = useCallback(async (): Promise<void> => {
     setError(null);
@@ -320,8 +418,10 @@ export function BuildingModelsPage({ baseUrl }: BuildingModelsPageProps): JSX.El
       setModelConfigs(configs);
       setModelFamilies(families);
       setSelectedFamily((previous) => {
-        if (requestedFamily && families.includes(requestedFamily)) return requestedFamily;
-        return families.includes(previous) ? previous : (families[0] ?? 'hmm_regime_switching');
+        if (requestedFamily && SUPPORTED_BUILDING_MODEL_FAMILIES.includes(requestedFamily as (typeof SUPPORTED_BUILDING_MODEL_FAMILIES)[number])) return requestedFamily;
+        if (SUPPORTED_BUILDING_MODEL_FAMILIES.includes(previous as (typeof SUPPORTED_BUILDING_MODEL_FAMILIES)[number])) return previous;
+        const firstSupportedFamily = families.find((family) => SUPPORTED_BUILDING_MODEL_FAMILIES.includes(family as (typeof SUPPORTED_BUILDING_MODEL_FAMILIES)[number]));
+        return firstSupportedFamily ?? 'hmm_regime_switching';
       });
       setJobs((previous) => {
         const hydrated = runs.map(mapRunToCard);
@@ -454,7 +554,13 @@ export function BuildingModelsPage({ baseUrl }: BuildingModelsPageProps): JSX.El
 
     setError(null);
     setIsCreatingConfig(true);
-    const desiredConfig = {
+    if (!SUPPORTED_BUILDING_MODEL_FAMILIES.includes(selectedFamily as (typeof SUPPORTED_BUILDING_MODEL_FAMILIES)[number])) {
+      setConfigErrors({ submit: `Selected model family '${selectedFamily}' is not supported by this builder yet.` });
+      setIsCreatingConfig(false);
+      return;
+    }
+
+    const desiredConfig: ModelConfigCreatePayload = {
       model_family: selectedFamily,
       config: selectedFamily === 'hmm_regime_switching'
         ? buildHmmPayload(configForm, sharedConfig)
@@ -477,6 +583,24 @@ export function BuildingModelsPage({ baseUrl }: BuildingModelsPageProps): JSX.El
     } catch (submitError) {
       if (isModelConfigCreateServerFailure(submitError)) {
         try {
+          const compatibilityPayload = buildCompatibilityCreatePayload(desiredConfig);
+          const created = await requestJson<ModelConfigItem>(baseUrl, '/api/v1/model-configs', {
+            method: 'POST',
+            body: JSON.stringify(compatibilityPayload),
+          });
+          setModelConfigs((previous) => [created, ...previous]);
+          setLaunchForm((previous) => ({ ...previous, modelConfigId: created.id }));
+          setConfigForm(defaultModelConfigForm);
+          setSharedConfig(defaultSharedConfigFields);
+          setTorchForm(defaultTorchFormState);
+          setKalmanForm(defaultKalmanFormState);
+          setConfigErrors({});
+          setError('Recovered from create endpoint 500 using compatibility payload retry.');
+          return;
+        } catch {
+          // Fall through to registry refresh fallback when compatibility retry also fails.
+        }
+        try {
           const refreshedConfigs = await requestJson<ModelConfigItem[]>(baseUrl, '/api/v1/model-configs');
           setModelConfigs(refreshedConfigs);
           const reusedConfig = findEquivalentModelConfig(refreshedConfigs, desiredConfig);
@@ -485,7 +609,8 @@ export function BuildingModelsPage({ baseUrl }: BuildingModelsPageProps): JSX.El
             setError('Create endpoint returned 500. Reused an equivalent saved model config from the registry.');
             return;
           }
-          setError('Create endpoint returned 500. Refreshed saved configs; select an existing config to continue.');
+          const failureDetail = submitError instanceof Error ? ` (${submitError.message})` : '';
+          setError(`Create endpoint returned 500. Refreshed saved configs; select an existing config to continue.${failureDetail}`);
           return;
         } catch {
           // Fall through to standard error display when refresh also fails.
@@ -723,7 +848,7 @@ export function BuildingModelsPage({ baseUrl }: BuildingModelsPageProps): JSX.El
         <h3>1) Create model config</h3>
         <ModelBuildConfigFormSection
           selectedFamily={selectedFamily}
-          modelFamilies={modelFamilies}
+          modelFamilies={configurableModelFamilies}
           sharedConfig={sharedConfig}
           configForm={configForm}
           torchForm={torchForm}
