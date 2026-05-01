@@ -354,7 +354,10 @@ function buildKalmanPayload(form: KalmanFormState, shared: SharedConfigFields): 
 }
 
 function isHttpMethodNotAllowed(error: unknown): boolean {
-  return error instanceof Error && /Request failed\s*\(405\)/i.test(error.message);
+  return error instanceof Error && (
+    /Request failed\s*\(405\)/i.test(error.message)
+    || /HTTP request failed with status 405\b/i.test(error.message)
+  );
 }
 
 function summarizeProbeFailure(error: unknown): string {
