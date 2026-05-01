@@ -192,6 +192,10 @@ Execute in this order for progressive rollout by environment:
 2. **Staging**
    - Promote the same flag and verify monotonic status progression (`queued -> running -> degraded|succeeded|failed`).
    - Confirm schema/version compatibility with downstream consumers.
-3. **Prod**
-   - Enable only after staging soak and degraded fallback telemetry checks are green.
+3. **Prod canary**
+   - Route a small capital slice/orders to the newest strategy version first (canary-only traffic).
+   - Monitor predefined guardrail metrics during the canary window (risk limits, error-rate, latency, and fill-quality).
+   - Auto-rollback to the prior strategy version on any guardrail breach and notify the primary on-call immediately.
+4. **Prod full rollout**
+   - Require explicit post-canary approval (trading + risk owner) before increasing traffic beyond canary.
    - Keep remaining domains disabled until prior domain is stable.
