@@ -582,6 +582,7 @@ export function BuildingModelsPage({ baseUrl }: BuildingModelsPageProps): JSX.El
       setConfigErrors({});
     } catch (submitError) {
       if (isModelConfigCreateServerFailure(submitError)) {
+        let compatibilityRetryError: unknown;
         try {
           const compatibilityPayload = buildCompatibilityCreatePayload(desiredConfig);
           const created = await requestJson<ModelConfigItem>(baseUrl, '/api/v1/model-configs', {
@@ -597,9 +598,10 @@ export function BuildingModelsPage({ baseUrl }: BuildingModelsPageProps): JSX.El
           setConfigErrors({});
           setError('Recovered from create endpoint 500 using compatibility payload retry.');
           return;
-        } catch {
-          // Fall through to registry refresh fallback when compatibility retry also fails.
+        } catch (retryError) {
+          compatibilityRetryError = retryError;
         }
+        let refreshFallbackError: unknown;
         try {
           const refreshedConfigs = await requestJson<ModelConfigItem[]>(baseUrl, '/api/v1/model-configs');
           setModelConfigs(refreshedConfigs);
@@ -612,9 +614,19 @@ export function BuildingModelsPage({ baseUrl }: BuildingModelsPageProps): JSX.El
           const failureDetail = submitError instanceof Error ? ` (${submitError.message})` : '';
           setError(`Create endpoint returned 500. Refreshed saved configs; select an existing config to continue.${failureDetail}`);
           return;
-        } catch {
-          // Fall through to standard error display when refresh also fails.
+        } catch (refreshError) {
+          refreshFallbackError = refreshError;
         }
+        const initialFailureDetail = submitError instanceof Error ? submitError.message : String(submitError);
+        const compatibilityFailureDetail = compatibilityRetryError instanceof Error ? compatibilityRetryError.message : String(compatibilityRetryError);
+        const refreshFailureDetail = refreshFallbackError instanceof Error ? refreshFallbackError.message : String(refreshFallbackError);
+        setError([
+          'Model config creation hit server-side failure handling path and all recovery attempts failed.',
+          `Initial create call failure:\n${initialFailureDetail}`,
+          `Compatibility payload retry failure:\n${compatibilityFailureDetail}`,
+          `Registry refresh/reuse fallback failure:\n${refreshFailureDetail}`,
+        ].join('\n\n'));
+        return;
       }
       setError(submitError instanceof Error ? submitError.message : 'Failed to create model config.');
     } finally {
