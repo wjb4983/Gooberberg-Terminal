@@ -20,7 +20,7 @@ import { JobDetailPage } from './pages/JobDetailPage';
 import { ParameterSweepsPage } from './pages/ParameterSweepsPage';
 import { TrainingRunsPage } from './pages/TrainingRunsPage';
 import { BacktestsPage } from './pages/BacktestsPage';
-import { ModelsPage } from './pages/ModelsPage';
+import { BuildingModelsPage } from './pages/BuildingModelsPage';
 import { ModelDeploymentsPage } from './pages/ModelDeploymentsPage';
 import { ModelCatalogPage } from './pages/ModelCatalogPage';
 
@@ -88,7 +88,7 @@ export function App(): JSX.Element {
           <Route path="jobs/:jobId" element={<ErrorBoundary><JobDetailPage baseUrl={preferences.baseUrl} /></ErrorBoundary>} />
 
           <Route path="models">
-            <Route path="build" element={<ErrorBoundary><ModelsPage baseUrl={preferences.baseUrl} /></ErrorBoundary>} />
+            <Route path="build" element={<ErrorBoundary><BuildingModelsPage baseUrl={preferences.baseUrl} /></ErrorBoundary>} />
             <Route path="train" element={<ErrorBoundary><TrainingRunsPage baseUrl={preferences.baseUrl} /></ErrorBoundary>} />
             <Route path="backtest" element={<ErrorBoundary><BacktestsPage baseUrl={preferences.baseUrl} /></ErrorBoundary>} />
             <Route path="deploy" element={<ErrorBoundary><ModelDeploymentsPage baseUrl={preferences.baseUrl} /></ErrorBoundary>} />

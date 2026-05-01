@@ -192,7 +192,7 @@ export function ModelCatalogPage({ baseUrl }: ModelCatalogPageProps): JSX.Elemen
       <h2>Model Catalog</h2>
       <p className="muted">Search model families, filter by tags, and inspect validator adapter details before model configuration.</p>
       <p style={{ marginTop: 0 }}>
-        <Link to={selectedFamily ? `/models?family=${encodeURIComponent(selectedFamily)}` : '/models'}>Back to Models</Link> · <Link to="/parameterization">Go to Parameterization</Link>
+        <Link to={selectedFamily ? `/models/build?family=${encodeURIComponent(selectedFamily)}` : '/models/build'}>Back to Models</Link> · <Link to="/parameterization">Go to Parameterization</Link>
       </p>
       {error ? <p className="error">{error}</p> : null}
       {selectionNotice ? <p className="muted" role="status">{selectionNotice}</p> : null}
@@ -240,7 +240,7 @@ export function ModelCatalogPage({ baseUrl }: ModelCatalogPageProps): JSX.Elemen
                 {selectedItem.tags.map((tag) => <span key={tag} className="catalog-tag">{tag}</span>)}
               </div>
               <p style={{ marginTop: '0.75rem', display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                <Link to={`/models?family=${encodeURIComponent(selectedItem.model_family)}`}>Create config for this family</Link>
+                <Link to={`/models/build?family=${encodeURIComponent(selectedItem.model_family)}`}>Create config for this family</Link>
                 <button type="button" onClick={() => toggleCompare(selectedItem.model_family)} disabled={!compareFamilies.includes(selectedItem.model_family) && compareFamilies.length >= 4}>
                   {compareFamilies.includes(selectedItem.model_family) ? 'Remove from compare' : 'Add to compare'}
                 </button>
