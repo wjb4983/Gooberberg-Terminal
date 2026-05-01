@@ -61,7 +61,24 @@
 - Reliability thresholds:
 - Alert routing and on-call owner:
 
-## 8) Approval Checklist (required for promotion)
+## 8) Champion/Challenger Governance
+
+- Production strategy:
+- Current champion model/version:
+- Challenger model/version:
+- Monthly comparison cadence owner:
+- Out-of-sample quality metrics (monthly):
+- Risk-adjusted metrics (monthly):
+
+## 9) Monthly Decision Record
+
+- Decision date (UTC):
+- Decision outcome (keep champion / replace / retrain):
+- Decision rationale (required):
+- Effective date (UTC):
+- `model_change_log` entry reference:
+
+## 10) Approval Checklist (required for promotion)
 
 - [ ] All sections above are fully completed (no placeholders).
 - [ ] Validation evidence links are attached.
@@ -77,7 +94,7 @@
 - Risk reviewer name:
 - Risk reviewer signature/date (UTC):
 
-## 9) Archive Record
+## 11) Archive Record
 
 - Signed model card path: `docs/model_risk/cards/<model-id>__<version>__<yyyy-mm-dd>.md`
 - Promotion decision date (UTC):
