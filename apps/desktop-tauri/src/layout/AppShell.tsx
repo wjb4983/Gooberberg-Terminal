@@ -6,14 +6,11 @@ const navGroups = [
   {
     label: 'Model Lifecycle',
     items: [
-      { label: 'Design', to: '/models' },
-      { label: 'Catalog', to: '/model-catalog' },
-      { label: 'Parameterize', to: '/parameterization' },
-      { label: 'Train', to: '/training-runs' },
-      { label: 'Sweep', to: '/parameter-sweeps' },
-      { label: 'Test', to: '/testing' },
-      { label: 'Backtest', to: '/backtests' },
-      { label: 'Deploy', to: '/model-deployments' },
+      { label: 'Build', to: '/models/build' },
+      { label: 'Train', to: '/models/train' },
+      { label: 'Backtest', to: '/models/backtest' },
+      { label: 'Deploy', to: '/models/deploy' },
+      { label: 'Monitor', to: '/models/monitor' },
     ],
   },
   {
@@ -27,14 +24,6 @@ const navGroups = [
       { label: 'Alerts/Health', to: '/alerts-health' },
       { label: 'Graphing', to: '/graphing' },
       { label: 'Settings', to: '/settings' },
-    ],
-  },
-  {
-    label: 'Aliases',
-    items: [
-      { label: 'Building Models (alias)', to: '/building-models' },
-      { label: 'Full-on Backtesting (alias)', to: '/full-on-backtesting' },
-      { label: 'Graph (alias)', to: '/graph' },
     ],
   },
 ];
