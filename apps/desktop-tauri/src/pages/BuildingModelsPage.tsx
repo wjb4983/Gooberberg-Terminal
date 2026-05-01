@@ -89,6 +89,7 @@ interface ArtifactDetail extends ArtifactSummary {
 
 interface TrainingRunCompatibilityStatus {
   modelConfigId: string;
+  available: boolean;
   compatible: boolean;
   warnings: string[];
   errors: string[];
@@ -118,6 +119,14 @@ interface LaunchPreflightState {
 interface ModelConfigCreatePayload {
   model_family: string;
   config: Record<string, unknown>;
+}
+
+interface TrainingRunCompatibilityRequestPayload {
+  model_config_id: string;
+  dataset_id: string;
+  task_type: TaskType;
+  subtask_type: SubtaskType;
+  parameters: Record<string, unknown>;
 }
 
 const SUPPORTED_BUILDING_MODEL_FAMILIES = ['hmm_regime_switching', 'torch_nn_timeseries', 'kalman_filter'] as const;
@@ -342,6 +351,41 @@ function buildKalmanPayload(form: KalmanFormState, shared: SharedConfigFields): 
     measurement_noise: Number(form.measurementNoise),
     initial_covariance_scale: Number(form.initialCovarianceScale),
   };
+}
+
+function isHttpMethodNotAllowed(error: unknown): boolean {
+  return error instanceof Error && /Request failed\s*\(405\)/i.test(error.message);
+}
+
+function summarizeProbeFailure(error: unknown): string {
+  if (!(error instanceof Error)) {
+    return 'Compatibility probe failed.';
+  }
+  if (isHttpMethodNotAllowed(error)) {
+    return 'Compatibility probe is unavailable on this API deployment. Upgrade the server or expose POST /api/v1/training-runs/compatibility (or /preflight).';
+  }
+  return error.message;
+}
+
+async function requestTrainingCompatibility(
+  baseUrl: string,
+  payload: TrainingRunCompatibilityRequestPayload,
+): Promise<TrainingRunValidationResponse> {
+  try {
+    return await requestJson<TrainingRunValidationResponse>(baseUrl, '/api/v1/training-runs/compatibility', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  } catch (compatibilityError) {
+    if (!isHttpMethodNotAllowed(compatibilityError)) {
+      throw compatibilityError;
+    }
+  }
+
+  return requestJson<TrainingRunValidationResponse>(baseUrl, '/api/v1/training-runs/preflight', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
 }
 
 function mapRunToCard(run: TrainingRunItem): JobCard {
@@ -651,27 +695,27 @@ export function BuildingModelsPage({ baseUrl }: BuildingModelsPageProps): JSX.El
       setCompatibilityLoading(true);
       try {
         const responses = await Promise.all(modelConfigs.map(async (modelConfig) => {
+          const requestPayload = {
+            model_config_id: modelConfig.id,
+            dataset_id: launchForm.datasetId.trim(),
+            task_type: launchForm.taskType,
+            subtask_type: launchForm.subtaskType,
+            parameters: {},
+          } satisfies TrainingRunCompatibilityRequestPayload;
           try {
-            const payload = await requestJson<TrainingRunValidationResponse>(baseUrl, '/api/v1/training-runs/compatibility', {
-              method: 'POST',
-              body: JSON.stringify({
-                model_config_id: modelConfig.id,
-                dataset_id: launchForm.datasetId.trim(),
-                task_type: launchForm.taskType,
-                subtask_type: launchForm.subtaskType,
-                parameters: {},
-              }),
-            });
+            const payload = await requestTrainingCompatibility(baseUrl, requestPayload);
             return [modelConfig.id, {
               modelConfigId: modelConfig.id,
+              available: true,
               compatible: payload.compatible,
               warnings: payload.warnings,
               errors: payload.errors,
             }] as const;
           } catch (compatibilityError) {
-            const message = compatibilityError instanceof Error ? compatibilityError.message : 'Compatibility probe failed.';
+            const message = summarizeProbeFailure(compatibilityError);
             return [modelConfig.id, {
               modelConfigId: modelConfig.id,
+              available: false,
               compatible: false,
               warnings: [],
               errors: [message],
@@ -907,7 +951,7 @@ export function BuildingModelsPage({ baseUrl }: BuildingModelsPageProps): JSX.El
                 {modelConfigs.map((item) => {
                   const status = compatibilityStatuses[item.id];
                   const label = typeof item.config.name === 'string' ? item.config.name : item.id;
-                  const state = !status ? 'unknown' : !status.compatible ? 'incompatible' : status.warnings.length > 0 ? 'warning' : 'compatible';
+                  const state = !status ? 'unknown' : !status.available ? 'unavailable' : !status.compatible ? 'incompatible' : status.warnings.length > 0 ? 'warning' : 'compatible';
                   return (
                     <li key={`compat-${item.id}`}>
                       <span><code>{label}</code>: <strong>{state}</strong></span>
