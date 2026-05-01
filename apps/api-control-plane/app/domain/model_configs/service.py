@@ -39,10 +39,15 @@ class ModelConfigService:
         validated_config = spec.validate_config(config)
         return self._repository.update(model_config_id, {"config": dict(validated_config)})
 
-    @staticmethod
-    def _normalize_model_family(value: Any) -> str:
+    def _normalize_model_family(self, value: Any) -> str:
         if isinstance(value, str):
-            return value
+            normalized = value.strip()
+            if "." in normalized:
+                enum_member_name = normalized.rsplit(".", maxsplit=1)[-1].strip()
+                recovered = enum_member_name.lower()
+                if recovered in self._model_registry.list_families():
+                    return recovered
+            return normalized
         if isinstance(value, Enum):
             raw_value = value.value
             if isinstance(raw_value, str):
