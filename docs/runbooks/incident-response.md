@@ -165,5 +165,7 @@ Within 48 hours:
 
 1. Produce timeline (trigger, detection, mitigation, recovery).
 2. Document root cause and contributing factors.
-3. Add prevention actions with owners and due dates.
-4. Update architecture/contracts/runbooks to capture new learnings.
+3. Add CAPAs (corrective and preventive actions) with mandatory owner, due date, and verification evidence fields (use `docs/incidents/postmortem-template.md`).
+4. Review open CAPAs weekly until closure, with escalation for overdue actions.
+5. Track incident-class recurrence rate and compare against previous reporting window.
+6. Update architecture/contracts/runbooks to capture new learnings.
