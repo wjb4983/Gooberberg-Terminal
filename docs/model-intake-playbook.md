@@ -15,7 +15,7 @@ Use this checklist as the reference block in every model-intake PR.
 - [ ] **Idea stage complete**: problem statement, expected user impact, and success criteria are documented.
 - [ ] **Metadata stage complete**: required model metadata fields are present and reviewed.
 - [ ] **Adapter scaffold stage complete**: scaffold generated and ownership assigned.
-- [ ] **Validation stage complete**: safety and quality gates pass.
+- [ ] **Validation stage complete**: safety and quality gates pass, including all default QA scenarios.
 - [ ] **Rollout status stage complete**: rollout state is set and linked to monitoring.
 - [ ] **Required documentation attached**: all required fields and evidence links are included.
 
@@ -89,7 +89,10 @@ Run pre-rollout validation and record evidence links.
 Required validation documentation:
 
 - Functional checks against declared input/output contract
+- Default dataset split policy documented and applied: **time-ordered train/validate/test split** plus **walk-forward window results**
 - Evaluation results against acceptance thresholds
+- Mandatory stress scenarios: **high-volatility regime**, **low-liquidity regime**, and **spread-widening regime**
+- Strategy report sections: **robustness**, **turnover stability**, **capacity**, and **slippage sensitivity**
 - Safety review outcomes (known bad-case coverage)
 - Operational checks (latency/cost/retry behavior)
 - Manual docs review checklist completion
@@ -97,6 +100,7 @@ Required validation documentation:
 Safety gates:
 
 - **Stop** if any critical safety scenario fails.
+- **Stop** if any mandatory stress scenario fails (high-volatility, low-liquidity, spread-widening).
 - **Stop** if observed quality is below documented threshold.
 - **Stop** if operational budget limits are exceeded.
 
@@ -108,6 +112,7 @@ Allowed rollout states:
 
 - `proposal`
 - `experimental`
+- `paper-trading`
 - `staged`
 - `production`
 - `paused`
@@ -127,6 +132,7 @@ Required rollout status fields:
 Safety gates:
 
 - **Stop** production promotion without staged validation evidence.
+- **Stop** promotion to `staged` or `paper-trading` unless **all default QA scenarios pass**.
 - **Stop** state transition if monitoring and on-call ownership are missing.
 
 ## Required documentation fields (single reference list)
@@ -144,6 +150,9 @@ Every intake record/PR must include:
 ## Manual docs review checklist
 
 - [ ] Playbook steps are followed in order: idea → metadata → adapter scaffold → validation → rollout status.
+- [ ] Validation includes default split policy (time-ordered train/validate/test + walk-forward windows).
+- [ ] Validation includes mandatory stress scenarios (high-volatility, low-liquidity, spread-widening).
+- [ ] Strategy report includes robustness, turnover stability, capacity, and slippage sensitivity sections.
 - [ ] PR checklist block is present and fully completed.
 - [ ] Required documentation fields are complete and non-placeholder.
 - [ ] Safety gates are acknowledged with pass/fail outcomes.
