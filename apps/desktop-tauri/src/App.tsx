@@ -6,6 +6,7 @@ import { DashboardPage } from './pages/DashboardPage';
 import { JobsPage } from './pages/JobsPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { AlertsHealthPage } from './pages/AlertsHealthPage';
+import { ModelMonitorPage } from './pages/ModelMonitorPage';
 import { PortfolioPage } from './pages/PortfolioPage';
 import { DataCachePage } from './pages/DataCachePage';
 import { loadPreferences, savePreferences } from './settings/preferences';
@@ -31,15 +32,6 @@ interface ToastItem {
 }
 
 
-
-function ModelsMonitorPage({ baseUrl, defaultSeverity }: { baseUrl: string; defaultSeverity: 'all' | 'info' | 'warning' | 'critical' }): JSX.Element {
-  return (
-    <>
-      <AlertsHealthPage baseUrl={baseUrl} defaultSeverity={defaultSeverity} />
-      <ModelDeploymentsPage baseUrl={baseUrl} />
-    </>
-  );
-}
 
 export function App(): JSX.Element {
   const [preferences, setPreferences] = useState(() => loadPreferences());
@@ -92,7 +84,7 @@ export function App(): JSX.Element {
             <Route path="train" element={<ErrorBoundary><TrainingRunsPage baseUrl={preferences.baseUrl} /></ErrorBoundary>} />
             <Route path="backtest" element={<ErrorBoundary><BacktestsPage baseUrl={preferences.baseUrl} /></ErrorBoundary>} />
             <Route path="deploy" element={<ErrorBoundary><ModelDeploymentsPage baseUrl={preferences.baseUrl} /></ErrorBoundary>} />
-            <Route path="monitor" element={<ErrorBoundary><ModelsMonitorPage baseUrl={preferences.baseUrl} defaultSeverity={preferences.filterDefaults.severity} /></ErrorBoundary>} />
+            <Route path="monitor" element={<ErrorBoundary><ModelMonitorPage baseUrl={preferences.baseUrl} defaultSeverity={preferences.filterDefaults.severity} /></ErrorBoundary>} />
             <Route index element={<Navigate to="build" replace />} />
           </Route>
 
