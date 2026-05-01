@@ -1,6 +1,14 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Link } from 'react-router-dom';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import { createDesktopApiClient } from '../api/client';
+import {
+  ModelBuildConfigFormSection,
+  type FormErrors,
+  type KalmanFormState,
+  type ModelConfigFormState,
+  type SharedConfigFields,
+  type TorchFormState,
+} from '../components/model-build/ModelBuildConfigFormSection';
 import { findEquivalentModelConfig, isModelConfigCreateServerFailure } from '../api/modelConfigRecovery';
 import { requestJson } from '../api/requestJson';
 import { SUBTASK_TYPES, TASK_TYPES, type SubtaskType, type TaskType } from '../types/api';
@@ -9,7 +17,6 @@ interface BuildingModelsPageProps {
   baseUrl: string;
 }
 
-type CovarianceType = 'full' | 'diag';
 type JobLifecycleStatus = 'queued' | 'running' | 'success' | 'failed' | 'cancelled' | 'unknown';
 
 interface ModelConfigItem {
@@ -32,39 +39,6 @@ interface TrainingRunItem {
   created_at: string;
 }
 
-interface ModelConfigFormState {
-  numRegimes: string;
-  lookbackWindow: string;
-  covarianceType: CovarianceType;
-  convergenceTol: string;
-  maxIterations: string;
-}
-
-interface SharedConfigFields {
-  name: string;
-  version: string;
-  taskType: TaskType;
-  subtaskType: SubtaskType;
-  dataProfile: string;
-}
-
-interface TorchFormState {
-  lookbackWindow: string;
-  horizonSteps: string;
-  preset: 'fast' | 'balanced' | 'accurate';
-  mode: 'simple' | 'advanced';
-  architecture: 'lstm' | 'gru' | 'tcn' | 'transformer_encoder';
-  optionsJson: string;
-}
-
-interface KalmanFormState {
-  transitionStructure: 'identity' | 'constant_velocity' | 'custom';
-  stateDimension: string;
-  observationDimension: string;
-  processNoise: string;
-  measurementNoise: string;
-  initialCovarianceScale: string;
-}
 
 interface TrainingLaunchFormState {
   modelConfigId: string;
@@ -112,9 +86,6 @@ interface ArtifactDetail extends ArtifactSummary {
   notes: string | null;
 }
 
-interface FormErrors {
-  [key: string]: string;
-}
 
 interface TrainingRunCompatibilityStatus {
   modelConfigId: string;
@@ -273,10 +244,6 @@ function buildKalmanPayload(form: KalmanFormState, shared: SharedConfigFields): 
   };
 }
 
-function FamilyConfigSection({ children }: { children: ReactNode }): JSX.Element {
-  return <div style={{ display: 'grid', gap: '0.5rem' }}>{children}</div>;
-}
-
 function mapRunToCard(run: TrainingRunItem): JobCard {
   return {
     id: run.job_id,
@@ -302,6 +269,8 @@ function mapRunToCard(run: TrainingRunItem): JobCard {
 }
 
 export function BuildingModelsPage({ baseUrl }: BuildingModelsPageProps): JSX.Element {
+  const [searchParams] = useSearchParams();
+  const requestedFamily = searchParams.get('family') ?? '';
   const client = useMemo(() => createDesktopApiClient({ baseHttpUrl: baseUrl }), [baseUrl]);
   const lastSeqRef = useRef<number | undefined>(undefined);
 
@@ -350,7 +319,10 @@ export function BuildingModelsPage({ baseUrl }: BuildingModelsPageProps): JSX.El
       ]);
       setModelConfigs(configs);
       setModelFamilies(families);
-      setSelectedFamily((previous) => (families.includes(previous) ? previous : (families[0] ?? 'hmm_regime_switching')));
+      setSelectedFamily((previous) => {
+        if (requestedFamily && families.includes(requestedFamily)) return requestedFamily;
+        return families.includes(previous) ? previous : (families[0] ?? 'hmm_regime_switching');
+      });
       setJobs((previous) => {
         const hydrated = runs.map(mapRunToCard);
         const optimistic = previous.filter((item) => item.isOptimistic);
@@ -363,7 +335,7 @@ export function BuildingModelsPage({ baseUrl }: BuildingModelsPageProps): JSX.El
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : 'Failed loading model build workspace.');
     }
-  }, [baseUrl]);
+  }, [baseUrl, requestedFamily]);
 
   useEffect(() => {
     void load();
@@ -749,80 +721,22 @@ export function BuildingModelsPage({ baseUrl }: BuildingModelsPageProps): JSX.El
 
       <div className="card" style={{ marginBottom: '1rem' }}>
         <h3>1) Create model config</h3>
-        <FamilyConfigSection>
-          <select value={selectedFamily} onChange={(event) => setSelectedFamily(event.target.value)}>
-            {[...new Set(modelFamilies.length > 0 ? modelFamilies : ['hmm_regime_switching', 'torch_nn_timeseries', 'kalman_filter'])].map((family) => (
-              <option key={family} value={family}>{family}</option>
-            ))}
-          </select>
-          <input value={sharedConfig.name} onChange={(event) => setSharedConfig((prev) => ({ ...prev, name: event.target.value }))} placeholder="Model name" />
-          {configErrors.name ? <small className="muted">{configErrors.name}</small> : null}
-          <input value={sharedConfig.version} onChange={(event) => setSharedConfig((prev) => ({ ...prev, version: event.target.value }))} placeholder="Version" />
-          <select value={sharedConfig.taskType} onChange={(event) => setSharedConfig((prev) => ({ ...prev, taskType: event.target.value as TaskType }))}>
-            {TASK_TYPES.map((taskType) => <option key={taskType} value={taskType}>{taskType}</option>)}
-          </select>
-          <select value={sharedConfig.subtaskType} onChange={(event) => setSharedConfig((prev) => ({ ...prev, subtaskType: event.target.value as SubtaskType }))}>
-            {SUBTASK_TYPES.map((subtaskType) => <option key={subtaskType} value={subtaskType}>{subtaskType}</option>)}
-          </select>
-          <input value={sharedConfig.dataProfile} onChange={(event) => setSharedConfig((prev) => ({ ...prev, dataProfile: event.target.value }))} placeholder="Data profile" />
-
-          {selectedFamily === 'hmm_regime_switching' ? (
-            <>
-              <input value={configForm.numRegimes} onChange={(event) => setConfigForm((prev) => ({ ...prev, numRegimes: event.target.value }))} placeholder="Num regimes" />
-              {configErrors.numRegimes ? <small className="muted">{configErrors.numRegimes}</small> : null}
-              <input value={configForm.lookbackWindow} onChange={(event) => setConfigForm((prev) => ({ ...prev, lookbackWindow: event.target.value }))} placeholder="Lookback window" />
-              {configErrors.lookbackWindow ? <small className="muted">{configErrors.lookbackWindow}</small> : null}
-              <select value={configForm.covarianceType} onChange={(event) => setConfigForm((prev) => ({ ...prev, covarianceType: event.target.value as CovarianceType }))}>
-                <option value="diag">diag</option>
-                <option value="full">full</option>
-              </select>
-              <input value={configForm.convergenceTol} onChange={(event) => setConfigForm((prev) => ({ ...prev, convergenceTol: event.target.value }))} placeholder="Convergence tolerance" />
-              {configErrors.convergenceTol ? <small className="muted">{configErrors.convergenceTol}</small> : null}
-              <input value={configForm.maxIterations} onChange={(event) => setConfigForm((prev) => ({ ...prev, maxIterations: event.target.value }))} placeholder="Max iterations" />
-              {configErrors.maxIterations ? <small className="muted">{configErrors.maxIterations}</small> : null}
-            </>
-          ) : null}
-
-          {selectedFamily === 'torch_nn_timeseries' ? (
-            <>
-              <div style={{ display: 'flex', gap: '0.5rem' }}>
-                <button type="button" onClick={() => setTorchForm((prev) => ({ ...prev, mode: 'simple' }))} disabled={torchForm.mode === 'simple'}>Simple mode</button>
-                <button type="button" onClick={() => setTorchForm((prev) => ({ ...prev, mode: 'advanced' }))} disabled={torchForm.mode === 'advanced'}>Advanced mode</button>
-              </div>
-              <input value={torchForm.lookbackWindow} onChange={(event) => setTorchForm((prev) => ({ ...prev, lookbackWindow: event.target.value }))} placeholder="Lookback window" />
-              <input value={torchForm.horizonSteps} onChange={(event) => setTorchForm((prev) => ({ ...prev, horizonSteps: event.target.value }))} placeholder="Horizon steps" />
-              {torchForm.mode === 'simple' ? (
-                <select value={torchForm.preset} onChange={(event) => setTorchForm((prev) => ({ ...prev, preset: event.target.value as TorchFormState['preset'] }))}>
-                  <option value="fast">fast</option>
-                  <option value="balanced">balanced</option>
-                  <option value="accurate">accurate</option>
-                </select>
-              ) : (
-                <>
-                  <select value={torchForm.architecture} onChange={(event) => setTorchForm((prev) => ({ ...prev, architecture: event.target.value as TorchFormState['architecture'] }))}>
-                    <option value="lstm">lstm</option><option value="gru">gru</option><option value="tcn">tcn</option><option value="transformer_encoder">transformer_encoder</option>
-                  </select>
-                  <textarea value={torchForm.optionsJson} onChange={(event) => setTorchForm((prev) => ({ ...prev, optionsJson: event.target.value }))} rows={8} />
-                  {configErrors.optionsJson ? <small className="muted">{configErrors.optionsJson}</small> : null}
-                </>
-              )}
-            </>
-          ) : null}
-
-          {selectedFamily === 'kalman_filter' ? (
-            <>
-              <select value={kalmanForm.transitionStructure} onChange={(event) => setKalmanForm((prev) => ({ ...prev, transitionStructure: event.target.value as KalmanFormState['transitionStructure'] }))}>
-                <option value="identity">identity</option><option value="constant_velocity">constant_velocity</option><option value="custom">custom</option>
-              </select>
-              <input value={kalmanForm.stateDimension} onChange={(event) => setKalmanForm((prev) => ({ ...prev, stateDimension: event.target.value }))} placeholder="State dimension" />
-              <input value={kalmanForm.observationDimension} onChange={(event) => setKalmanForm((prev) => ({ ...prev, observationDimension: event.target.value }))} placeholder="Observation dimension" />
-              <input value={kalmanForm.processNoise} onChange={(event) => setKalmanForm((prev) => ({ ...prev, processNoise: event.target.value }))} placeholder="Process noise" />
-              <input value={kalmanForm.measurementNoise} onChange={(event) => setKalmanForm((prev) => ({ ...prev, measurementNoise: event.target.value }))} placeholder="Measurement noise" />
-              <input value={kalmanForm.initialCovarianceScale} onChange={(event) => setKalmanForm((prev) => ({ ...prev, initialCovarianceScale: event.target.value }))} placeholder="Initial covariance scale" />
-            </>
-          ) : null}
-          <button type="button" disabled={isCreatingConfig} onClick={() => void submitConfig()}>{isCreatingConfig ? 'Creating…' : 'Create config'}</button>
-        </FamilyConfigSection>
+        <ModelBuildConfigFormSection
+          selectedFamily={selectedFamily}
+          modelFamilies={modelFamilies}
+          sharedConfig={sharedConfig}
+          configForm={configForm}
+          torchForm={torchForm}
+          kalmanForm={kalmanForm}
+          configErrors={configErrors}
+          isCreatingConfig={isCreatingConfig}
+          onSelectedFamilyChange={setSelectedFamily}
+          onSharedConfigChange={(updater) => setSharedConfig(updater)}
+          onConfigFormChange={(updater) => setConfigForm(updater)}
+          onTorchFormChange={(updater) => setTorchForm(updater)}
+          onKalmanFormChange={(updater) => setKalmanForm(updater)}
+          onSubmit={() => void submitConfig()}
+        />
       </div>
 
       <div className="card" style={{ marginBottom: '1rem' }}>
