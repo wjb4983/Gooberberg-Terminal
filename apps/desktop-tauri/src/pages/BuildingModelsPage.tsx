@@ -353,19 +353,25 @@ function buildKalmanPayload(form: KalmanFormState, shared: SharedConfigFields): 
   };
 }
 
-function isHttpMethodNotAllowed(error: unknown): boolean {
-  return error instanceof Error && (
-    /Request failed\s*\(405\)/i.test(error.message)
-    || /HTTP request failed with status 405\b/i.test(error.message)
-  );
+function getHttpStatusFromError(error: unknown): number | null {
+  if (!(error instanceof Error)) return null;
+  const statusMatch = error.message.match(/status\s+(\d{3})\b/i);
+  if (!statusMatch) return null;
+  const parsed = Number(statusMatch[1]);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function isCompatibilityProbeUnavailable(error: unknown): boolean {
+  const status = getHttpStatusFromError(error);
+  return status === 404 || status === 405 || status === 501;
 }
 
 function summarizeProbeFailure(error: unknown): string {
   if (!(error instanceof Error)) {
     return 'Compatibility probe failed.';
   }
-  if (isHttpMethodNotAllowed(error)) {
-    return 'Compatibility probe is unavailable on this API deployment. Upgrade the server or expose POST /api/v1/training-runs/compatibility (or /preflight).';
+  if (isCompatibilityProbeUnavailable(error)) {
+    return 'Live compatibility checks are unavailable on this API deployment.';
   }
   return error.message;
 }
@@ -380,7 +386,7 @@ async function requestTrainingCompatibility(
       body: JSON.stringify(payload),
     });
   } catch (compatibilityError) {
-    if (!isHttpMethodNotAllowed(compatibilityError)) {
+    if (!isCompatibilityProbeUnavailable(compatibilityError)) {
       throw compatibilityError;
     }
   }
@@ -436,6 +442,8 @@ export function BuildingModelsPage({ baseUrl }: BuildingModelsPageProps): JSX.El
   const [launchErrors, setLaunchErrors] = useState<FormErrors>({});
   const [compatibilityStatuses, setCompatibilityStatuses] = useState<Record<string, TrainingRunCompatibilityStatus>>({});
   const [compatibilityLoading, setCompatibilityLoading] = useState(false);
+  const [compatibilityProbeMessage, setCompatibilityProbeMessage] = useState<string | null>(null);
+  const [compatibilityProbeUnsupported, setCompatibilityProbeUnsupported] = useState(false);
 
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -688,25 +696,51 @@ export function BuildingModelsPage({ baseUrl }: BuildingModelsPageProps): JSX.El
   };
 
   useEffect(() => {
+    setCompatibilityProbeUnsupported(false);
+    setCompatibilityProbeMessage(null);
+  }, [baseUrl]);
+
+  useEffect(() => {
     if (!launchForm.datasetId.trim() || modelConfigs.length === 0) {
       setCompatibilityStatuses({});
+      setCompatibilityProbeMessage(null);
+      return;
+    }
+    if (compatibilityProbeUnsupported) {
+      setCompatibilityStatuses({});
+      setCompatibilityProbeMessage('Live compatibility checks are unavailable on this API deployment.');
       return;
     }
 
     let cancelled = false;
+    const datasetId = launchForm.datasetId.trim();
+    const buildRequestPayload = (modelConfigId: string): TrainingRunCompatibilityRequestPayload => ({
+      model_config_id: modelConfigId,
+      dataset_id: datasetId,
+      task_type: launchForm.taskType,
+      subtask_type: launchForm.subtaskType,
+      parameters: {},
+    });
+
     const loadCompatibility = async (): Promise<void> => {
       setCompatibilityLoading(true);
+      setCompatibilityProbeMessage(null);
       try {
-        const responses = await Promise.all(modelConfigs.map(async (modelConfig) => {
-          const requestPayload = {
-            model_config_id: modelConfig.id,
-            dataset_id: launchForm.datasetId.trim(),
-            task_type: launchForm.taskType,
-            subtask_type: launchForm.subtaskType,
-            parameters: {},
-          } satisfies TrainingRunCompatibilityRequestPayload;
+        const firstModelConfig = modelConfigs[0];
+        if (!firstModelConfig) return;
+
+        const firstPayload = await requestTrainingCompatibility(baseUrl, buildRequestPayload(firstModelConfig.id));
+        const firstEntry = [firstModelConfig.id, {
+          modelConfigId: firstModelConfig.id,
+          available: true,
+          compatible: firstPayload.compatible,
+          warnings: firstPayload.warnings,
+          errors: firstPayload.errors,
+        }] as const;
+
+        const remainingResponses = await Promise.all(modelConfigs.slice(1).map(async (modelConfig) => {
           try {
-            const payload = await requestTrainingCompatibility(baseUrl, requestPayload);
+            const payload = await requestTrainingCompatibility(baseUrl, buildRequestPayload(modelConfig.id));
             return [modelConfig.id, {
               modelConfigId: modelConfig.id,
               available: true,
@@ -725,9 +759,20 @@ export function BuildingModelsPage({ baseUrl }: BuildingModelsPageProps): JSX.El
             }] as const;
           }
         }));
+        const responses = [firstEntry, ...remainingResponses] as const;
         if (!cancelled) {
           setCompatibilityStatuses(Object.fromEntries(responses));
         }
+      } catch (compatibilityError) {
+        if (cancelled) return;
+        if (isCompatibilityProbeUnavailable(compatibilityError)) {
+          setCompatibilityStatuses({});
+          setCompatibilityProbeMessage(summarizeProbeFailure(compatibilityError));
+          setCompatibilityProbeUnsupported(true);
+          return;
+        }
+        setCompatibilityStatuses({});
+        setError(compatibilityError instanceof Error ? compatibilityError.message : 'Failed to check compatibility.');
       } finally {
         if (!cancelled) {
           setCompatibilityLoading(false);
@@ -739,7 +784,7 @@ export function BuildingModelsPage({ baseUrl }: BuildingModelsPageProps): JSX.El
     return () => {
       cancelled = true;
     };
-  }, [baseUrl, launchForm.datasetId, launchForm.subtaskType, launchForm.taskType, modelConfigs]);
+  }, [baseUrl, compatibilityProbeUnsupported, launchForm.datasetId, launchForm.subtaskType, launchForm.taskType, modelConfigs]);
 
   const launchTrainingRun = async (): Promise<void> => {
     const optimisticId = `optimistic-${crypto.randomUUID()}`;
@@ -947,9 +992,10 @@ export function BuildingModelsPage({ baseUrl }: BuildingModelsPageProps): JSX.El
           {launchErrors.modelConfigId ? <small className="muted">{launchErrors.modelConfigId}</small> : null}
           <div style={{ border: '1px solid rgba(255,255,255,0.12)', borderRadius: '0.5rem', padding: '0.75rem' }}>
             <strong>Candidate compatibility</strong>
-            <p className="muted" style={{ margin: '0.25rem 0 0.5rem 0' }}>Statuses come from /api/v1/training-runs/compatibility for selected dataset/task.</p>
+            <p className="muted" style={{ margin: '0.25rem 0 0.5rem 0' }}>Live checks for selected dataset/task.</p>
             {compatibilityLoading ? <p className="muted" style={{ margin: 0 }}>Checking compatibility…</p> : null}
-            {!compatibilityLoading && modelConfigs.length > 0 ? (
+            {!compatibilityLoading && compatibilityProbeMessage ? <p className="muted" style={{ margin: 0 }}>{compatibilityProbeMessage}</p> : null}
+            {!compatibilityLoading && !compatibilityProbeMessage && modelConfigs.length > 0 ? (
               <ul style={{ margin: 0, paddingLeft: '1.25rem', display: 'grid', gap: '0.35rem' }}>
                 {modelConfigs.map((item) => {
                   const status = compatibilityStatuses[item.id];
