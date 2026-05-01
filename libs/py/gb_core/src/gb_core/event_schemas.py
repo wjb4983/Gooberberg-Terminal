@@ -16,6 +16,8 @@ class BaseEvent(BaseModel):
     producer: str = Field(min_length=1)
     strategy_version: str = Field(min_length=1)
     config_hash: str = Field(min_length=1)
+    run_id: str | None = None
+    strategy_id: str | None = None
 
 
 class MarketDataEvent(BaseEvent):

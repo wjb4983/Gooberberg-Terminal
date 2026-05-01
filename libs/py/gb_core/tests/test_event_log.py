@@ -3,7 +3,7 @@ from datetime import UTC, datetime, timedelta
 from gb_core.event_log import EventLogPolicy, EventLogWriter, EventQuery
 
 
-def _payload(*, event_type: str, symbol: str, event_time: datetime, trace_id: str = "t-1", decision_id: str = "d-1", order_id: str = "o-1") -> dict[str, object]:
+def _payload(*, event_type: str, symbol: str, event_time: datetime, trace_id: str = "t-1", decision_id: str = "d-1", order_id: str = "o-1", run_id: str = "run-1", strategy_id: str = "strategy-1") -> dict[str, object]:
     return {
         "event_type": event_type,
         "symbol": symbol,
@@ -11,6 +11,8 @@ def _payload(*, event_type: str, symbol: str, event_time: datetime, trace_id: st
         "trace_id": trace_id,
         "decision_id": decision_id,
         "order_id": order_id,
+        "run_id": run_id,
+        "strategy_id": strategy_id,
     }
 
 
@@ -37,6 +39,8 @@ def test_query_filters() -> None:
     assert len(writer.query(EventQuery(trace_id="t-2"))) == 1
     assert len(writer.query(EventQuery(decision_id="d-3"))) == 1
     assert len(writer.query(EventQuery(order_id="o-1"))) == 1
+    assert len(writer.query(EventQuery(run_id="run-1"))) == 3
+    assert len(writer.query(EventQuery(strategy_id="strategy-1"))) == 3
 
 
 def test_retention_archive_and_integrity_segments() -> None:
