@@ -165,6 +165,17 @@ interface DatasetFormErrors {
   finestResolution?: string;
 }
 
+type IngestionJobState = 'queued' | 'running' | 'succeeded' | 'failed';
+
+interface IngestionJobRecord {
+  requestId: string;
+  datasetId: string | null;
+  status: IngestionJobState;
+  startedAt: string;
+  lastUpdateAt: string;
+  errorMessage: string | null;
+}
+
 function isModelCompatible(config: ModelConfigItem, taskType: TaskType): boolean {
   const configTaskType = typeof config.config.task_type === 'string' ? config.config.task_type : null;
   if (!configTaskType) {
@@ -212,6 +223,7 @@ export function ParameterizationPage({ baseUrl }: ParameterizationPageProps): JS
   });
   const [datasetCreateNotice, setDatasetCreateNotice] = useState<string | null>(null);
   const [selectedDatasetPresetId, setSelectedDatasetPresetId] = useState<DatasetPreset['id']>('sp500_default');
+  const [ingestionJob, setIngestionJob] = useState<IngestionJobRecord | null>(null);
   const [templates, setTemplates] = useState<TrainingTemplate[]>([]);
   const [templateName, setTemplateName] = useState('My Template');
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
@@ -492,8 +504,28 @@ export function ParameterizationPage({ baseUrl }: ParameterizationPageProps): JS
         }),
       });
 
+      const nowIso = new Date().toISOString();
+      const requestId = typeof payload.request_id === 'string' ? payload.request_id : '';
       const createdDatasetId = (typeof payload.dataset_id === 'string' && payload.dataset_id)
         || (typeof payload.request_id === 'string' && payload.request_id ? `ingestion:${payload.request_id}` : '');
+      const normalizedStatus: IngestionJobState = payload.status === 'failed'
+        ? 'failed'
+        : payload.status === 'succeeded'
+          ? 'succeeded'
+          : payload.status === 'running'
+            ? 'running'
+            : 'queued';
+
+      if (requestId) {
+        setIngestionJob({
+          requestId,
+          datasetId: typeof payload.dataset_id === 'string' && payload.dataset_id ? payload.dataset_id : null,
+          status: normalizedStatus,
+          startedAt: nowIso,
+          lastUpdateAt: nowIso,
+          errorMessage: null,
+        });
+      }
 
       if (createdDatasetId) {
         setDatasetId(createdDatasetId);
@@ -506,6 +538,58 @@ export function ParameterizationPage({ baseUrl }: ParameterizationPageProps): JS
       setPageError(submitError instanceof Error ? submitError.message : 'Failed creating dataset ingestion request.');
     }
   };
+
+  useEffect(() => {
+    if (!ingestionJob || ingestionJob.status === 'succeeded' || ingestionJob.status === 'failed') {
+      return;
+    }
+
+    const intervalId = globalThis.setInterval(() => {
+      void (async () => {
+        try {
+          const items = await requestJson<IngestionItem[]>(baseUrl, '/api/v1/market-data/ingestions');
+          const matching = items.find((item) => item.request_id === ingestionJob.requestId);
+          if (!matching) {
+            return;
+          }
+          const nextStatus: IngestionJobState = matching.status === 'failed'
+            ? 'failed'
+            : matching.status === 'succeeded'
+              ? 'succeeded'
+              : matching.status === 'running'
+                ? 'running'
+                : 'queued';
+          const nextDatasetId = typeof matching.dataset_id === 'string' && matching.dataset_id ? matching.dataset_id : null;
+          const nowIso = new Date().toISOString();
+          setIngestions(items);
+          setIngestionJob((previous) => previous ? {
+            ...previous,
+            status: nextStatus,
+            datasetId: nextDatasetId ?? previous.datasetId,
+            lastUpdateAt: nowIso,
+            errorMessage: nextStatus === 'failed' ? 'Dataset ingestion failed. Review request settings and retry.' : null,
+          } : previous);
+
+          if (nextStatus === 'succeeded' && nextDatasetId) {
+            setDatasetId(nextDatasetId);
+            setDatasetSelectionMode('existing');
+          }
+        } catch {
+          // best-effort polling
+        }
+      })();
+    }, 3000);
+    return () => globalThis.clearInterval(intervalId);
+  }, [baseUrl, ingestionJob]);
+
+  const ingestionFailureMessage = useMemo(() => {
+    const message = ingestionJob?.errorMessage?.toLowerCase() ?? '';
+    if (!message) return null;
+    if (message.includes('invalid universe')) return 'Universe is invalid or unknown. Choose a valid saved universe ID or provide symbols.';
+    if (message.includes('rate limit') || message.includes('429')) return 'Provider rate limit hit. Wait a bit, reduce symbol/date scope, then retry.';
+    if (message.includes('date') && (message.includes('window') || message.includes('range'))) return 'Date window is too large for this request. Narrow the range and try again.';
+    return ingestionJob?.errorMessage ?? 'Dataset ingestion failed. Please retry.';
+  }, [ingestionJob]);
 
   const createTemplate = async (): Promise<void> => {
     try {
@@ -701,7 +785,22 @@ export function ParameterizationPage({ baseUrl }: ParameterizationPageProps): JS
               <input type="checkbox" checked={datasetCreateForm.featurePackEnabled} onChange={(event) => setDatasetCreateForm((prev) => ({ ...prev, featurePackEnabled: event.target.checked }))} />
               Feature pack enabled
             </label>
-            <button type="button" onClick={() => void createDataset()}>Submit dataset creation</button>
+            <button type="button" onClick={() => void createDataset()}>{datasetSelectionMode === 'create' ? 'Start dataset download on server' : 'Submit dataset creation'}</button>
+            {ingestionJob ? (
+              <div style={{ border: '1px solid #2b3558', borderRadius: 8, padding: '0.75rem', marginTop: '0.5rem' }}>
+                <h5 style={{ marginTop: 0, marginBottom: '0.5rem' }}>Ingestion status</h5>
+                <p className="muted" style={{ margin: '0.2rem 0' }}>State: <strong>{ingestionJob.status}</strong></p>
+                <p className="muted" style={{ margin: '0.2rem 0' }}>Last update: {new Date(ingestionJob.lastUpdateAt).toLocaleString()}</p>
+                <p className="muted" style={{ margin: '0.2rem 0' }}>Request ID: {ingestionJob.requestId}</p>
+                {ingestionJob.datasetId ? <p className="muted" style={{ margin: '0.2rem 0' }}>Dataset ID: {ingestionJob.datasetId}</p> : null}
+                {ingestionJob.status === 'failed' ? (
+                  <>
+                    <p className="error" style={{ margin: '0.2rem 0' }}>{ingestionFailureMessage}</p>
+                    <button type="button" onClick={() => void createDataset()}>Retry ingestion</button>
+                  </>
+                ) : null}
+              </div>
+            ) : null}
           </div>
         ) : null}
         {datasetCreateNotice ? <p className="muted" style={{ marginTop: '0.75rem' }}>{datasetCreateNotice}</p> : null}
