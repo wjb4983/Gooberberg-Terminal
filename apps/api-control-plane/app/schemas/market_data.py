@@ -5,6 +5,10 @@ from pydantic import BaseModel, Field, model_validator
 
 
 class MarketDataIngestionRequest(BaseModel):
+    idempotency_key: str | None = Field(default=None, min_length=1, max_length=128)
+    alias: str | None = Field(default=None, min_length=1, max_length=128)
+    requested_by: str | None = Field(default=None, min_length=1, max_length=128)
+    freshness_sla_days: int = Field(default=30, ge=1, le=3650)
     preset_id: str | None = Field(default=None, min_length=1)
     provider: Literal["massive"] = "massive"
     asset_class: Literal["stocks", "options"] = "stocks"
@@ -39,6 +43,13 @@ class MarketDataIngestionResponse(BaseModel):
     symbols: list[str] = Field(default_factory=list)
     timeframe: str
     effective_params: dict[str, Any] = Field(default_factory=dict)
+    logs: list[str] = Field(default_factory=list)
+
+
+class MarketDataBatchIngestionRequest(BaseModel):
+    preset_ids: list[str] = Field(default_factory=list, min_length=1)
+    requested_by: str | None = Field(default=None, min_length=1, max_length=128)
+    idempotency_key_prefix: str | None = Field(default=None, min_length=1, max_length=64)
 
 
 class MarketDataCacheCoverageResponse(BaseModel):

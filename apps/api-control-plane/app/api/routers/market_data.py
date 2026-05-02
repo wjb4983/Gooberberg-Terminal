@@ -3,6 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from app.api.dependencies import get_market_data_service
 from app.domain.market_data import Service as MarketDataService
 from app.schemas import (
+    MarketDataBatchIngestionRequest,
     MarketDataCacheCoverageResponse,
     MarketDataDatasetLookupResponse,
     MarketDataIngestionRequest,
@@ -18,6 +19,14 @@ def request_market_data_ingestion(
     service: MarketDataService = Depends(get_market_data_service),
 ) -> MarketDataIngestionResponse:
     return service.request_ingestion(payload)
+
+
+@router.post("/ingestions/batch", response_model=list[MarketDataIngestionResponse], status_code=status.HTTP_202_ACCEPTED)
+def request_market_data_batch_ingestion(
+    payload: MarketDataBatchIngestionRequest,
+    service: MarketDataService = Depends(get_market_data_service),
+) -> list[MarketDataIngestionResponse]:
+    return service.request_batch_ingestion(payload)
 
 
 @router.get("/cache-coverage", response_model=MarketDataCacheCoverageResponse)

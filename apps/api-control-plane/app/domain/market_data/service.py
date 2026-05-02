@@ -5,6 +5,7 @@ from fastapi import HTTPException, status
 
 from app.domain.market_data.repository import Repository
 from app.schemas import (
+    MarketDataBatchIngestionRequest,
     MarketDataCacheCoverageResponse,
     MarketDataDatasetLookupResponse,
     MarketDataIngestionRequest,
@@ -52,6 +53,20 @@ class Service:
     def request_ingestion(self, payload: MarketDataIngestionRequest) -> MarketDataIngestionResponse:
         normalized = self._resolve_payload(payload)
         return self._repository.request_ingestion(normalized)
+
+    def request_batch_ingestion(self, payload: MarketDataBatchIngestionRequest) -> list[MarketDataIngestionResponse]:
+        responses: list[MarketDataIngestionResponse] = []
+        for idx, preset_id in enumerate(payload.preset_ids):
+            responses.append(
+                self.request_ingestion(
+                    MarketDataIngestionRequest(
+                        preset_id=preset_id,
+                        requested_by=payload.requested_by,
+                        idempotency_key=f"{payload.idempotency_key_prefix or 'batch'}:{idx}:{preset_id}",
+                    )
+                )
+            )
+        return responses
 
     def _resolve_payload(self, payload: MarketDataIngestionRequest) -> MarketDataIngestionRequest:
         if not payload.preset_id:
