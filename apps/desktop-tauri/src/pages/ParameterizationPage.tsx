@@ -32,6 +32,7 @@ interface IngestionItem {
   dataset_id?: string;
   status?: string;
   symbols?: string[];
+  universe_type?: string;
   timeframe?: string;
   start_date?: string;
   end_date?: string;
@@ -55,6 +56,7 @@ interface TrainingTemplate {
   parameter_preset: { name: string; parameters: Record<string, unknown> };
 }
 type TrainingPreset = 'safe' | 'balanced' | 'aggressive';
+type DatasetSelectionMode = 'existing' | 'create';
 
 interface DatasetCreateForm {
   universeType: 'stocks' | 'options';
@@ -198,7 +200,7 @@ export function ParameterizationPage({ baseUrl }: ParameterizationPageProps): JS
   const [preflightPayloadJson, setPreflightPayloadJson] = useState<string>('');
   const [warningConfirmationChecked, setWarningConfirmationChecked] = useState(false);
 
-  const [showCreateDataset, setShowCreateDataset] = useState(false);
+  const [datasetSelectionMode, setDatasetSelectionMode] = useState<DatasetSelectionMode>('existing');
   const [datasetCreateForm, setDatasetCreateForm] = useState<DatasetCreateForm>({
     universeType: 'stocks',
     symbolsCsv: 'AAPL,MSFT,SPY',
@@ -297,6 +299,30 @@ export function ParameterizationPage({ baseUrl }: ParameterizationPageProps): JS
     [datasetId, existingDatasetRows],
   );
 
+  const selectedDatasetMetadata = useMemo(() => {
+    if (!datasetId) return null;
+    const matchingIngestion = ingestions.find((ingestion) => {
+      const candidateId = (typeof ingestion.dataset_id === 'string' && ingestion.dataset_id)
+        || (typeof ingestion.request_id === 'string' && ingestion.request_id ? `ingestion:${ingestion.request_id}` : '');
+      return candidateId === datasetId;
+    });
+
+    if (!matchingIngestion) {
+      return { coverage: selectedDatasetCoverage, universeType: null, timeframe: null, dateWindow: null };
+    }
+
+    const startDate = matchingIngestion.start_date?.trim() ?? '';
+    const endDate = matchingIngestion.end_date?.trim() ?? '';
+    const dateWindow = startDate && endDate ? `${startDate} → ${endDate}` : null;
+
+    return {
+      coverage: typeof matchingIngestion.coverage_pct === 'number' ? matchingIngestion.coverage_pct : selectedDatasetCoverage,
+      universeType: matchingIngestion.universe_type ?? null,
+      timeframe: matchingIngestion.timeframe ?? null,
+      dateWindow,
+    };
+  }, [datasetId, ingestions, selectedDatasetCoverage]);
+
   const selectedModelConfig = useMemo(
     () => modelConfigs.find((item) => item.id === modelConfigId) ?? null,
     [modelConfigId, modelConfigs],
@@ -350,7 +376,7 @@ export function ParameterizationPage({ baseUrl }: ParameterizationPageProps): JS
     if (subtaskType === 'regime_state' && taskType !== 'regime_switching') {
       errors.subtaskType = 'Subtask regime_state can only be used with task regime_switching.';
     }
-    if (!datasetId.trim()) {
+    if (datasetSelectionMode === 'existing' && !datasetId.trim()) {
       errors.datasetId = 'Select an existing dataset or create one first.';
     }
     if (!modelConfigId.trim()) {
@@ -471,10 +497,10 @@ export function ParameterizationPage({ baseUrl }: ParameterizationPageProps): JS
 
       if (createdDatasetId) {
         setDatasetId(createdDatasetId);
+        setDatasetSelectionMode('existing');
       }
 
       setDatasetCreateNotice(`Dataset creation submitted${createdDatasetId ? `: ${createdDatasetId}` : ''}.`);
-      setShowCreateDataset(false);
       await load();
     } catch (submitError) {
       setPageError(submitError instanceof Error ? submitError.message : 'Failed creating dataset ingestion request.');
@@ -589,15 +615,38 @@ export function ParameterizationPage({ baseUrl }: ParameterizationPageProps): JS
               {selectedDatasetCoverage === null ? 'Unknown' : `${selectedDatasetCoverage.toFixed(1)}%`}
             </strong>
           </p>
-          <div>
-            <button type="button" onClick={() => setShowCreateDataset((prev) => !prev)}>
-              {showCreateDataset ? 'Close create dataset' : 'Create dataset'}
+          <div style={{ display: 'inline-flex', border: '1px solid #2b3558', borderRadius: 8, overflow: 'hidden', width: 'fit-content' }}>
+            <button
+              type="button"
+              onClick={() => setDatasetSelectionMode('existing')}
+              disabled={datasetSelectionMode === 'existing'}
+            >
+              Use existing dataset
+            </button>
+            <button
+              type="button"
+              onClick={() => setDatasetSelectionMode('create')}
+              disabled={datasetSelectionMode === 'create'}
+            >
+              Create new dataset
             </button>
           </div>
-          {launchErrors.datasetId ? <small className="error">{launchErrors.datasetId}</small> : null}
+          {datasetSelectionMode === 'existing' ? (
+            <>
+              {selectedDatasetMetadata ? (
+                <p className="muted" style={{ margin: 0 }}>
+                  Summary: coverage {selectedDatasetMetadata.coverage === null ? 'Unknown' : `${selectedDatasetMetadata.coverage.toFixed(1)}%`}
+                  {selectedDatasetMetadata.universeType ? ` · universe ${selectedDatasetMetadata.universeType}` : ''}
+                  {selectedDatasetMetadata.timeframe ? ` · timeframe ${selectedDatasetMetadata.timeframe}` : ''}
+                  {selectedDatasetMetadata.dateWindow ? ` · ${selectedDatasetMetadata.dateWindow}` : ''}
+                </p>
+              ) : null}
+              {launchErrors.datasetId ? <small className="error">{launchErrors.datasetId}</small> : null}
+            </>
+          ) : null}
         </div>
 
-        {showCreateDataset ? (
+        {datasetSelectionMode === 'create' ? (
           <div style={{ marginTop: '0.75rem', border: '1px solid #2b3558', borderRadius: 8, padding: '0.75rem', display: 'grid', gap: '0.5rem' }}>
             <h4 style={{ margin: 0 }}>Create dataset</h4>
             <label>
