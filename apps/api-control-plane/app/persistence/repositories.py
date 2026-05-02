@@ -479,22 +479,26 @@ class MarketDataSqlRepository:
         symbols = payload.universe_members or payload.symbols or ["UNKNOWN"]
         timeframe = (payload.resolutions[0] if payload.resolutions else payload.timeframe) or "1d"
 
-        existing = self._session.get(MarketDataCatalogRow, dataset_id)
+        lookup_id = payload.idempotency_key or dataset_id
+        existing = self._session.get(MarketDataCatalogRow, lookup_id)
+        if existing is None and lookup_id != dataset_id:
+            existing = self._session.get(MarketDataCatalogRow, dataset_id)
         if existing is not None:
             existing_symbols = list((existing.metadata_json or {}).get("symbols", symbols))
             return MarketDataIngestionResponse(
-                request_id=dataset_id,
+                request_id=existing.dataset_id,
                 dataset_id=dataset_id,
                 status="already_exists",
                 source=existing.source,
                 symbols=existing_symbols,
                 timeframe=existing.timeframe,
                 effective_params={"provider": existing.source, "asset_class": (existing.metadata_json or {}).get("asset_class", payload.asset_class), "symbols": existing_symbols, "resolutions": (existing.metadata_json or {}).get("resolutions", [existing.timeframe]), "start_date": (existing.metadata_json or {}).get("start_date"), "end_date": (existing.metadata_json or {}).get("end_date")},
+                logs=list((existing.metadata_json or {}).get("logs", [])),
             )
 
         self._session.add(
             MarketDataCatalogRow(
-                dataset_id=dataset_id,
+                dataset_id=lookup_id,
                 source=source,
                 symbol=symbols[0],
                 timeframe=timeframe,
@@ -509,6 +513,18 @@ class MarketDataSqlRepository:
                     "end_date": payload.end_date.isoformat(),
                     "feature_recipe_version": payload.feature_recipe_version,
                     "label_recipe_version": payload.label_recipe_version,
+                    "alias": payload.alias,
+                    "version_id": dataset_id,
+                    "version": 1,
+                    "requested_by": payload.requested_by or "unknown",
+                    "created_at": utc_now().isoformat(),
+                    "parameter_hash": sha256(serialized_spec.encode("utf-8")).hexdigest(),
+                    "freshness_sla_days": payload.freshness_sla_days,
+                    "stale": (date.today() - payload.end_date).days > payload.freshness_sla_days,
+                    "logs": [
+                        f"accepted request for {len(symbols)} symbols",
+                        f"date_range={payload.start_date.isoformat()}..{payload.end_date.isoformat()}",
+                    ],
                 },
             )
         )
@@ -524,13 +540,14 @@ class MarketDataSqlRepository:
             )
         self._session.commit()
         return MarketDataIngestionResponse(
-            request_id=dataset_id,
+            request_id=lookup_id,
             dataset_id=dataset_id,
             status="accepted",
             source=source,
             symbols=symbols,
             timeframe=timeframe,
-            effective_params={"provider": payload.provider, "asset_class": payload.asset_class, "symbols": symbols, "resolutions": payload.resolutions, "start_date": payload.start_date.isoformat(), "end_date": payload.end_date.isoformat(), "preset_id": payload.preset_id},
+            effective_params={"provider": payload.provider, "asset_class": payload.asset_class, "symbols": symbols, "resolutions": payload.resolutions, "start_date": payload.start_date.isoformat(), "end_date": payload.end_date.isoformat(), "preset_id": payload.preset_id, "alias": payload.alias},
+            logs=["ingestion accepted", f"idempotency_key={payload.idempotency_key or 'dataset_id'}"],
         )
 
     def get_cache_coverage(self, symbol: str, timeframe: str) -> MarketDataCacheCoverageResponse:

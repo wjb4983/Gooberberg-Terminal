@@ -45,6 +45,7 @@ from app.schemas.jobs import (
     RunType,
 )
 from app.schemas.market_data import (
+    MarketDataBatchIngestionRequest,
     MarketDataCacheCoverageResponse,
     MarketDataDatasetLookupResponse,
     MarketDataIngestionRequest,
@@ -134,6 +135,7 @@ __all__ = [
     "JobStatusResponse",
     "LogEvent",
     "LogLevel",
+    "MarketDataBatchIngestionRequest",
     "MarketDataCacheCoverageResponse",
     "MarketDataDatasetLookupResponse",
     "MarketDataIngestionRequest",
