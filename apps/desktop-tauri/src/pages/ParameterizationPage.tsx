@@ -87,6 +87,15 @@ interface DatasetPreset {
   roughSizeCostHint: string;
 }
 
+interface QuickStartTemplate {
+  id: string;
+  label: string;
+  description: string;
+  datasetMode: DatasetSelectionMode;
+  datasetPresetId: DatasetPreset['id'];
+  trainingPreset: TrainingPreset;
+}
+
 const DATASET_PRESETS: DatasetPreset[] = [
   {
     id: 'sp500_default',
@@ -111,12 +120,12 @@ const DATASET_PRESETS: DatasetPreset[] = [
     universe_type: 'stocks',
     symbolStrategy: 'saved_universe',
     savedUniverseId: 'all_stocks_etfs_us',
-    defaultTimeframe: '1d',
+    defaultTimeframe: '15m',
     defaultDateWindow: {
       mode: 'rolling_window',
-      startDate: '2024-01-01',
+      startDate: '2024-09-01',
       endDate: '2024-12-31',
-      label: 'Broad market window (large footprint)',
+      label: 'Recent intraday research window',
     },
     notes: 'Max-coverage preset for discovery and cross-sectional experiments.',
     estimatedCoverage: 'Thousands of symbols',
@@ -154,6 +163,33 @@ const DATASET_PRESETS: DatasetPreset[] = [
     notes: 'Uses current manual input flow and preserves backward-compatible behavior.',
     estimatedCoverage: 'User-defined',
     roughSizeCostHint: 'Cost depends on symbol count and timeframe.',
+  },
+];
+
+const QUICK_START_TEMPLATES: QuickStartTemplate[] = [
+  {
+    id: 'large_cap_equities_daily_baseline',
+    label: 'Large-cap equities daily baseline',
+    description: 'S&P 500 daily dataset baseline with balanced training defaults.',
+    datasetMode: 'create',
+    datasetPresetId: 'sp500_default',
+    trainingPreset: 'balanced',
+  },
+  {
+    id: 'sp500_intraday_research_starter',
+    label: 'S&P 500 intraday research starter',
+    description: 'Broad US equities with intraday cadence and safe training defaults.',
+    datasetMode: 'create',
+    datasetPresetId: 'all_stocks_etfs_us',
+    trainingPreset: 'safe',
+  },
+  {
+    id: 'etf_rotation_starter',
+    label: 'ETF rotation starter',
+    description: 'Liquid ETF universe starter tuned for faster intraday experiments.',
+    datasetMode: 'create',
+    datasetPresetId: 'top_liquid_etfs',
+    trainingPreset: 'aggressive',
   },
 ];
 
@@ -227,6 +263,7 @@ export function ParameterizationPage({ baseUrl }: ParameterizationPageProps): JS
   const [templates, setTemplates] = useState<TrainingTemplate[]>([]);
   const [templateName, setTemplateName] = useState('My Template');
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
+  const [selectedQuickStartId, setSelectedQuickStartId] = useState('');
 
   const load = useCallback(async (): Promise<void> => {
     setPageError(null);
@@ -632,12 +669,43 @@ export function ParameterizationPage({ baseUrl }: ParameterizationPageProps): JS
     setPreflightPayloadJson(JSON.stringify(payload.normalized_payload, null, 2));
   };
 
+  const selectedQuickStartTemplate = useMemo(
+    () => QUICK_START_TEMPLATES.find((template) => template.id === selectedQuickStartId) ?? null,
+    [selectedQuickStartId],
+  );
+
+  const applyQuickStartTemplate = useCallback((template: QuickStartTemplate): void => {
+    setDatasetSelectionMode(template.datasetMode);
+    setSelectedDatasetPresetId(template.datasetPresetId);
+    setSelectedPreset(template.trainingPreset);
+    setLaunchNotice(`Quick start applied: ${template.label}. You can adjust any advanced settings before launch.`);
+  }, []);
+
   return (
     <section>
       <h2>Parameterization</h2>
       <p className="muted">Guide training launches through a 4-step flow: tasking, dataset, compatible model config, then run submission.</p>
       <p style={{ marginTop: 0 }}><Link to="/model-catalog">Browse model catalog</Link> to compare metadata while selecting compatible configs.</p>
       {pageError ? <p className="error">{pageError}</p> : null}
+      <div className="card" style={{ marginBottom: '1rem' }}>
+        <h3>Quick start</h3>
+        <p className="muted" style={{ marginTop: 0 }}>Apply a recommended template, then fine-tune any settings below.</p>
+        <div style={{ display: 'grid', gap: '0.5rem', gridTemplateColumns: '2fr 1fr' }}>
+          <label>
+            Recommended templates
+            <select value={selectedQuickStartId} onChange={(event) => setSelectedQuickStartId(event.target.value)}>
+              <option value="">Select quick start template</option>
+              {QUICK_START_TEMPLATES.map((template) => (
+                <option key={template.id} value={template.id}>{template.label}</option>
+              ))}
+            </select>
+          </label>
+          <button type="button" onClick={() => selectedQuickStartTemplate && applyQuickStartTemplate(selectedQuickStartTemplate)} disabled={!selectedQuickStartTemplate}>
+            Apply quick start
+          </button>
+        </div>
+        {selectedQuickStartTemplate ? <p className="muted" style={{ marginBottom: 0 }}>{selectedQuickStartTemplate.description}</p> : null}
+      </div>
       <div className="card" style={{ marginBottom: '1rem' }}>
         <h3>Reusable templates</h3>
         <div style={{ display: 'grid', gap: '0.5rem', gridTemplateColumns: '2fr 1fr 1fr' }}>
