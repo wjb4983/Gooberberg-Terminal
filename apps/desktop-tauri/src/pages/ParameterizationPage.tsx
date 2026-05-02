@@ -66,6 +66,95 @@ interface DatasetCreateForm {
   featurePackEnabled: boolean;
 }
 
+
+interface DatasetPreset {
+  id: 'sp500_default' | 'all_stocks_etfs_us' | 'top_liquid_etfs' | 'custom_manual';
+  label: string;
+  universe_type: DatasetCreateForm['universeType'];
+  symbolStrategy: 'saved_universe' | 'manual_symbols';
+  savedUniverseId?: string;
+  defaultTimeframe: string;
+  defaultDateWindow: {
+    mode: 'fixed_range' | 'rolling_window';
+    startDate: string;
+    endDate: string;
+    label: string;
+  };
+  notes?: string;
+  estimatedCoverage: string;
+  roughSizeCostHint: string;
+}
+
+const DATASET_PRESETS: DatasetPreset[] = [
+  {
+    id: 'sp500_default',
+    label: 'S&P 500 (default)',
+    universe_type: 'stocks',
+    symbolStrategy: 'saved_universe',
+    savedUniverseId: 'sp500',
+    defaultTimeframe: '1d',
+    defaultDateWindow: {
+      mode: 'fixed_range',
+      startDate: '2024-01-01',
+      endDate: '2024-12-31',
+      label: 'Calendar year 2024 baseline',
+    },
+    notes: 'Balanced baseline for broad US large-cap coverage.',
+    estimatedCoverage: '~500 tickers',
+    roughSizeCostHint: 'Moderate ingestion/runtime cost; good starter benchmark.',
+  },
+  {
+    id: 'all_stocks_etfs_us',
+    label: 'All US stocks + ETFs',
+    universe_type: 'stocks',
+    symbolStrategy: 'saved_universe',
+    savedUniverseId: 'all_stocks_etfs_us',
+    defaultTimeframe: '1d',
+    defaultDateWindow: {
+      mode: 'rolling_window',
+      startDate: '2024-01-01',
+      endDate: '2024-12-31',
+      label: 'Broad market window (large footprint)',
+    },
+    notes: 'Max-coverage preset for discovery and cross-sectional experiments.',
+    estimatedCoverage: 'Thousands of symbols',
+    roughSizeCostHint: 'High ingestion/runtime cost; expect longer queue and compute time.',
+  },
+  {
+    id: 'top_liquid_etfs',
+    label: 'Top liquid ETFs',
+    universe_type: 'stocks',
+    symbolStrategy: 'saved_universe',
+    savedUniverseId: 'top_liquid_etfs',
+    defaultTimeframe: '1h',
+    defaultDateWindow: {
+      mode: 'rolling_window',
+      startDate: '2024-07-01',
+      endDate: '2024-12-31',
+      label: 'Recent liquid ETF window',
+    },
+    notes: 'Liquidity-focused for lower slippage assumptions and tighter spread behavior.',
+    estimatedCoverage: '~25-150 ETFs',
+    roughSizeCostHint: 'Lower-to-moderate cost; good for faster iteration loops.',
+  },
+  {
+    id: 'custom_manual',
+    label: 'Custom manual symbols',
+    universe_type: 'stocks',
+    symbolStrategy: 'manual_symbols',
+    defaultTimeframe: '1d',
+    defaultDateWindow: {
+      mode: 'fixed_range',
+      startDate: '2024-01-01',
+      endDate: '2024-12-31',
+      label: 'Manual baseline (editable)',
+    },
+    notes: 'Uses current manual input flow and preserves backward-compatible behavior.',
+    estimatedCoverage: 'User-defined',
+    roughSizeCostHint: 'Cost depends on symbol count and timeframe.',
+  },
+];
+
 interface DatasetFormErrors {
   symbolsCsv?: string;
   savedUniverseId?: string;
@@ -120,6 +209,7 @@ export function ParameterizationPage({ baseUrl }: ParameterizationPageProps): JS
     featurePackEnabled: true,
   });
   const [datasetCreateNotice, setDatasetCreateNotice] = useState<string | null>(null);
+  const [selectedDatasetPresetId, setSelectedDatasetPresetId] = useState<DatasetPreset['id']>('sp500_default');
   const [templates, setTemplates] = useState<TrainingTemplate[]>([]);
   const [templateName, setTemplateName] = useState('My Template');
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
@@ -312,12 +402,30 @@ export function ParameterizationPage({ baseUrl }: ParameterizationPageProps): JS
     }
   };
 
+  const selectedDatasetPreset = useMemo(
+    () => DATASET_PRESETS.find((preset) => preset.id === selectedDatasetPresetId) ?? DATASET_PRESETS[0],
+    [selectedDatasetPresetId],
+  );
+
+  useEffect(() => {
+    setDatasetCreateForm((previous) => ({
+      ...previous,
+      universeType: selectedDatasetPreset.universe_type,
+      savedUniverseId: selectedDatasetPreset.symbolStrategy === 'saved_universe' ? (selectedDatasetPreset.savedUniverseId ?? '') : '',
+      finestResolution: selectedDatasetPreset.defaultTimeframe,
+      startDate: selectedDatasetPreset.defaultDateWindow.startDate,
+      endDate: selectedDatasetPreset.defaultDateWindow.endDate,
+      symbolsCsv: selectedDatasetPreset.symbolStrategy === 'manual_symbols' ? previous.symbolsCsv : '',
+    }));
+  }, [selectedDatasetPreset]);
+
   const validateDatasetForm = (): DatasetFormErrors => {
     const errors: DatasetFormErrors = {};
     const symbols = datasetCreateForm.symbolsCsv.split(',').map((item) => item.trim()).filter(Boolean);
+    const requiresManualSymbols = selectedDatasetPreset.symbolStrategy === 'manual_symbols';
     if (!datasetCreateForm.savedUniverseId.trim() && symbols.length === 0) {
       errors.symbolsCsv = 'Provide symbols list or a saved universe ID.';
-      errors.savedUniverseId = 'Provide symbols list or a saved universe ID.';
+      errors.savedUniverseId = requiresManualSymbols ? undefined : 'Provide symbols list or a saved universe ID.';
     }
     if (!normalizeDate(datasetCreateForm.startDate)) {
       errors.startDate = 'Start date is required.';
@@ -493,20 +601,34 @@ export function ParameterizationPage({ baseUrl }: ParameterizationPageProps): JS
           <div style={{ marginTop: '0.75rem', border: '1px solid #2b3558', borderRadius: 8, padding: '0.75rem', display: 'grid', gap: '0.5rem' }}>
             <h4 style={{ margin: 0 }}>Create dataset</h4>
             <label>
+              Dataset preset
+              <select value={selectedDatasetPresetId} onChange={(event) => setSelectedDatasetPresetId(event.target.value as DatasetPreset['id'])}>
+                {DATASET_PRESETS.map((preset) => <option key={preset.id} value={preset.id}>{preset.label}</option>)}
+              </select>
+            </label>
+            <p className="muted" style={{ margin: 0 }}>
+              {selectedDatasetPreset.notes} Coverage: {selectedDatasetPreset.estimatedCoverage}. {selectedDatasetPreset.roughSizeCostHint} Date window: {selectedDatasetPreset.defaultDateWindow.label}.
+            </p>
+            <label>
               Universe type
               <select value={datasetCreateForm.universeType} onChange={(event) => setDatasetCreateForm((prev) => ({ ...prev, universeType: event.target.value as DatasetCreateForm['universeType'] }))}>
                 <option value="stocks">stocks</option>
                 <option value="options">options</option>
               </select>
             </label>
-            <label>
-              Symbols list (comma separated)
-              <input value={datasetCreateForm.symbolsCsv} onChange={(event) => setDatasetCreateForm((prev) => ({ ...prev, symbolsCsv: event.target.value }))} placeholder="AAPL,MSFT,SPY" />
+            <label style={selectedDatasetPreset.symbolStrategy === 'manual_symbols' ? undefined : { opacity: 0.6 }}>
+              Symbols list (comma separated){selectedDatasetPreset.symbolStrategy === 'manual_symbols' ? '' : ' (manual override only)'}
+              <input
+                value={datasetCreateForm.symbolsCsv}
+                onChange={(event) => setDatasetCreateForm((prev) => ({ ...prev, symbolsCsv: event.target.value }))}
+                placeholder="AAPL,MSFT,SPY"
+                disabled={selectedDatasetPreset.symbolStrategy !== 'manual_symbols'}
+              />
             </label>
             {datasetFormErrors.symbolsCsv ? <small className="error">{datasetFormErrors.symbolsCsv}</small> : null}
-            <label>
+            <label style={selectedDatasetPreset.symbolStrategy === 'saved_universe' ? undefined : { opacity: 0.6 }}>
               Saved universe ID
-              <input value={datasetCreateForm.savedUniverseId} onChange={(event) => setDatasetCreateForm((prev) => ({ ...prev, savedUniverseId: event.target.value }))} placeholder="optional_universe_id" />
+              <input value={datasetCreateForm.savedUniverseId} onChange={(event) => setDatasetCreateForm((prev) => ({ ...prev, savedUniverseId: event.target.value }))} placeholder="optional_universe_id" disabled={selectedDatasetPreset.symbolStrategy !== 'saved_universe'} />
             </label>
             {datasetFormErrors.savedUniverseId ? <small className="error">{datasetFormErrors.savedUniverseId}</small> : null}
             <div style={{ display: 'grid', gap: '0.5rem', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' }}>
