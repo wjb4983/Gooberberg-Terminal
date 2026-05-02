@@ -13,6 +13,7 @@ import { findEquivalentModelConfig, isModelConfigCreateServerFailure } from '../
 import { requestJson } from '../api/requestJson';
 import {
   isTrainingValidationEndpointUnavailable,
+  requestTrainingRunPreflightOrBypass,
   requestTrainingRunPreflight,
   type TrainingRunCompatibilityRequestPayload,
   type TrainingRunValidationResponse,
@@ -780,7 +781,7 @@ export function BuildingModelsPage({ baseUrl }: BuildingModelsPageProps): JSX.El
     setWarningConfirmationChecked(false);
 
     try {
-      const preflight = await requestTrainingRunPreflight(baseUrl, draftPayload);
+      const { preflight, skippedValidation } = await requestTrainingRunPreflightOrBypass(baseUrl, draftPayload);
       setLaunchPreflight({
         normalizedPayload: preflight.normalized_payload,
         warnings: preflight.warnings,
@@ -791,7 +792,7 @@ export function BuildingModelsPage({ baseUrl }: BuildingModelsPageProps): JSX.El
         setLaunchErrors({ submit: preflight.errors.join(' ') || 'Preflight failed.' });
         return;
       }
-      if (preflight.warnings.length > 0 && !warningConfirmationChecked) {
+      if (!skippedValidation && preflight.warnings.length > 0 && !warningConfirmationChecked) {
         setLaunchErrors({ submit: 'Preflight reported warnings. Confirm to continue submitting.' });
         return;
       }

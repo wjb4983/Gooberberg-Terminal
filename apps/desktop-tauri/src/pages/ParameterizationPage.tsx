@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { requestJson } from '../api/requestJson';
-import { requestTrainingRunPreflight, type TrainingRunValidationResponse } from '../api/trainingRuns';
+import {
+  requestTrainingRunPreflightOrBypass,
+  type TrainingRunValidationResponse,
+} from '../api/trainingRuns';
 import { SUBTASK_TYPES, TASK_TYPES, type SubtaskType, type TaskType } from '../types/api';
 import { ModelConfigSelect } from '../components/ModelConfigSelect';
 
@@ -280,7 +283,7 @@ export function ParameterizationPage({ baseUrl }: ParameterizationPageProps): JS
     }
 
     try {
-      const preflight = await requestTrainingRunPreflight(baseUrl, {
+      const { preflight, skippedValidation } = await requestTrainingRunPreflightOrBypass(baseUrl, {
         model_config_id: modelConfigId,
         dataset_id: datasetId.trim(),
         task_type: taskType,
@@ -294,7 +297,7 @@ export function ParameterizationPage({ baseUrl }: ParameterizationPageProps): JS
         setLaunchErrors({ submit: preflight.errors.join(' ') || 'Preflight validation failed.' });
         return;
       }
-      if (preflight.warnings.length > 0 && !warningConfirmationChecked) {
+      if (!skippedValidation && preflight.warnings.length > 0 && !warningConfirmationChecked) {
         setLaunchErrors({ submit: 'Preflight warnings detected. Confirm acknowledgement before launching.' });
         return;
       }
