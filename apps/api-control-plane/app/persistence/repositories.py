@@ -481,13 +481,15 @@ class MarketDataSqlRepository:
 
         existing = self._session.get(MarketDataCatalogRow, dataset_id)
         if existing is not None:
+            existing_symbols = list((existing.metadata_json or {}).get("symbols", symbols))
             return MarketDataIngestionResponse(
                 request_id=dataset_id,
                 dataset_id=dataset_id,
                 status="already_exists",
                 source=existing.source,
-                symbols=list((existing.metadata_json or {}).get("symbols", symbols)),
+                symbols=existing_symbols,
                 timeframe=existing.timeframe,
+                effective_params={"provider": existing.source, "asset_class": (existing.metadata_json or {}).get("asset_class", payload.asset_class), "symbols": existing_symbols, "resolutions": (existing.metadata_json or {}).get("resolutions", [existing.timeframe]), "start_date": (existing.metadata_json or {}).get("start_date"), "end_date": (existing.metadata_json or {}).get("end_date")},
             )
 
         self._session.add(
@@ -528,6 +530,7 @@ class MarketDataSqlRepository:
             source=source,
             symbols=symbols,
             timeframe=timeframe,
+            effective_params={"provider": payload.provider, "asset_class": payload.asset_class, "symbols": symbols, "resolutions": payload.resolutions, "start_date": payload.start_date.isoformat(), "end_date": payload.end_date.isoformat(), "preset_id": payload.preset_id},
         )
 
     def get_cache_coverage(self, symbol: str, timeframe: str) -> MarketDataCacheCoverageResponse:

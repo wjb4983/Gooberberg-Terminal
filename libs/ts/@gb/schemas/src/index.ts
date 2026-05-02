@@ -334,19 +334,22 @@ export interface CreateBacktestRunRequest {
 }
 
 export interface MarketDataIngestionRequest {
-  source: string;
-  symbols: string[];
-  timeframe: string;
-  startDate: string;
-  endDate: string;
+  source?: string;
+  presetId?: string;
+  symbols?: string[];
+  timeframe?: string;
+  startDate?: string;
+  endDate?: string;
 }
 
 export interface MarketDataIngestionResponse {
   requestId: string;
+  datasetId?: string;
   status: string;
   source: string;
   symbols: string[];
   timeframe: string;
+  effectiveParams: Record<string, unknown>;
 }
 
 export interface MarketDataCacheCoverageResponse {
@@ -592,18 +595,22 @@ export function parseMarketDataIngestionResponse(payload: unknown): MarketDataIn
   if (!isRecord(payload)) throw new Error('Market data ingestion response must be an object.');
   if (typeof payload.request_id !== 'string') throw new Error('Market data ingestion response request_id is malformed.');
   if (typeof payload.status !== 'string') throw new Error('Market data ingestion response status is malformed.');
+  if (payload.dataset_id !== undefined && payload.dataset_id !== null && typeof payload.dataset_id !== 'string') throw new Error('Market data ingestion response dataset_id is malformed.');
   if (typeof payload.source !== 'string') throw new Error('Market data ingestion response source is malformed.');
   if (!Array.isArray(payload.symbols) || payload.symbols.some((item) => typeof item !== 'string')) {
     throw new Error('Market data ingestion response symbols is malformed.');
   }
   if (typeof payload.timeframe !== 'string') throw new Error('Market data ingestion response timeframe is malformed.');
+  if (!isRecord(payload.effective_params)) throw new Error('Market data ingestion response effective_params is malformed.');
 
   return {
     requestId: payload.request_id,
+    datasetId: typeof payload.dataset_id === 'string' ? payload.dataset_id : undefined,
     status: payload.status,
     source: payload.source,
     symbols: payload.symbols,
     timeframe: payload.timeframe,
+    effectiveParams: payload.effective_params,
   };
 }
 

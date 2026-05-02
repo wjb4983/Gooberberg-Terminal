@@ -415,6 +415,8 @@ def test_market_data_ingestion_endpoint_returns_contract_shape_and_persists() ->
     assert payload["status"] == "accepted"
     assert payload["source"] == "massive"
     assert payload["symbols"] == ["AAPL", "MSFT"]
+    assert payload["dataset_id"] == payload["request_id"]
+    assert payload["effective_params"]["symbols"] == ["AAPL", "MSFT"]
 
     dataset = client.get(f"/api/v1/market-data/datasets/{payload['request_id']}")
     assert dataset.status_code == 200
@@ -440,3 +442,34 @@ def test_websocket_event_envelope_contract_schema_accepts_jobs_payload() -> None
     assert dumped["contract_name"] == "gb.ws.event"
     assert dumped["contract_version"] == "1.0"
     assert dumped["payload"]["status"] == "queued"
+
+
+def test_market_data_ingestion_preset_rejects_manual_symbols_with_structured_error() -> None:
+    ingestion = client.post(
+        "/api/v1/market-data/ingestions",
+        json={
+            "preset_id": "us_stocks_daily_core",
+            "symbols": ["AAPL"],
+            "start_date": "2025-01-01",
+            "end_date": "2025-01-31",
+        },
+    )
+
+    assert ingestion.status_code == 422
+    payload = ingestion.json()
+    assert payload["detail"]["code"] == "invalid_override_combination"
+    assert payload["detail"]["field"] == "symbols"
+
+
+def test_market_data_ingestion_preset_resolves_defaults_when_dates_omitted() -> None:
+    ingestion = client.post(
+        "/api/v1/market-data/ingestions",
+        json={
+            "preset_id": "us_stocks_daily_core",
+        },
+    )
+
+    assert ingestion.status_code == 202
+    payload = ingestion.json()
+    assert payload["effective_params"]["resolutions"] == ["1d"]
+    assert payload["effective_params"]["symbols"] == ["SPY", "QQQ", "IWM"]

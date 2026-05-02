@@ -5,14 +5,15 @@ from pydantic import BaseModel, Field, model_validator
 
 
 class MarketDataIngestionRequest(BaseModel):
+    preset_id: str | None = Field(default=None, min_length=1)
     provider: Literal["massive"] = "massive"
     asset_class: Literal["stocks", "options"] = "stocks"
     universe_members: list[str] = Field(default_factory=list)
     resolutions: list[str] = Field(default_factory=list)
     feature_recipe_version: str = Field(default="v1", min_length=1)
     label_recipe_version: str = Field(default="v1", min_length=1)
-    start_date: date
-    end_date: date
+    start_date: date | None = None
+    end_date: date | None = None
 
     # Backward-compatible legacy fields.
     source: str | None = Field(default=None, min_length=1)
@@ -32,11 +33,12 @@ class MarketDataIngestionRequest(BaseModel):
 
 class MarketDataIngestionResponse(BaseModel):
     request_id: str
-    dataset_id: str
+    dataset_id: str | None = None
     status: str = "accepted"
     source: str
     symbols: list[str] = Field(default_factory=list)
     timeframe: str
+    effective_params: dict[str, Any] = Field(default_factory=dict)
 
 
 class MarketDataCacheCoverageResponse(BaseModel):

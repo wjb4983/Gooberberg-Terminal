@@ -466,6 +466,7 @@ export class GbApiClient {
       headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
       body: JSON.stringify({
         source: request.source,
+        preset_id: request.presetId,
         symbols: request.symbols,
         timeframe: request.timeframe,
         start_date: request.startDate,
