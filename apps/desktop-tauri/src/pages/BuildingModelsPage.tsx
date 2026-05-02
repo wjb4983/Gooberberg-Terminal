@@ -11,6 +11,12 @@ import {
 } from '../components/model-build/ModelBuildConfigFormSection';
 import { findEquivalentModelConfig, isModelConfigCreateServerFailure } from '../api/modelConfigRecovery';
 import { requestJson } from '../api/requestJson';
+import {
+  isTrainingValidationEndpointUnavailable,
+  requestTrainingRunPreflight,
+  type TrainingRunCompatibilityRequestPayload,
+  type TrainingRunValidationResponse,
+} from '../api/trainingRuns';
 import { SUBTASK_TYPES, TASK_TYPES, type SubtaskType, type TaskType } from '../types/api';
 
 interface BuildingModelsPageProps {
@@ -95,20 +101,6 @@ interface TrainingRunCompatibilityStatus {
   errors: string[];
 }
 
-interface TrainingRunValidationResponse {
-  normalized_payload: {
-    model_config_id: string;
-    dataset_id: string;
-    task_type: TaskType;
-    subtask_type: SubtaskType;
-    parameters: Record<string, unknown>;
-  };
-  warnings: string[];
-  errors: string[];
-  compatible: boolean;
-  valid: boolean;
-}
-
 interface LaunchPreflightState {
   normalizedPayload: TrainingRunValidationResponse['normalized_payload'] | null;
   warnings: string[];
@@ -119,14 +111,6 @@ interface LaunchPreflightState {
 interface ModelConfigCreatePayload {
   model_family: string;
   config: Record<string, unknown>;
-}
-
-interface TrainingRunCompatibilityRequestPayload {
-  model_config_id: string;
-  dataset_id: string;
-  task_type: TaskType;
-  subtask_type: SubtaskType;
-  parameters: Record<string, unknown>;
 }
 
 const SUPPORTED_BUILDING_MODEL_FAMILIES = ['hmm_regime_switching', 'torch_nn_timeseries', 'kalman_filter'] as const;
@@ -353,17 +337,8 @@ function buildKalmanPayload(form: KalmanFormState, shared: SharedConfigFields): 
   };
 }
 
-function getHttpStatusFromError(error: unknown): number | null {
-  if (!(error instanceof Error)) return null;
-  const statusMatch = error.message.match(/status\s+(\d{3})\b/i);
-  if (!statusMatch) return null;
-  const parsed = Number(statusMatch[1]);
-  return Number.isFinite(parsed) ? parsed : null;
-}
-
 function isCompatibilityProbeUnavailable(error: unknown): boolean {
-  const status = getHttpStatusFromError(error);
-  return status === 404 || status === 405 || status === 501;
+  return isTrainingValidationEndpointUnavailable(error);
 }
 
 function summarizeProbeFailure(error: unknown): string {
@@ -391,10 +366,7 @@ async function requestTrainingCompatibility(
     }
   }
 
-  return requestJson<TrainingRunValidationResponse>(baseUrl, '/api/v1/training-runs/preflight', {
-    method: 'POST',
-    body: JSON.stringify(payload),
-  });
+  return requestTrainingRunPreflight(baseUrl, payload);
 }
 
 function mapRunToCard(run: TrainingRunItem): JobCard {
@@ -808,10 +780,7 @@ export function BuildingModelsPage({ baseUrl }: BuildingModelsPageProps): JSX.El
     setWarningConfirmationChecked(false);
 
     try {
-      const preflight = await requestJson<TrainingRunValidationResponse>(baseUrl, '/api/v1/training-runs/preflight', {
-        method: 'POST',
-        body: JSON.stringify(draftPayload),
-      });
+      const preflight = await requestTrainingRunPreflight(baseUrl, draftPayload);
       setLaunchPreflight({
         normalizedPayload: preflight.normalized_payload,
         warnings: preflight.warnings,

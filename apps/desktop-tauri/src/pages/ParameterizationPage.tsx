@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { requestJson } from '../api/requestJson';
+import { requestTrainingRunPreflight, type TrainingRunValidationResponse } from '../api/trainingRuns';
 import { SUBTASK_TYPES, TASK_TYPES, type SubtaskType, type TaskType } from '../types/api';
 import { ModelConfigSelect } from '../components/ModelConfigSelect';
 
@@ -41,19 +42,6 @@ interface LaunchErrors {
   modelConfigId?: string;
   parametersJson?: string;
   submit?: string;
-}
-interface TrainingRunValidationResponse {
-  normalized_payload: {
-    model_config_id: string;
-    dataset_id: string;
-    task_type: TaskType;
-    subtask_type: SubtaskType;
-    parameters: Record<string, unknown>;
-  };
-  warnings: string[];
-  errors: string[];
-  compatible: boolean;
-  valid: boolean;
 }
 interface TrainingTemplate {
   id: string;
@@ -292,15 +280,12 @@ export function ParameterizationPage({ baseUrl }: ParameterizationPageProps): JS
     }
 
     try {
-      const preflight = await requestJson<TrainingRunValidationResponse>(baseUrl, '/api/v1/training-runs/preflight', {
-        method: 'POST',
-        body: JSON.stringify({
-          model_config_id: modelConfigId,
-          dataset_id: datasetId.trim(),
-          task_type: taskType,
-          subtask_type: subtaskType,
-          parameters: JSON.parse(parametersJson) as Record<string, unknown>,
-        }),
+      const preflight = await requestTrainingRunPreflight(baseUrl, {
+        model_config_id: modelConfigId,
+        dataset_id: datasetId.trim(),
+        task_type: taskType,
+        subtask_type: subtaskType,
+        parameters: JSON.parse(parametersJson) as Record<string, unknown>,
       });
       setPreflightWarnings(preflight.warnings);
       setPreflightErrors(preflight.errors);
