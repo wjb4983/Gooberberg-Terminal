@@ -6,7 +6,9 @@ source "$ROOT_DIR/scripts/ops/lib.sh"
 
 COMPOSE_FILE="${COMPOSE_FILE:-infra/compose/docker-compose.prod.yml}"
 ENV_FILE="${ENV_FILE:-config/env/.env}"
-PROJECT_NAME="${COMPOSE_PROJECT_NAME:-gooberberg}"
+PROJECT_NAME="${COMPOSE_PROJECT_NAME:-}"
+COMPOSE_PROFILES_RAW="${COMPOSE_PROFILES:-}"
+COMPOSE_SERVICES_RAW="${COMPOSE_SERVICES:-}"
 if [[ -f "$ROOT_DIR/$ENV_FILE" ]]; then
   # shellcheck disable=SC1090
   set -a
@@ -32,13 +34,41 @@ require_cmd curl
 
 cd "$ROOT_DIR"
 
+compose_cmd=(docker compose --ansi never)
+if [[ -n "$PROJECT_NAME" ]]; then
+  compose_cmd+=(--project-name "$PROJECT_NAME")
+fi
+compose_cmd+=(--env-file "$ENV_FILE" -f "$COMPOSE_FILE")
+
+if [[ -n "$COMPOSE_PROFILES_RAW" ]]; then
+  read -r -a compose_profiles <<< "$COMPOSE_PROFILES_RAW"
+  for profile in "${compose_profiles[@]}"; do
+    compose_cmd+=(--profile "$profile")
+  done
+fi
+
+compose_services=()
+if [[ -n "$COMPOSE_SERVICES_RAW" ]]; then
+  read -r -a compose_services <<< "$COMPOSE_SERVICES_RAW"
+fi
+
+api_log_service="${API_SERVICE_NAME:-api-control-plane}"
+if [[ -z "${API_SERVICE_NAME:-}" ]]; then
+  for service in "${compose_services[@]}"; do
+    if [[ "$service" == api-control-plane* ]]; then
+      api_log_service="$service"
+      break
+    fi
+  done
+fi
+
 log "updating images and rebuilding stack using $COMPOSE_FILE"
-run_with_timeout "$PULL_TIMEOUT" docker compose --ansi never --project-name "$PROJECT_NAME" --env-file "$ENV_FILE" -f "$COMPOSE_FILE" pull --ignore-pull-failures
-run_with_timeout "$COMPOSE_TIMEOUT" docker compose --ansi never --project-name "$PROJECT_NAME" --env-file "$ENV_FILE" -f "$COMPOSE_FILE" up -d --build --remove-orphans
+run_with_timeout "$PULL_TIMEOUT" "${compose_cmd[@]}" pull --ignore-pull-failures "${compose_services[@]}"
+run_with_timeout "$COMPOSE_TIMEOUT" "${compose_cmd[@]}" up -d --build --remove-orphans "${compose_services[@]}"
 if ! poll_http_health "$API_HEALTH_URL" "$HEALTH_RETRIES" "$HEALTH_SLEEP_SECONDS" "$HEALTH_REQUEST_TIMEOUT"; then
   log 'health check failed; collecting compose diagnostics.'
-  run_with_timeout 30s docker compose --ansi never --project-name "$PROJECT_NAME" --env-file "$ENV_FILE" -f "$COMPOSE_FILE" ps || true
-  run_with_timeout 30s docker compose --ansi never --project-name "$PROJECT_NAME" --env-file "$ENV_FILE" -f "$COMPOSE_FILE" logs --tail=200 api-control-plane postgres redis || true
+  run_with_timeout 30s "${compose_cmd[@]}" ps || true
+  run_with_timeout 30s "${compose_cmd[@]}" logs --tail=200 "$api_log_service" postgres redis || true
   die "$EXIT_HEALTH" "health check failed: $API_HEALTH_URL"
 fi
 print_tailscale_info

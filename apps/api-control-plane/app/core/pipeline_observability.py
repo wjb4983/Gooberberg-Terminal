@@ -6,18 +6,14 @@ import logging
 import time
 from collections.abc import Callable
 from contextlib import contextmanager
-from dataclasses import dataclass
+
+from app.schemas.graph import PipelineResponseMetadata
 
 logger = logging.getLogger("app.pipeline")
 
 
-@dataclass(frozen=True, slots=True)
-class PipelineResponseMeta:
-    version: str
-    deterministic: bool
-    stage: str
-    fingerprint: str
-    fallback_reason: str | None = None
+class PipelineResponseMeta(PipelineResponseMetadata):
+    pass
 
 
 @contextmanager

@@ -109,6 +109,7 @@ services:
       start_period: 20s
     networks:
       - gb-prod-private
+      - gb-prod-edge
     <<: [*default-logging, *default-resources]
 
   postgres:

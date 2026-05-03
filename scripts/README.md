@@ -34,12 +34,18 @@ COMPOSE_FILE='infra/compose/docker-compose.prod.yml' \
 
 PULL_TIMEOUT='20m' COMPOSE_TIMEOUT='25m' \
 ./scripts/ops/update-build-run.sh
+
+COMPOSE_PROFILES='loopback' \
+COMPOSE_SERVICES='postgres redis api-control-plane-loopback' \
+./scripts/ops/update-build-run.sh
 ```
 
 Notes:
 
 - Scripts are non-interactive (`--ansi never`) and include explicit timeouts for long-running commands.
 - Scripts automatically load `config/env/.env` by default (`ENV_FILE` override) and pass it to Docker Compose via `--env-file`.
+- Scripts use the compose file's project name by default; set `COMPOSE_PROJECT_NAME` only when you intentionally need a non-default project namespace.
+- `COMPOSE_PROFILES` accepts a space-delimited list of compose profiles, and `COMPOSE_SERVICES` accepts a space-delimited list of services to target.
 - Health polling targets `API_HEALTH_URL` (default derived from `API_BIND_IP`/`API_BIND_PORT`, falling back to `http://127.0.0.1:8000/healthz`) with bounded retries.
 - Scripts print concise status and a brief Tailscale summary (if `tailscale` is installed).
 
@@ -94,15 +100,32 @@ Use this exact sequence on the **server**.
    timeout 30m ./scripts/ops/update-build-run.sh
    ```
 
+   If your remote client connects through Tailscale to the loopback-only API, use:
+
+   ```bash
+   COMPOSE_PROFILES='loopback' \
+   COMPOSE_SERVICES='postgres redis api-control-plane-loopback' \
+   timeout 30m ./scripts/ops/update-build-run.sh
+   ```
+
 3. Re-check from the other machine:
    - `https://<server>.<tailnet>.ts.net/healthz`
    - `https://<server>.<tailnet>.ts.net/api/v1/health` (not `/api/v1/healthz`)
+   - Re-run `tailscale serve --bg http://127.0.0.1:8000` only if `tailscale serve status` no longer shows the proxy.
 
 ### C) Routine restart (no code updates)
 
 1. Start existing stack:
 
    ```bash
+   timeout 20m ./scripts/ops/subsequent-run.sh
+   ```
+
+   Loopback/Tailscale variant:
+
+   ```bash
+   COMPOSE_PROFILES='loopback' \
+   COMPOSE_SERVICES='postgres redis api-control-plane-loopback' \
    timeout 20m ./scripts/ops/subsequent-run.sh
    ```
 

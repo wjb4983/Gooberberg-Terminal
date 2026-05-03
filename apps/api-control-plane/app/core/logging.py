@@ -92,13 +92,17 @@ class RequestIDMiddleware(BaseHTTPMiddleware):
         try:
             response = await call_next(request)
             response.headers["X-Request-ID"] = request_id
-            _log_request_summary(request, response_status=response.status_code, elapsed_ms=(time.perf_counter() - started_at) * 1000)
+            _log_request_summary(
+                request=request,
+                response_status=response.status_code,
+                elapsed_ms=(time.perf_counter() - started_at) * 1000,
+            )
             if response.status_code >= 400:
                 return _normalize_error_response(request=request, response=response)
             return response
         except Exception:
             _log_request_summary(
-                request,
+                request=request,
                 response_status=500,
                 elapsed_ms=(time.perf_counter() - started_at) * 1000,
                 error_code="internal_error",
