@@ -24,6 +24,7 @@ import { BacktestsPage } from './pages/BacktestsPage';
 import { BuildingModelsPage } from './pages/BuildingModelsPage';
 import { ModelDeploymentsPage } from './pages/ModelDeploymentsPage';
 import { ModelCatalogPage } from './pages/ModelCatalogPage';
+import { StrategyWorkbenchPage } from './pages/StrategyWorkbenchPage';
 
 interface ToastItem {
   id: number;
@@ -104,6 +105,7 @@ export function App(): JSX.Element {
 
           <Route path="data-cache" element={<ErrorBoundary><DataCachePage baseUrl={preferences.baseUrl} /></ErrorBoundary>} />
           <Route path="strategies" element={<ErrorBoundary><StrategiesPage baseUrl={preferences.baseUrl} /></ErrorBoundary>} />
+          <Route path="strategies/workbench" element={<ErrorBoundary><StrategyWorkbenchPage baseUrl={preferences.baseUrl} /></ErrorBoundary>} />
           <Route path="portfolio" element={<ErrorBoundary><PortfolioPage baseUrl={preferences.baseUrl} /></ErrorBoundary>} />
           <Route path="alerts-health" element={<ErrorBoundary><AlertsHealthPage baseUrl={preferences.baseUrl} defaultSeverity={preferences.filterDefaults.severity} /></ErrorBoundary>} />
           <Route
