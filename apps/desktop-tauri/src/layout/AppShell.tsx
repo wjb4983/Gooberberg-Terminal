@@ -20,6 +20,7 @@ const navGroups = [
       { label: 'Jobs', to: '/jobs' },
       { label: 'Data Cache', to: '/data-cache' },
       { label: 'Strategies', to: '/strategies' },
+      { label: 'Strategy Workbench', to: '/strategies/workbench' },
       { label: 'Portfolio', to: '/portfolio' },
       { label: 'Alerts/Health', to: '/alerts-health' },
       { label: 'Graphing', to: '/graphing' },
