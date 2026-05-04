@@ -1,9 +1,11 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
+  getStrategyExternalStatus,
   getStrategyTrainingLiveStatus,
   launchStrategyTrainingRun,
   listStrategyTrainingModels,
+  type StrategyServiceStatus,
   type StrategyTrainingLaunchResponse,
 } from '../api/strategyTraining';
 
@@ -33,6 +35,16 @@ export function StrategyWorkbenchPage({ baseUrl }: StrategyWorkbenchPageProps): 
       return status === 'queued' || status === 'running' ? 2_500 : false;
     },
   });
+  const externalStatusQuery = useQuery({
+    queryKey: ['strategy-training', 'external-status', baseUrl],
+    queryFn: () => getStrategyExternalStatus(baseUrl),
+    refetchInterval: 10_000,
+  });
+
+  const selectedModel = (modelsQuery.data ?? [])[0];
+  const staleModelSummary = selectedModel
+    ? Date.now() - new Date(selectedModel.last_trained_at ?? selectedModel.created_at).getTime() > 24 * 60 * 60 * 1000
+    : false;
 
   const handleLaunchTraining = async (): Promise<void> => {
     const modelId = selectedModelId || modelsQuery.data?.[0]?.id || '';
@@ -58,6 +70,21 @@ export function StrategyWorkbenchPage({ baseUrl }: StrategyWorkbenchPageProps): 
     <section>
       <h2>Strategy Workbench</h2>
       <p>Design, gate, and observe strategy experiments before rolling changes into paper or live modes.</p>
+      <p className="muted">Execution routing is handled by external paper/live services and only observed here.</p>
+
+      <div className="card" style={{ marginBottom: '1rem' }}>
+        <h3>KPI strip</h3>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: '0.75rem' }}>
+          <div><strong>Model:</strong> {selectedModel?.label ?? '—'}</div>
+          <div><strong>Family:</strong> {selectedModel?.family ?? '—'}</div>
+          <div><strong>Sharpe:</strong> {selectedModel?.sharpe ?? '—'}</div>
+          <div><strong>Max DD:</strong> {selectedModel?.max_drawdown != null ? `${selectedModel.max_drawdown}%` : '—'}</div>
+          <div><strong>Latency p95:</strong> {selectedModel?.latency_p95_ms != null ? `${selectedModel.latency_p95_ms}ms` : '—'}</div>
+          <div><strong>Readiness:</strong> {selectedModel?.readiness ?? '—'}</div>
+          <div><strong>Last trained:</strong> {selectedModel ? new Date(selectedModel.last_trained_at ?? selectedModel.created_at).toLocaleString() : '—'}</div>
+        </div>
+        {staleModelSummary ? <p className="muted">⚠️ Model summary data is stale (&gt;24h old).</p> : null}
+      </div>
 
       <div className="card" style={{ marginBottom: '1rem' }}>
         <h3>Hypothesis</h3>
@@ -179,6 +206,38 @@ export function StrategyWorkbenchPage({ baseUrl }: StrategyWorkbenchPageProps): 
           </ul>
         ) : null}
       </div>
+
+      <div className="card" style={{ marginTop: '1rem' }}>
+        <h3>External execution status</h3>
+        <p className="muted">Paper/live execution is performed outside this UI. Status below reflects upstream connectivity snapshots.</p>
+        {externalStatusQuery.isError ? <p className="muted">Unable to load external service status.</p> : null}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '0.75rem' }}>
+          {(['paper', 'live'] as const).map((mode) => (
+            <ServiceStatusWidget key={mode} label={mode.toUpperCase()} status={externalStatusQuery.data?.[mode]} />
+          ))}
+        </div>
+      </div>
     </section>
+  );
+}
+
+function ServiceStatusWidget({ label, status }: { label: string; status?: StrategyServiceStatus }): JSX.Element {
+  if (!status) {
+    return <div className="card"><strong>{label}</strong><p className="muted">No status available.</p></div>;
+  }
+  const staleHeartbeat = status.heartbeat_age_seconds != null && status.heartbeat_age_seconds > 90;
+  return (
+    <div className="card">
+      <strong>{label} service</strong>
+      <ul>
+        <li>Connectivity: {status.connected ? 'connected' : 'disconnected'}</li>
+        <li>Probe status: {status.status}</li>
+        <li>Heartbeat: {status.heartbeat_at ? new Date(status.heartbeat_at).toLocaleString() : 'not provided'}</li>
+        <li>Heartbeat age: {status.heartbeat_age_seconds != null ? `${Math.round(status.heartbeat_age_seconds)}s` : 'not provided'}</li>
+        {status.pnl != null ? <li>PnL: {status.pnl}</li> : null}
+        {status.exposure != null ? <li>Exposure: {status.exposure}</li> : null}
+      </ul>
+      {staleHeartbeat ? <p className="muted">⚠️ Stale heartbeat detected for {label.toLowerCase()} service.</p> : null}
+    </div>
   );
 }

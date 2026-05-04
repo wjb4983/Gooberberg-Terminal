@@ -30,6 +30,10 @@ class ServiceConnectivityStatus(BaseModel):
     checked_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     endpoint: str | None = None
     upstream_http_status: int | None = None
+    heartbeat_at: datetime | None = None
+    heartbeat_age_seconds: float | None = None
+    pnl: float | None = None
+    exposure: float | None = None
 
 
 class ExternalServicesStatusResponse(BaseModel):
