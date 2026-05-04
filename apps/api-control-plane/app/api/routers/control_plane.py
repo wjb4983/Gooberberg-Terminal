@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+import json
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
@@ -63,7 +64,30 @@ def _probe_service(name: str, mode: str, endpoint: str | None) -> ServiceConnect
     try:
         with urlopen(request, timeout=2.5) as response:  # noqa: S310
             code = getattr(response, "status", 200)
-            return ServiceConnectivityStatus(service=name, mode=mode, connected=True, status="connected", detail="upstream service reachable", endpoint=endpoint, upstream_http_status=code, checked_at=datetime.now(UTC))
+            payload: dict[str, object] = {}
+            try:
+                raw_payload = response.read()
+                if raw_payload:
+                    decoded_payload = json.loads(raw_payload.decode("utf-8"))
+                    if isinstance(decoded_payload, dict):
+                        payload = decoded_payload
+            except (UnicodeDecodeError, json.JSONDecodeError):
+                payload = {}
+
+            return ServiceConnectivityStatus(
+                service=name,
+                mode=mode,
+                connected=True,
+                status="connected",
+                detail="upstream service reachable",
+                endpoint=endpoint,
+                upstream_http_status=code,
+                checked_at=datetime.now(UTC),
+                heartbeat_at=payload.get("heartbeat_at") if isinstance(payload.get("heartbeat_at"), str) else None,
+                heartbeat_age_seconds=float(payload["heartbeat_age_seconds"]) if isinstance(payload.get("heartbeat_age_seconds"), (float, int)) else None,
+                pnl=float(payload["pnl"]) if isinstance(payload.get("pnl"), (float, int)) else None,
+                exposure=float(payload["exposure"]) if isinstance(payload.get("exposure"), (float, int)) else None,
+            )
     except HTTPError as exc:
         return ServiceConnectivityStatus(service=name, mode=mode, connected=False, status="degraded", detail="upstream returned http error", endpoint=endpoint, upstream_http_status=exc.code, checked_at=datetime.now(UTC))
     except URLError:
