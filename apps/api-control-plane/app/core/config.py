@@ -38,6 +38,8 @@ class Settings(BaseSettings):
     health_prod_dependency_checks_enabled: bool = Field(default=False)
     deterministic_pipeline_mixed_mode_allowed: bool = Field(default=False)
     deterministic_pipeline_response_meta_version: str = Field(default="dp-v1")
+    paper_service_status_url: str | None = Field(default=None)
+    live_service_status_url: str | None = Field(default=None)
 
     model_config = SettingsConfigDict(env_prefix="GB_", extra="ignore")
 

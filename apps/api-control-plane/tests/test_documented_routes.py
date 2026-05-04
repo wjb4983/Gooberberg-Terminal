@@ -5,6 +5,9 @@ from app.main import create_app
 
 DOCUMENTED_HTTP_ROUTES = {
     "/api/v1/health",
+    "/api/v1/control-plane/training/launch",
+    "/api/v1/control-plane/models/leaderboard",
+    "/api/v1/control-plane/services/external-status",
     "/api/v1/audit/decisions/{decision_id}",
     "/api/v1/audit/orders/{order_id}",
     "/api/v1/audit/fills/{fill_id}",

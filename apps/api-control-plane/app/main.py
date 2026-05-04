@@ -13,6 +13,7 @@ from fastapi.responses import JSONResponse
 from app.api.routers.alerts import router as alerts_router
 from app.api.routers.audit import router as audit_router
 from app.api.routers.backtest_runs import router as backtest_runs_router
+from app.api.routers.control_plane import router as control_plane_router
 from app.api.routers.graph import router as graph_router
 from app.api.routers.health import router as health_router
 from app.api.routers.jobs import router as jobs_router
@@ -135,6 +136,7 @@ def create_app() -> FastAPI:
         )
 
     app.include_router(health_router, prefix=settings.api_prefix)
+    app.include_router(control_plane_router, prefix=settings.api_prefix)
     app.include_router(audit_router, prefix=settings.api_prefix)
     app.include_router(alerts_router, prefix=settings.api_prefix)
     app.include_router(jobs_router, prefix=settings.api_prefix)

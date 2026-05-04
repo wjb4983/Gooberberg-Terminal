@@ -1,3 +1,9 @@
+from app.schemas.control_plane import (
+    ExternalServicesStatusResponse,
+    ModelLeaderboardEntry,
+    ServiceConnectivityStatus,
+    TrainingLaunchResponse,
+)
 from app.schemas.backtest_runs import (
     BacktestPagedResponse,
     BacktestRunCreateRequest,
@@ -188,5 +194,9 @@ __all__ = [
     "TrainingTemplateCreateRequest",
     "TransactionCostModel",
     "ExecutionDelayModel",
+    "ExternalServicesStatusResponse",
+    "ModelLeaderboardEntry",
+    "ServiceConnectivityStatus",
+    "TrainingLaunchResponse",
     "WebSocketContractEnvelope",
 ]
