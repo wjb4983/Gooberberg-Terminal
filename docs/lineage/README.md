@@ -15,6 +15,7 @@ This directory tracks end-to-end lineage for Tier-0 strategies in the required m
 ## Lineage files
 
 - `tier0-momentum-v1.md`
+- `nvda-open-dip-rebound-hypothesis.md` (research hypothesis, validation, and risk controls)
 
 ## Monthly review policy
 
