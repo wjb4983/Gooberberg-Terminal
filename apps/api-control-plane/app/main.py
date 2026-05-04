@@ -32,7 +32,7 @@ from app.core.config import get_settings
 from app.core.auth import BearerTokenAuthMiddleware
 from app.core.logging import RequestIDMiddleware, configure_logging
 from app.domain.job_runner import JobRunnerRepository, JobRunnerService
-from app.persistence import create_database
+from app.persistence import create_database, run_database_migrations
 from app.persistence.job_events import JobEventRepository
 from app.persistence.models import Base
 from pathlib import Path
@@ -88,6 +88,7 @@ async def app_lifespan(app: FastAPI) -> AsyncIterator[None]:
         for task_type in ("training", "parameter_sweep", "backtest", "testing"):
             task_registry.register_runner(task_type, _noop_task_runner)
 
+        run_database_migrations(settings)
         database = create_database(settings)
         Base.metadata.create_all(database.engine)
 

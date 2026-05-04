@@ -22,7 +22,7 @@ def _dependency_checks_enabled() -> bool:
 
 
 def _run_postgres_probe(request: Request) -> None:
-    with request.app.state.db.session_factory() as session:
+    with request.app.state.database.session_factory() as session:
         session.execute(text("SELECT 1"))
 
 
