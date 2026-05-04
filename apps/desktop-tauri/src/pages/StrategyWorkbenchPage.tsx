@@ -1,17 +1,58 @@
-import { useMemo, useState } from 'react';
-import { createDesktopApiClient } from '../api/client';
+import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import {
+  getStrategyTrainingLiveStatus,
+  launchStrategyTrainingRun,
+  listStrategyTrainingModels,
+  type StrategyTrainingLaunchResponse,
+} from '../api/strategyTraining';
 
 interface StrategyWorkbenchPageProps {
   baseUrl: string;
 }
 
 export function StrategyWorkbenchPage({ baseUrl }: StrategyWorkbenchPageProps): JSX.Element {
-  const client = useMemo(() => createDesktopApiClient({ baseHttpUrl: baseUrl }), [baseUrl]);
   const [riskTolerance, setRiskTolerance] = useState(35);
   const [positionCap, setPositionCap] = useState(8);
   const [explorationWeight, setExplorationWeight] = useState(20);
+  const [selectedModelId, setSelectedModelId] = useState('');
+  const [trainingRun, setTrainingRun] = useState<StrategyTrainingLaunchResponse | null>(null);
+  const [launchError, setLaunchError] = useState<string | null>(null);
 
-  void client;
+  const modelsQuery = useQuery({
+    queryKey: ['strategy-training', 'models', baseUrl],
+    queryFn: () => listStrategyTrainingModels(baseUrl),
+  });
+
+  const liveStatusQuery = useQuery({
+    queryKey: ['strategy-training', 'live-status', baseUrl, trainingRun?.run_id],
+    queryFn: () => getStrategyTrainingLiveStatus(baseUrl, trainingRun?.run_id ?? ''),
+    enabled: Boolean(trainingRun?.run_id),
+    refetchInterval: (query) => {
+      const status = query.state.data?.status ?? trainingRun?.status;
+      return status === 'queued' || status === 'running' ? 2_500 : false;
+    },
+  });
+
+  const handleLaunchTraining = async (): Promise<void> => {
+    const modelId = selectedModelId || modelsQuery.data?.[0]?.id || '';
+    if (!modelId) {
+      setLaunchError('Select a model to launch training.');
+      return;
+    }
+
+    setLaunchError(null);
+    try {
+      const created = await launchStrategyTrainingRun(baseUrl, {
+        strategy_key: 'strategy-workbench',
+        model_id: modelId,
+        parameters: { riskTolerance, positionCap, explorationWeight },
+      });
+      setTrainingRun(created);
+    } catch (error) {
+      setLaunchError(error instanceof Error ? error.message : 'Failed to launch training run.');
+    }
+  };
 
   return (
     <section>
@@ -61,10 +102,35 @@ export function StrategyWorkbenchPage({ baseUrl }: StrategyWorkbenchPageProps): 
 
       <div className="card" style={{ marginBottom: '1rem' }}>
         <h3>Training actions</h3>
-        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-          <button type="button">Queue incremental retraining</button>
-          <button type="button">Run stress-test backfill</button>
-          <button type="button">Export training report</button>
+        <div style={{ display: 'grid', gap: '0.75rem' }}>
+          <label>
+            Training model
+            <select
+              value={selectedModelId}
+              onChange={(event) => setSelectedModelId(event.target.value)}
+              disabled={modelsQuery.isLoading || modelsQuery.data?.length === 0}
+            >
+              <option value="">{modelsQuery.isLoading ? 'Loading models…' : 'Select a model'}</option>
+              {(modelsQuery.data ?? []).map((model) => (
+                <option key={model.id} value={model.id}>
+                  {model.label} ({model.family})
+                </option>
+              ))}
+            </select>
+          </label>
+          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+            <button type="button" onClick={() => void handleLaunchTraining()}>Queue incremental retraining</button>
+            <button type="button">Run stress-test backfill</button>
+            <button type="button">Export training report</button>
+          </div>
+          {modelsQuery.isError ? <p className="muted">Paper/live model service not implemented yet.</p> : null}
+          {modelsQuery.data && modelsQuery.data.length === 0 ? <p className="muted">No models available yet from training model service.</p> : null}
+          {launchError ? <p className="muted">Error: {launchError}</p> : null}
+          {trainingRun ? (
+            <p className="muted">
+              Training run {trainingRun.run_id} launched as job {trainingRun.job_id}.
+            </p>
+          ) : null}
         </div>
       </div>
 
@@ -101,11 +167,17 @@ export function StrategyWorkbenchPage({ baseUrl }: StrategyWorkbenchPageProps): 
 
       <div className="card">
         <h3>Live status dashboard</h3>
-        <ul>
-          <li>Inference stream: Healthy (0 dropped batches in last 15m)</li>
-          <li>Paper rollout coverage: 42% of eligible symbols</li>
-          <li>Guardrail alerts: 1 warning (spread anomaly) pending review</li>
-        </ul>
+        {liveStatusQuery.isError ? <p className="muted">Paper/live status microservice not implemented yet.</p> : null}
+        {!trainingRun ? <p className="muted">Launch a training run to monitor queued/running/completed/failed status.</p> : null}
+        {trainingRun ? (
+          <ul>
+            <li>Run: {trainingRun.run_id}</li>
+            <li>Job: {trainingRun.job_id}</li>
+            <li>Status: {(liveStatusQuery.data?.status ?? trainingRun.status).toUpperCase()}</li>
+            <li>Detail: {liveStatusQuery.data?.detail ?? trainingRun.detail}</li>
+            <li>Last updated: {new Date(liveStatusQuery.data?.updated_at ?? trainingRun.created_at).toLocaleString()}</li>
+          </ul>
+        ) : null}
       </div>
     </section>
   );
