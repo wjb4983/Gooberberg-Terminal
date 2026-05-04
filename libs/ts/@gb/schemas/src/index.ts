@@ -722,3 +722,113 @@ function parseGraphEdge(payload: unknown, index: number): GraphEdge {
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
 }
+
+export interface NvdaOpenDipReboundOpenWindow {
+  startMinutesFromOpen: number;
+  endMinutesFromOpen: number;
+}
+
+export interface NvdaOpenDipReboundDipThresholdRange {
+  minPct: number;
+  maxPct: number;
+}
+
+export interface NvdaOpenDipReboundReboundHorizon {
+  minBars: number;
+  maxBars: number;
+}
+
+export interface NvdaOpenDipReboundPositionSizing {
+  maxNotionalUsd: number;
+  maxPositionPctEquity: number;
+  perTradeRiskPctEquity: number;
+}
+
+export interface NvdaOpenDipReboundSafetyControls {
+  maxDailyDrawdownPct: number;
+  stopLossPct: number;
+  cooldownMinutes: number;
+  maxTradesPerDay: number;
+}
+
+export interface NvdaOpenDipReboundStrategyConfig {
+  strategyKey: 'nvda_open_dip_rebound';
+  openWindow: NvdaOpenDipReboundOpenWindow;
+  dipThresholdRange: NvdaOpenDipReboundDipThresholdRange;
+  reboundHorizon: NvdaOpenDipReboundReboundHorizon;
+  positionSizing: NvdaOpenDipReboundPositionSizing;
+  safetyControls: NvdaOpenDipReboundSafetyControls;
+}
+
+export const DEFAULT_NVDA_OPEN_DIP_REBOUND_STRATEGY_CONFIG: NvdaOpenDipReboundStrategyConfig = {
+  strategyKey: 'nvda_open_dip_rebound',
+  openWindow: { startMinutesFromOpen: 5, endMinutesFromOpen: 30 },
+  dipThresholdRange: { minPct: 0.004, maxPct: 0.012 },
+  reboundHorizon: { minBars: 2, maxBars: 8 },
+  positionSizing: { maxNotionalUsd: 5_000, maxPositionPctEquity: 0.02, perTradeRiskPctEquity: 0.0025 },
+  safetyControls: { maxDailyDrawdownPct: 0.01, stopLossPct: 0.006, cooldownMinutes: 20, maxTradesPerDay: 2 },
+};
+
+export interface NvdaOpenDipReboundTrainingRequest {
+  strategyConfig: NvdaOpenDipReboundStrategyConfig;
+  datasetId: string;
+  lookbackDays: number;
+  validationSplit: number;
+}
+
+export interface NvdaOpenDipReboundModelVariantMetrics {
+  variantId: string;
+  winRate: number;
+  avgReturnPct: number;
+  sharpe: number;
+  maxDrawdownPct: number;
+  totalTrades: number;
+}
+
+export interface NvdaOpenDipReboundTrainingResultSummary {
+  runId: string;
+  selectedVariantId: string;
+  bestValidationSharpe: number;
+  realizedMaxDrawdownPct: number;
+  variantMetrics: NvdaOpenDipReboundModelVariantMetrics[];
+}
+
+export interface NvdaOpenDipReboundExternalLiveStatusSnapshot {
+  strategyInstanceId: string;
+  paperOnline: boolean;
+  liveOnline: boolean;
+  dayPnlUsd: number;
+  grossExposureUsd: number;
+  heartbeatAtIso: string;
+}
+
+export function validateNvdaOpenDipReboundStrategyConfig(config: NvdaOpenDipReboundStrategyConfig): void {
+  assertInRange(config.openWindow.startMinutesFromOpen, 0, 60, 'openWindow.startMinutesFromOpen');
+  assertInRange(config.openWindow.endMinutesFromOpen, 1, 120, 'openWindow.endMinutesFromOpen');
+  assertInRange(config.dipThresholdRange.minPct, 0.001, 0.03, 'dipThresholdRange.minPct');
+  assertInRange(config.dipThresholdRange.maxPct, 0.002, 0.05, 'dipThresholdRange.maxPct');
+  assertInRange(config.reboundHorizon.minBars, 1, 20, 'reboundHorizon.minBars');
+  assertInRange(config.reboundHorizon.maxBars, 1, 60, 'reboundHorizon.maxBars');
+  assertInRange(config.positionSizing.maxNotionalUsd, 100, 50_000, 'positionSizing.maxNotionalUsd');
+  assertInRange(config.positionSizing.maxPositionPctEquity, 0.0025, 0.1, 'positionSizing.maxPositionPctEquity');
+  assertInRange(config.positionSizing.perTradeRiskPctEquity, 0.0005, 0.02, 'positionSizing.perTradeRiskPctEquity');
+  assertInRange(config.safetyControls.maxDailyDrawdownPct, 0.0025, 0.05, 'safetyControls.maxDailyDrawdownPct');
+  assertInRange(config.safetyControls.stopLossPct, 0.001, 0.03, 'safetyControls.stopLossPct');
+  assertInRange(config.safetyControls.cooldownMinutes, 1, 240, 'safetyControls.cooldownMinutes');
+  assertInRange(config.safetyControls.maxTradesPerDay, 1, 10, 'safetyControls.maxTradesPerDay');
+  if (config.openWindow.endMinutesFromOpen <= config.openWindow.startMinutesFromOpen) {
+    throw new Error('openWindow.endMinutesFromOpen must be greater than startMinutesFromOpen.');
+  }
+  if (config.dipThresholdRange.maxPct <= config.dipThresholdRange.minPct) {
+    throw new Error('dipThresholdRange.maxPct must be greater than minPct.');
+  }
+  if (config.reboundHorizon.maxBars < config.reboundHorizon.minBars) {
+    throw new Error('reboundHorizon.maxBars must be >= minBars.');
+  }
+}
+
+function assertInRange(value: number, min: number, max: number, fieldName: string): void {
+  if (!Number.isFinite(value) || value < min || value > max) {
+    throw new Error(`${fieldName} must be between ${min} and ${max}.`);
+  }
+}
