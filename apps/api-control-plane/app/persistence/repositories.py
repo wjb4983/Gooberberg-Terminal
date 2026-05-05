@@ -531,7 +531,7 @@ class MarketDataSqlRepository:
         for symbol in symbols:
             self._session.add(
                 DatasetPartitionRow(
-                    dataset_id=dataset_id,
+                    dataset_id=lookup_id,
                     symbol=symbol,
                     timeframe=timeframe,
                     partition_start=payload.start_date,
@@ -573,11 +573,26 @@ class MarketDataSqlRepository:
     def lookup_dataset(self, dataset_id: str) -> MarketDataDatasetLookupResponse | None:
         row = self._session.get(MarketDataCatalogRow, dataset_id)
         if row is None:
+            row = self._lookup_dataset_by_version_id(dataset_id)
+        if row is None:
             return None
+        resolved_dataset_id = self._resolved_dataset_id(row)
         return MarketDataDatasetLookupResponse(
-            dataset_id=row.dataset_id,
+            dataset_id=resolved_dataset_id,
             source=row.source,
             symbol=row.symbol,
             timeframe=row.timeframe,
             metadata=dict(row.metadata_json or {}),
         )
+
+    def _lookup_dataset_by_version_id(self, dataset_id: str) -> MarketDataCatalogRow | None:
+        rows = self._session.execute(select(MarketDataCatalogRow)).scalars().all()
+        for row in rows:
+            if self._resolved_dataset_id(row) == dataset_id:
+                return row
+        return None
+
+    @staticmethod
+    def _resolved_dataset_id(row: MarketDataCatalogRow) -> str:
+        version_id = (row.metadata_json or {}).get("version_id")
+        return version_id if isinstance(version_id, str) and version_id else row.dataset_id

@@ -21,6 +21,10 @@ def _dependency_checks_enabled() -> bool:
     return get_settings().health_prod_dependency_checks_enabled
 
 
+def _placeholder_dependency_status(*, configured: bool, detail: str) -> DependencyStatus:
+    return DependencyStatus(configured=configured, reachable=None, detail=detail)
+
+
 def _run_postgres_probe(request: Request) -> None:
     with request.app.state.database.session_factory() as session:
         session.execute(text("SELECT 1"))
@@ -30,9 +34,15 @@ async def _postgres_status(request: Request, *, timeout_seconds: float) -> Depen
     settings = get_settings()
     configured = bool(settings.postgres_dsn)
     if not configured:
-        return DependencyStatus(configured=False, reachable=False, detail="postgres dsn not configured")
+        return _placeholder_dependency_status(
+            configured=False,
+            detail="placeholder: postgres dsn not configured",
+        )
     if not _dependency_checks_enabled():
-        return DependencyStatus(configured=True, reachable=False, detail="dependency checks disabled by GB_HEALTH_PROD_DEPENDENCY_CHECKS_ENABLED")
+        return _placeholder_dependency_status(
+            configured=True,
+            detail="placeholder: dependency checks disabled by GB_HEALTH_PROD_DEPENDENCY_CHECKS_ENABLED",
+        )
 
     start = time.monotonic()
     try:
@@ -48,9 +58,15 @@ async def _redis_status(request: Request, *, timeout_seconds: float) -> Dependen
     settings = get_settings()
     configured = bool(settings.redis_dsn)
     if not configured:
-        return DependencyStatus(configured=False, reachable=False, detail="redis dsn not configured")
+        return _placeholder_dependency_status(
+            configured=False,
+            detail="placeholder: redis dsn not configured",
+        )
     if not _dependency_checks_enabled():
-        return DependencyStatus(configured=True, reachable=False, detail="dependency checks disabled by GB_HEALTH_PROD_DEPENDENCY_CHECKS_ENABLED")
+        return _placeholder_dependency_status(
+            configured=True,
+            detail="placeholder: dependency checks disabled by GB_HEALTH_PROD_DEPENDENCY_CHECKS_ENABLED",
+        )
 
     client = getattr(request.app.state, "redis_client", None)
     if client is None:
@@ -79,7 +95,8 @@ async def health(request: Request) -> HealthResponse:
     else:
         redis = await _redis_status(request, timeout_seconds=min(_DEPENDENCY_PROBE_TIMEOUT_SECONDS, remaining))
 
-    status = "ok" if postgres.reachable and redis.reachable else "degraded"
+    dependencies = (postgres, redis)
+    status = "degraded" if any(dependency.reachable is False for dependency in dependencies) else "ok"
     with observe_pipeline_stage(stage="health", fingerprint_source={"route":"health","dep_checks":settings.health_prod_dependency_checks_enabled,"status":status}, fallback_reason=fallback_reason) as fingerprint:
         pass
     return HealthResponse(service=settings.app_name, status=status, version=settings.app_version, postgres=postgres, redis=redis, response_metadata=PipelineResponseMeta(version=settings.deterministic_pipeline_response_meta_version, deterministic=True, stage="health", fingerprint=fingerprint, fallback_reason=fallback_reason))

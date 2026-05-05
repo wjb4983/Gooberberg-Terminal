@@ -173,6 +173,34 @@ def test_duplicate_dataset_ingestion_with_same_spec_returns_same_dataset_id() ->
     assert second_payload["status"] == "already_exists"
 
 
+def test_dataset_lookup_accepts_canonical_dataset_id_when_request_id_differs() -> None:
+    with TestClient(create_app()) as client:
+        response = client.post(
+            "/api/v1/market-data/ingestions",
+            json={
+                "provider": "massive",
+                "asset_class": "stocks",
+                "universe_members": ["AAPL"],
+                "resolutions": ["1d"],
+                "start_date": "2025-01-01",
+                "end_date": "2025-01-02",
+                "idempotency_key": "ingestion-job-123",
+            },
+        )
+
+        assert response.status_code == 202
+        payload = response.json()
+        assert payload["request_id"] == "ingestion-job-123"
+        assert payload["dataset_id"] != payload["request_id"]
+
+        lookup_response = client.get(f"/api/v1/market-data/datasets/{payload['dataset_id']}")
+
+    assert lookup_response.status_code == 200
+    lookup_payload = lookup_response.json()
+    assert lookup_payload["dataset_id"] == payload["dataset_id"]
+    assert lookup_payload["metadata"]["version_id"] == payload["dataset_id"]
+
+
 def test_training_run_preflight_returns_normalized_payload() -> None:
     market_data_service = StubMarketDataService(
         coverage=MarketDataCacheCoverageResponse(
