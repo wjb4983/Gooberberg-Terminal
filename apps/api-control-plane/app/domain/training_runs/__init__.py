@@ -6,7 +6,7 @@ if TYPE_CHECKING:
     from app.domain.training_runs.repository import Repository
     from app.domain.training_runs.service import Service
 
-__all__ = ["Repository", "Service"]
+__all__ = ["Repository", "Service", "TrainingRunService"]
 
 
 def __getattr__(name: str) -> Any:
@@ -20,4 +20,8 @@ def __getattr__(name: str) -> Any:
         from app.domain.training_runs.service import Service
 
         return Service
+    if name == "TrainingRunService":
+        from app.domain.training_runs.service import Service as TrainingRunService
+
+        return TrainingRunService
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

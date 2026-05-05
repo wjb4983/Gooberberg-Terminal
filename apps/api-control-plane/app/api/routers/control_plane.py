@@ -17,9 +17,9 @@ from app.schemas import (
     TrainingLaunchResponse,
     TrainingRunCreateRequest,
 )
-from app.domain.training_runs import TrainingRunService
+from app.domain.training_runs import Service as TrainingRunService
 from app.domain.model_configs import ModelConfigService
-from app.domain.market_data import MarketDataService
+from app.domain.market_data import Service as MarketDataService
 
 router = APIRouter(prefix="/control-plane", tags=["control-plane"])
 
