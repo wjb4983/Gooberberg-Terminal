@@ -11,6 +11,10 @@ const navGroups = [
       { label: 'Backtest', to: '/models/backtest' },
       { label: 'Deploy', to: '/models/deploy' },
       { label: 'Monitor', to: '/models/monitor' },
+      { label: 'Model Catalog', to: '/model-catalog' },
+      { label: 'Parameterization', to: '/parameterization' },
+      { label: 'Parameter Sweeps', to: '/parameter-sweeps' },
+      { label: 'Testing', to: '/testing' },
     ],
   },
   {
