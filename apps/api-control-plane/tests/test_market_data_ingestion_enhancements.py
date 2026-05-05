@@ -39,3 +39,46 @@ def test_batch_preset_ingestion_endpoint() -> None:
     body = response.json()
     assert len(body) == 2
     assert all("request_id" in item for item in body)
+
+
+def test_list_ingestions_returns_most_recent_first_with_dataset_and_request_ids() -> None:
+    first = client.post(
+        "/api/v1/market-data/ingestions",
+        json={
+            "provider": "massive",
+            "asset_class": "stocks",
+            "symbols": ["SPY"],
+            "timeframe": "1d",
+            "start_date": "2024-01-01",
+            "end_date": "2024-01-10",
+            "idempotency_key": "list-ingestion-first",
+            "alias": "first-alias",
+            "requested_by": "test-user",
+        },
+    )
+    assert first.status_code == 202
+
+    second = client.post(
+        "/api/v1/market-data/ingestions",
+        json={
+            "provider": "massive",
+            "asset_class": "stocks",
+            "symbols": ["QQQ"],
+            "timeframe": "1d",
+            "start_date": "2024-02-01",
+            "end_date": "2024-02-10",
+            "idempotency_key": "list-ingestion-second",
+            "alias": "second-alias",
+            "requested_by": "test-user",
+        },
+    )
+    assert second.status_code == 202
+    second_payload = second.json()
+
+    listed = client.get("/api/v1/market-data/ingestions")
+    assert listed.status_code == 200
+    body = listed.json()
+    assert len(body) >= 2
+    assert body[0]["request_id"] == "list-ingestion-second"
+    assert body[0]["dataset_id"] == second_payload["dataset_id"]
+    assert body[0]["effective_params"]["alias"] == "second-alias"

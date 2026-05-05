@@ -29,6 +29,13 @@ def request_market_data_batch_ingestion(
     return service.request_batch_ingestion(payload)
 
 
+@router.get("/ingestions", response_model=list[MarketDataIngestionResponse])
+def list_market_data_ingestions(
+    service: MarketDataService = Depends(get_market_data_service),
+) -> list[MarketDataIngestionResponse]:
+    return service.list_ingestions()
+
+
 @router.get("/cache-coverage", response_model=MarketDataCacheCoverageResponse)
 def get_cache_coverage(
     symbol: str = Query(min_length=1),

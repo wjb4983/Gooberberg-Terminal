@@ -550,6 +550,67 @@ class MarketDataSqlRepository:
             logs=["ingestion accepted", f"idempotency_key={payload.idempotency_key or 'dataset_id'}"],
         )
 
+    def list_ingestions(self) -> list[MarketDataIngestionResponse]:
+        rows = self._session.execute(select(MarketDataCatalogRow)).scalars().all()
+        sorted_rows = sorted(
+            rows,
+            key=lambda row: (
+                str((row.metadata_json or {}).get("created_at") or ""),
+                row.dataset_id,
+            ),
+            reverse=True,
+        )
+
+        responses: list[MarketDataIngestionResponse] = []
+        for row in sorted_rows:
+            metadata = dict(row.metadata_json or {})
+            symbols_raw = metadata.get("symbols")
+            symbols = (
+                [item for item in symbols_raw if isinstance(item, str) and item]
+                if isinstance(symbols_raw, list)
+                else []
+            )
+            if not symbols:
+                symbols = [row.symbol]
+
+            resolutions_raw = metadata.get("resolutions")
+            resolutions = (
+                [item for item in resolutions_raw if isinstance(item, str) and item]
+                if isinstance(resolutions_raw, list)
+                else []
+            )
+            timeframe = resolutions[0] if resolutions else row.timeframe
+            status = str(metadata.get("status") or "accepted")
+            logs_raw = metadata.get("logs")
+            logs = (
+                [item for item in logs_raw if isinstance(item, str)]
+                if isinstance(logs_raw, list)
+                else []
+            )
+
+            responses.append(
+                MarketDataIngestionResponse(
+                    request_id=row.dataset_id,
+                    dataset_id=self._resolved_dataset_id(row),
+                    status=status,
+                    source=row.source,
+                    symbols=symbols,
+                    timeframe=timeframe,
+                    effective_params={
+                        "provider": metadata.get("provider"),
+                        "asset_class": metadata.get("asset_class"),
+                        "symbols": symbols,
+                        "resolutions": resolutions if resolutions else [timeframe],
+                        "start_date": metadata.get("start_date"),
+                        "end_date": metadata.get("end_date"),
+                        "preset_id": metadata.get("preset_id"),
+                        "alias": metadata.get("alias"),
+                    },
+                    logs=logs,
+                )
+            )
+        return responses
+
     def get_cache_coverage(self, symbol: str, timeframe: str) -> MarketDataCacheCoverageResponse:
         result = self._session.execute(
             select(

@@ -46,6 +46,11 @@ interface TrainingRunItem {
   created_at: string;
 }
 
+interface IngestionItem {
+  request_id?: string;
+  dataset_id?: string;
+}
+
 
 interface TrainingLaunchFormState {
   modelConfigId: string;
@@ -247,7 +252,7 @@ const defaultKalmanFormState: KalmanFormState = {
 
 const defaultTrainingLaunchForm: TrainingLaunchFormState = {
   modelConfigId: '',
-  datasetId: 'equities_daily_v1',
+  datasetId: '',
   taskType: 'time_series_momentum',
   subtaskType: 'ranking',
   epochs: '20',
@@ -402,6 +407,7 @@ export function BuildingModelsPage({ baseUrl }: BuildingModelsPageProps): JSX.El
 
   const [modelConfigs, setModelConfigs] = useState<ModelConfigItem[]>([]);
   const [modelFamilies, setModelFamilies] = useState<string[]>([]);
+  const [ingestions, setIngestions] = useState<IngestionItem[]>([]);
   const [selectedFamily, setSelectedFamily] = useState('hmm_regime_switching');
   const [jobs, setJobs] = useState<JobCard[]>([]);
 
@@ -440,17 +446,33 @@ export function BuildingModelsPage({ baseUrl }: BuildingModelsPageProps): JSX.El
     () => modelFamilies.filter((family) => SUPPORTED_BUILDING_MODEL_FAMILIES.includes(family as (typeof SUPPORTED_BUILDING_MODEL_FAMILIES)[number])),
     [modelFamilies],
   );
+  const knownDatasetIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const run of jobs) {
+      const datasetId = run.datasetId.trim();
+      if (datasetId) ids.add(datasetId);
+    }
+    for (const ingestion of ingestions) {
+      const datasetId = typeof ingestion.dataset_id === 'string' ? ingestion.dataset_id.trim() : '';
+      if (datasetId) ids.add(datasetId);
+      const requestId = typeof ingestion.request_id === 'string' ? ingestion.request_id.trim() : '';
+      if (requestId) ids.add(requestId);
+    }
+    return Array.from(ids).sort((a, b) => a.localeCompare(b));
+  }, [ingestions, jobs]);
 
   const load = useCallback(async (): Promise<void> => {
     setError(null);
     try {
-      const [configs, runs, families] = await Promise.all([
+      const [configs, runs, families, ingestionPayload] = await Promise.all([
         requestJson<ModelConfigItem[]>(baseUrl, '/api/v1/model-configs'),
         requestJson<TrainingRunItem[]>(baseUrl, '/api/v1/training-runs'),
         requestJson<string[]>(baseUrl, '/api/v1/models/deployments/families'),
+        requestJson<IngestionItem[]>(baseUrl, '/api/v1/market-data/ingestions').catch(() => []),
       ]);
       setModelConfigs(configs);
       setModelFamilies(families);
+      setIngestions(ingestionPayload);
       setSelectedFamily((previous) => {
         if (requestedFamily && SUPPORTED_BUILDING_MODEL_FAMILIES.includes(requestedFamily as (typeof SUPPORTED_BUILDING_MODEL_FAMILIES)[number])) return requestedFamily;
         if (SUPPORTED_BUILDING_MODEL_FAMILIES.includes(previous as (typeof SUPPORTED_BUILDING_MODEL_FAMILIES)[number])) return previous;
@@ -462,9 +484,15 @@ export function BuildingModelsPage({ baseUrl }: BuildingModelsPageProps): JSX.El
         const optimistic = previous.filter((item) => item.isOptimistic);
         return [...optimistic, ...hydrated];
       });
+      const datasetFromIngestions = ingestionPayload.find((item) => typeof item.dataset_id === 'string' && item.dataset_id.trim())?.dataset_id?.trim()
+        ?? ingestionPayload.find((item) => typeof item.request_id === 'string' && item.request_id.trim())?.request_id?.trim()
+        ?? '';
+      const datasetFromRuns = runs.find((item) => item.dataset_id.trim())?.dataset_id?.trim() ?? '';
+      const defaultDatasetId = datasetFromIngestions || datasetFromRuns;
       setLaunchForm((previous) => ({
         ...previous,
         modelConfigId: previous.modelConfigId || configs[0]?.id || '',
+        datasetId: previous.datasetId || defaultDatasetId,
       }));
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : 'Failed loading model build workspace.');
@@ -674,7 +702,12 @@ export function BuildingModelsPage({ baseUrl }: BuildingModelsPageProps): JSX.El
   }, [baseUrl]);
 
   useEffect(() => {
-    if (!launchForm.datasetId.trim() || modelConfigs.length === 0) {
+    if (!launchForm.datasetId.trim()) {
+      setCompatibilityStatuses({});
+      setCompatibilityProbeMessage('Enter or select a dataset ID to run compatibility checks.');
+      return;
+    }
+    if (modelConfigs.length === 0) {
       setCompatibilityStatuses({});
       setCompatibilityProbeMessage(null);
       return;
@@ -982,7 +1015,16 @@ export function BuildingModelsPage({ baseUrl }: BuildingModelsPageProps): JSX.El
               </ul>
             ) : null}
           </div>
-          <input value={launchForm.datasetId} onChange={(event) => setLaunchForm((prev) => ({ ...prev, datasetId: event.target.value }))} placeholder="Dataset ID" />
+          <input
+            list="known-dataset-ids"
+            value={launchForm.datasetId}
+            onChange={(event) => setLaunchForm((prev) => ({ ...prev, datasetId: event.target.value }))}
+            placeholder="Dataset ID"
+          />
+          <datalist id="known-dataset-ids">
+            {knownDatasetIds.map((datasetId) => <option key={datasetId} value={datasetId} />)}
+          </datalist>
+          {knownDatasetIds.length === 0 ? <small className="muted">No known datasets yet. Create one on Parameterization, then come back to launch training.</small> : null}
           {launchErrors.datasetId ? <small className="muted">{launchErrors.datasetId}</small> : null}
           <div style={{ display: 'grid', gap: '0.5rem', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' }}>
             <select value={launchForm.taskType} onChange={(event) => setLaunchForm((prev) => ({ ...prev, taskType: event.target.value as TaskType }))}>

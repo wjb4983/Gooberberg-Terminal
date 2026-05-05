@@ -68,6 +68,9 @@ class Service:
             )
         return responses
 
+    def list_ingestions(self) -> list[MarketDataIngestionResponse]:
+        return self._repository.list_ingestions()
+
     def _resolve_payload(self, payload: MarketDataIngestionRequest) -> MarketDataIngestionRequest:
         if not payload.preset_id:
             if payload.start_date is None or payload.end_date is None:

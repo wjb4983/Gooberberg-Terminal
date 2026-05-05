@@ -14,6 +14,9 @@ class Repository:
     def request_ingestion(self, payload: MarketDataIngestionRequest) -> MarketDataIngestionResponse:
         return self._repository.request_ingestion(payload)
 
+    def list_ingestions(self) -> list[MarketDataIngestionResponse]:
+        return self._repository.list_ingestions()
+
     def get_cache_coverage(self, symbol: str, timeframe: str) -> MarketDataCacheCoverageResponse:
         return self._repository.get_cache_coverage(symbol, timeframe)
 
