@@ -224,6 +224,30 @@ function normalizeDate(value: string): string {
   return value.trim();
 }
 
+const SAVED_UNIVERSE_SEED_SYMBOLS: Record<string, string[]> = {
+  sp500: ['SPY', 'QQQ', 'IWM'],
+  all_stocks_etfs_us: ['SPY', 'QQQ', 'IWM', 'VTI', 'DIA'],
+  top_liquid_etfs: ['SPY', 'QQQ', 'IWM', 'TLT', 'GLD'],
+};
+
+function resolveDatasetSymbols(args: {
+  manualSymbolsCsv: string;
+  symbolStrategy: DatasetPreset['symbolStrategy'];
+  savedUniverseId: string;
+}): string[] {
+  const manualSymbols = args.manualSymbolsCsv
+    .split(',')
+    .map((item) => item.trim().toUpperCase())
+    .filter(Boolean);
+  if (manualSymbols.length > 0) {
+    return Array.from(new Set(manualSymbols));
+  }
+  if (args.symbolStrategy !== 'saved_universe') {
+    return [];
+  }
+  return SAVED_UNIVERSE_SEED_SYMBOLS[args.savedUniverseId.trim().toLowerCase()] ?? [];
+}
+
 export function ParameterizationPage({ baseUrl }: ParameterizationPageProps): JSX.Element {
   const [taskType, setTaskType] = useState<TaskType>('time_series_momentum');
   const [subtaskType, setSubtaskType] = useState<SubtaskType>('ranking');
@@ -496,11 +520,20 @@ export function ParameterizationPage({ baseUrl }: ParameterizationPageProps): JS
 
   const validateDatasetForm = (): DatasetFormErrors => {
     const errors: DatasetFormErrors = {};
-    const symbols = datasetCreateForm.symbolsCsv.split(',').map((item) => item.trim()).filter(Boolean);
+    const symbols = resolveDatasetSymbols({
+      manualSymbolsCsv: datasetCreateForm.symbolsCsv,
+      symbolStrategy: selectedDatasetPreset.symbolStrategy,
+      savedUniverseId: datasetCreateForm.savedUniverseId,
+    });
     const requiresManualSymbols = selectedDatasetPreset.symbolStrategy === 'manual_symbols';
-    if (!datasetCreateForm.savedUniverseId.trim() && symbols.length === 0) {
-      errors.symbolsCsv = 'Provide symbols list or a saved universe ID.';
-      errors.savedUniverseId = requiresManualSymbols ? undefined : 'Provide symbols list or a saved universe ID.';
+    if (symbols.length === 0) {
+      if (requiresManualSymbols) {
+        errors.symbolsCsv = 'Provide a symbols list.';
+      } else if (!datasetCreateForm.savedUniverseId.trim()) {
+        errors.savedUniverseId = 'Provide a saved universe ID.';
+      } else {
+        errors.savedUniverseId = 'Saved universe expansion is unavailable for this ID. Use a listed preset ID or switch to Custom manual symbols.';
+      }
     }
     if (!normalizeDate(datasetCreateForm.startDate)) {
       errors.startDate = 'Start date is required.';
@@ -526,18 +559,26 @@ export function ParameterizationPage({ baseUrl }: ParameterizationPageProps): JS
     }
 
     try {
-      const symbols = datasetCreateForm.symbolsCsv.split(',').map((item) => item.trim()).filter(Boolean);
+      const symbols = resolveDatasetSymbols({
+        manualSymbolsCsv: datasetCreateForm.symbolsCsv,
+        symbolStrategy: selectedDatasetPreset.symbolStrategy,
+        savedUniverseId: datasetCreateForm.savedUniverseId,
+      });
+      const timeframe = datasetCreateForm.finestResolution.trim();
       const payload = await requestJson<IngestionItem>(baseUrl, '/api/v1/market-data/ingestions', {
         method: 'POST',
         body: JSON.stringify({
-          source: 'polygon',
-          universe_type: datasetCreateForm.universeType,
+          provider: 'massive',
+          asset_class: datasetCreateForm.universeType,
+          universe_members: symbols,
           symbols,
-          universe_id: datasetCreateForm.savedUniverseId.trim() || undefined,
-          timeframe: datasetCreateForm.finestResolution.trim(),
+          resolutions: [timeframe],
+          timeframe,
           start_date: datasetCreateForm.startDate,
           end_date: datasetCreateForm.endDate,
-          feature_pack_enabled: datasetCreateForm.featurePackEnabled,
+          feature_recipe_version: datasetCreateForm.featurePackEnabled ? 'v2' : 'v1',
+          label_recipe_version: 'v1',
+          alias: datasetCreateForm.savedUniverseId.trim() || undefined,
         }),
       });
 
