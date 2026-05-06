@@ -4,9 +4,13 @@ export interface DatasetCreateForm {
   savedUniverseId: string;
   startDate: string;
   endDate: string;
-  finestResolution: string;
+  targetResolution: ResolutionOption;
+  fetchResolution: ResolutionOption;
   featurePackEnabled: boolean;
 }
+
+export const RESOLUTION_OPTIONS = ['1m', '5m', '15m', '1h', '1d'] as const;
+export type ResolutionOption = (typeof RESOLUTION_OPTIONS)[number];
 
 export interface DatasetPreset {
   id: 'sp500_default' | 'all_stocks_etfs_us' | 'top_liquid_etfs' | 'custom_manual';
@@ -14,7 +18,7 @@ export interface DatasetPreset {
   universe_type: DatasetCreateForm['universeType'];
   symbolStrategy: 'saved_universe' | 'manual_symbols';
   savedUniverseId?: string;
-  defaultTimeframe: string;
+  defaultTimeframe: ResolutionOption;
   defaultDateWindow: {
     mode: 'fixed_range' | 'rolling_window';
     startDate: string;
@@ -31,7 +35,28 @@ export interface DatasetFormErrors {
   savedUniverseId?: string;
   startDate?: string;
   endDate?: string;
-  finestResolution?: string;
+  targetResolution?: string;
+  fetchResolution?: string;
+}
+
+interface IngestResolutionPayload {
+  timeframe: ResolutionOption;
+  resolutions: ResolutionOption[];
+}
+
+export function normalizeIngestResolution(args: {
+  targetResolution: string;
+  fetchResolution?: string;
+}): IngestResolutionPayload | null {
+  const target = RESOLUTION_OPTIONS.find((value) => value === args.targetResolution.trim());
+  if (!target) return null;
+  const fetchResolutionCandidate = args.fetchResolution?.trim() ?? target;
+  const fetchResolution = RESOLUTION_OPTIONS.find((value) => value === fetchResolutionCandidate);
+  if (!fetchResolution) return null;
+  return {
+    timeframe: target,
+    resolutions: [fetchResolution],
+  };
 }
 
 export const DATASET_PRESETS: DatasetPreset[] = [

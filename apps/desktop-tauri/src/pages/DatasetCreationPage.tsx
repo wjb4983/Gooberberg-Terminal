@@ -2,7 +2,14 @@ import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { fetchUniverseSymbols } from '../api/universes';
 import { requestJson } from '../api/requestJson';
-import { DATASET_PRESETS, type DatasetCreateForm, type DatasetFormErrors, type DatasetPreset } from '../features/datasets/forms';
+import {
+  DATASET_PRESETS,
+  RESOLUTION_OPTIONS,
+  normalizeIngestResolution,
+  type DatasetCreateForm,
+  type DatasetFormErrors,
+  type DatasetPreset,
+} from '../features/datasets/forms';
 
 interface DatasetCreationPageProps { baseUrl: string; }
 interface IngestionItem { request_id?: string; dataset_id?: string; status?: string; }
@@ -15,7 +22,16 @@ function resolveManualSymbols(args: { manualSymbolsCsv: string; symbolStrategy: 
 
 export function DatasetCreationPage({ baseUrl }: DatasetCreationPageProps): JSX.Element {
   const [selectedDatasetPresetId, setSelectedDatasetPresetId] = useState<DatasetPreset['id']>('sp500_default');
-  const [datasetCreateForm, setDatasetCreateForm] = useState<DatasetCreateForm>({ universeType: 'stocks', symbolsCsv: 'AAPL,MSFT,SPY', savedUniverseId: '', startDate: '2024-01-01', endDate: '2024-12-31', finestResolution: '1d', featurePackEnabled: true });
+  const [datasetCreateForm, setDatasetCreateForm] = useState<DatasetCreateForm>({
+    universeType: 'stocks',
+    symbolsCsv: 'AAPL,MSFT,SPY',
+    savedUniverseId: '',
+    startDate: '2024-01-01',
+    endDate: '2024-12-31',
+    targetResolution: '1d',
+    fetchResolution: '1d',
+    featurePackEnabled: true,
+  });
   const [datasetFormErrors, setDatasetFormErrors] = useState<DatasetFormErrors>({});
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -44,7 +60,11 @@ export function DatasetCreationPage({ baseUrl }: DatasetCreationPageProps): JSX.
     if (!datasetCreateForm.startDate) errors.startDate = 'Start date is required.';
     if (!datasetCreateForm.endDate) errors.endDate = 'End date is required.';
     if (datasetCreateForm.startDate && datasetCreateForm.endDate && datasetCreateForm.startDate > datasetCreateForm.endDate) errors.endDate = 'End date must be on or after start date.';
-    if (!datasetCreateForm.finestResolution.trim()) errors.finestResolution = 'Finest resolution target is required.';
+    if (!RESOLUTION_OPTIONS.includes(datasetCreateForm.targetResolution)) errors.targetResolution = 'Target resolution must be one of: 1m, 5m, 15m, 1h, 1d.';
+    if (!RESOLUTION_OPTIONS.includes(datasetCreateForm.fetchResolution)) errors.fetchResolution = 'Fetch resolution must be one of: 1m, 5m, 15m, 1h, 1d.';
+    if (!normalizeIngestResolution({ targetResolution: datasetCreateForm.targetResolution, fetchResolution: datasetCreateForm.fetchResolution })) {
+      errors.targetResolution = 'Unsupported resolution mapping.';
+    }
     return { errors, symbols };
   };
 
@@ -52,7 +72,30 @@ export function DatasetCreationPage({ baseUrl }: DatasetCreationPageProps): JSX.
     const { errors, symbols } = await validateDatasetForm();
     setDatasetFormErrors(errors);
     if (Object.keys(errors).length > 0) return;
-    const payload = await requestJson<IngestionItem>(baseUrl, '/api/v1/market-data/ingestions', { method: 'POST', body: JSON.stringify({ provider: 'massive', asset_class: datasetCreateForm.universeType, universe_members: symbols, symbols, resolutions: [datasetCreateForm.finestResolution.trim()], timeframe: datasetCreateForm.finestResolution.trim(), start_date: datasetCreateForm.startDate, end_date: datasetCreateForm.endDate, feature_recipe_version: datasetCreateForm.featurePackEnabled ? 'v2' : 'v1', label_recipe_version: 'v1', alias: datasetCreateForm.savedUniverseId.trim() || undefined }) });
+    const normalizedResolution = normalizeIngestResolution({
+      targetResolution: datasetCreateForm.targetResolution,
+      fetchResolution: datasetCreateForm.fetchResolution,
+    });
+    if (!normalizedResolution) {
+      setDatasetFormErrors({ targetResolution: 'Unsupported resolution mapping.' });
+      return;
+    }
+    const payload = await requestJson<IngestionItem>(baseUrl, '/api/v1/market-data/ingestions', {
+      method: 'POST',
+      body: JSON.stringify({
+        provider: 'massive',
+        asset_class: datasetCreateForm.universeType,
+        universe_members: symbols,
+        symbols,
+        resolutions: normalizedResolution.resolutions,
+        timeframe: normalizedResolution.timeframe,
+        start_date: datasetCreateForm.startDate,
+        end_date: datasetCreateForm.endDate,
+        feature_recipe_version: datasetCreateForm.featurePackEnabled ? 'v2' : 'v1',
+        label_recipe_version: 'v1',
+        alias: datasetCreateForm.savedUniverseId.trim() || undefined,
+      }),
+    });
     const id = payload.dataset_id || (payload.request_id ? `ingestion:${payload.request_id}` : 'submitted');
     setNotice(`Dataset creation submitted: ${id}`);
   };
@@ -79,7 +122,16 @@ export function DatasetCreationPage({ baseUrl }: DatasetCreationPageProps): JSX.
         </label>
         <label>Start date<input type="date" value={datasetCreateForm.startDate} onChange={(event) => setDatasetCreateForm((prev) => ({ ...prev, startDate: event.target.value }))} /></label>
         <label>End date<input type="date" value={datasetCreateForm.endDate} onChange={(event) => setDatasetCreateForm((prev) => ({ ...prev, endDate: event.target.value }))} /></label>
-        <label>Finest resolution<input value={datasetCreateForm.finestResolution} onChange={(event) => setDatasetCreateForm((prev) => ({ ...prev, finestResolution: event.target.value }))} /></label>
+        <label>Target resolution
+          <select value={datasetCreateForm.targetResolution} onChange={(event) => setDatasetCreateForm((prev) => ({ ...prev, targetResolution: event.target.value as DatasetCreateForm['targetResolution'] }))}>
+            {RESOLUTION_OPTIONS.map((resolution) => <option key={resolution} value={resolution}>{resolution}</option>)}
+          </select>
+        </label>
+        <label>Backend fetch resolution
+          <select value={datasetCreateForm.fetchResolution} onChange={(event) => setDatasetCreateForm((prev) => ({ ...prev, fetchResolution: event.target.value as DatasetCreateForm['fetchResolution'] }))}>
+            {RESOLUTION_OPTIONS.map((resolution) => <option key={resolution} value={resolution}>{resolution}</option>)}
+          </select>
+        </label>
         <label><input type="checkbox" checked={datasetCreateForm.featurePackEnabled} onChange={(event) => setDatasetCreateForm((prev) => ({ ...prev, featurePackEnabled: event.target.checked }))} /> Feature pack enabled</label>
         <button type="button" onClick={() => void createDataset()}>Start dataset download on server</button>
         {Object.values(datasetFormErrors)[0] ? <small className="error">{Object.values(datasetFormErrors).filter(Boolean).join(' ')}</small> : null}
