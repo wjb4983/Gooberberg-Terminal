@@ -113,30 +113,6 @@ function normalizeDate(value: string): string {
   return value.trim();
 }
 
-const SAVED_UNIVERSE_SEED_SYMBOLS: Record<string, string[]> = {
-  sp500: ['SPY', 'QQQ', 'IWM'],
-  all_stocks_etfs_us: ['SPY', 'QQQ', 'IWM', 'VTI', 'DIA'],
-  top_liquid_etfs: ['SPY', 'QQQ', 'IWM', 'TLT', 'GLD'],
-};
-
-function resolveDatasetSymbols(args: {
-  manualSymbolsCsv: string;
-  symbolStrategy: DatasetPreset['symbolStrategy'];
-  savedUniverseId: string;
-}): string[] {
-  const manualSymbols = args.manualSymbolsCsv
-    .split(',')
-    .map((item) => item.trim().toUpperCase())
-    .filter(Boolean);
-  if (manualSymbols.length > 0) {
-    return Array.from(new Set(manualSymbols));
-  }
-  if (args.symbolStrategy !== 'saved_universe') {
-    return [];
-  }
-  return SAVED_UNIVERSE_SEED_SYMBOLS[args.savedUniverseId.trim().toLowerCase()] ?? [];
-}
-
 export function ParameterizationPage({ baseUrl }: ParameterizationPageProps): JSX.Element {
   const [taskType, setTaskType] = useState<TaskType>('time_series_momentum');
   const [subtaskType, setSubtaskType] = useState<SubtaskType>('ranking');
