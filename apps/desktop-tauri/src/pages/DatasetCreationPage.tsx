@@ -1,18 +1,16 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { fetchUniverseSymbols } from '../api/universes';
 import { requestJson } from '../api/requestJson';
 import { DATASET_PRESETS, type DatasetCreateForm, type DatasetFormErrors, type DatasetPreset } from '../features/datasets/forms';
 
 interface DatasetCreationPageProps { baseUrl: string; }
 interface IngestionItem { request_id?: string; dataset_id?: string; status?: string; }
 
-const SAVED_UNIVERSE_SEED_SYMBOLS: Record<string, string[]> = { sp500: ['SPY','QQQ','IWM'], all_stocks_etfs_us: ['SPY','QQQ','IWM','VTI','DIA'], top_liquid_etfs: ['SPY','QQQ','IWM','TLT','GLD'] };
-
-function resolveDatasetSymbols(args: { manualSymbolsCsv: string; symbolStrategy: DatasetPreset['symbolStrategy']; savedUniverseId: string; }): string[] {
+function resolveManualSymbols(args: { manualSymbolsCsv: string; symbolStrategy: DatasetPreset['symbolStrategy']; }): string[] {
   const manualSymbols = args.manualSymbolsCsv.split(',').map((item) => item.trim().toUpperCase()).filter(Boolean);
   if (manualSymbols.length > 0) return Array.from(new Set(manualSymbols));
-  if (args.symbolStrategy !== 'saved_universe') return [];
-  return SAVED_UNIVERSE_SEED_SYMBOLS[args.savedUniverseId.trim().toLowerCase()] ?? [];
+  return [];
 }
 
 export function DatasetCreationPage({ baseUrl }: DatasetCreationPageProps): JSX.Element {
@@ -23,23 +21,37 @@ export function DatasetCreationPage({ baseUrl }: DatasetCreationPageProps): JSX.
 
   const selectedDatasetPreset = useMemo(() => DATASET_PRESETS.find((preset) => preset.id === selectedDatasetPresetId) ?? DATASET_PRESETS[0], [selectedDatasetPresetId]);
 
-  const validate = (): DatasetFormErrors => {
+  const validateDatasetForm = async (): Promise<{ errors: DatasetFormErrors; symbols: string[] }> => {
     const errors: DatasetFormErrors = {};
-    const symbols = resolveDatasetSymbols({ manualSymbolsCsv: datasetCreateForm.symbolsCsv, symbolStrategy: selectedDatasetPreset.symbolStrategy, savedUniverseId: datasetCreateForm.savedUniverseId });
-    if (symbols.length === 0 && selectedDatasetPreset.symbolStrategy === 'manual_symbols') errors.symbolsCsv = 'Provide a symbols list.';
-    if (symbols.length === 0 && selectedDatasetPreset.symbolStrategy === 'saved_universe') errors.savedUniverseId = 'Provide a valid saved universe ID.';
+    let symbols = resolveManualSymbols({ manualSymbolsCsv: datasetCreateForm.symbolsCsv, symbolStrategy: selectedDatasetPreset.symbolStrategy });
+    if (selectedDatasetPreset.symbolStrategy === 'manual_symbols' && symbols.length === 0) errors.symbolsCsv = 'Provide a symbols list.';
+    if (selectedDatasetPreset.symbolStrategy === 'saved_universe') {
+      const normalizedUniverseId = datasetCreateForm.savedUniverseId.trim();
+      if (!normalizedUniverseId) {
+        errors.savedUniverseId = 'Saved universe ID is required.';
+      } else {
+        try {
+          symbols = await fetchUniverseSymbols(baseUrl, normalizedUniverseId);
+          if (symbols.length === 0) {
+            errors.savedUniverseId = `Saved universe "${normalizedUniverseId}" returned no members from backend.`;
+          }
+        } catch (error) {
+          const detail = error instanceof Error ? error.message : 'Unknown backend error.';
+          errors.savedUniverseId = `Failed to load saved universe "${normalizedUniverseId}" from backend: ${detail}`;
+        }
+      }
+    }
     if (!datasetCreateForm.startDate) errors.startDate = 'Start date is required.';
     if (!datasetCreateForm.endDate) errors.endDate = 'End date is required.';
     if (datasetCreateForm.startDate && datasetCreateForm.endDate && datasetCreateForm.startDate > datasetCreateForm.endDate) errors.endDate = 'End date must be on or after start date.';
     if (!datasetCreateForm.finestResolution.trim()) errors.finestResolution = 'Finest resolution target is required.';
-    return errors;
+    return { errors, symbols };
   };
 
   const createDataset = async (): Promise<void> => {
-    const errors = validate();
+    const { errors, symbols } = await validateDatasetForm();
     setDatasetFormErrors(errors);
     if (Object.keys(errors).length > 0) return;
-    const symbols = resolveDatasetSymbols({ manualSymbolsCsv: datasetCreateForm.symbolsCsv, symbolStrategy: selectedDatasetPreset.symbolStrategy, savedUniverseId: datasetCreateForm.savedUniverseId });
     const payload = await requestJson<IngestionItem>(baseUrl, '/api/v1/market-data/ingestions', { method: 'POST', body: JSON.stringify({ provider: 'massive', asset_class: datasetCreateForm.universeType, universe_members: symbols, symbols, resolutions: [datasetCreateForm.finestResolution.trim()], timeframe: datasetCreateForm.finestResolution.trim(), start_date: datasetCreateForm.startDate, end_date: datasetCreateForm.endDate, feature_recipe_version: datasetCreateForm.featurePackEnabled ? 'v2' : 'v1', label_recipe_version: 'v1', alias: datasetCreateForm.savedUniverseId.trim() || undefined }) });
     const id = payload.dataset_id || (payload.request_id ? `ingestion:${payload.request_id}` : 'submitted');
     setNotice(`Dataset creation submitted: ${id}`);
