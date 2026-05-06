@@ -25,6 +25,7 @@ import { BuildingModelsPage } from './pages/BuildingModelsPage';
 import { ModelDeploymentsPage } from './pages/ModelDeploymentsPage';
 import { ModelCatalogPage } from './pages/ModelCatalogPage';
 import { StrategyWorkbenchPage } from './pages/StrategyWorkbenchPage';
+import { DatasetCreationPage } from './pages/DatasetCreationPage';
 
 interface ToastItem {
   id: number;
@@ -91,6 +92,7 @@ export function App(): JSX.Element {
 
           <Route path="model-catalog" element={<ErrorBoundary><ModelCatalogPage baseUrl={preferences.baseUrl} /></ErrorBoundary>} />
           <Route path="parameterization" element={<ErrorBoundary><ParameterizationPage baseUrl={preferences.baseUrl} /></ErrorBoundary>} />
+          <Route path="datasets/create" element={<ErrorBoundary><DatasetCreationPage baseUrl={preferences.baseUrl} /></ErrorBoundary>} />
           <Route path="parameter-sweeps" element={<ErrorBoundary><ParameterSweepsPage baseUrl={preferences.baseUrl} /></ErrorBoundary>} />
           <Route path="testing" element={<ErrorBoundary><TestingPage baseUrl={preferences.baseUrl} /></ErrorBoundary>} />
 
