@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useCallback, useEffect, useMemo, useState, type JSX } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import type { DatasetPreset } from '../features/datasets/forms';
-import { DATASET_PRESETS, QUICK_START_TEMPLATES, type QuickStartTemplate } from '../features/datasets/catalog';
+import { QUICK_START_TEMPLATES, type QuickStartTemplate } from '../features/datasets/catalog';
 import { requestJson } from '../api/requestJson';
 import {
   requestTrainingRunPreflightOrBypass,
@@ -58,17 +58,6 @@ interface TrainingTemplate {
   parameter_preset: { name: string; parameters: Record<string, unknown> };
 }
 type TrainingPreset = 'safe' | 'balanced' | 'aggressive';
-type IngestionJobState = 'queued' | 'running' | 'succeeded' | 'failed';
-
-interface IngestionJobRecord {
-  requestId: string;
-  datasetId: string | null;
-  status: IngestionJobState;
-  startedAt: string;
-  lastUpdateAt: string;
-  errorMessage: string | null;
-}
-
 function isModelCompatible(config: ModelConfigItem, taskType: TaskType): boolean {
   const configTaskType = typeof config.config.task_type === 'string' ? config.config.task_type : null;
   if (!configTaskType) {
@@ -77,14 +66,12 @@ function isModelCompatible(config: ModelConfigItem, taskType: TaskType): boolean
   return configTaskType === taskType;
 }
 
-function normalizeDate(value: string): string {
-  return value.trim();
-}
-
 export function ParameterizationPage({ baseUrl }: ParameterizationPageProps): JSX.Element {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [taskType, setTaskType] = useState<TaskType>('time_series_momentum');
   const [subtaskType, setSubtaskType] = useState<SubtaskType>('ranking');
   const [datasetId, setDatasetId] = useState('');
+  const [datasetSelectionMode, setDatasetSelectionMode] = useState<'existing' | 'create'>('existing');
   const [modelConfigId, setModelConfigId] = useState('');
   const [parametersJson, setParametersJson] = useState('{"epochs": 20, "seed": 42}');
   const [selectedPreset, setSelectedPreset] = useState<TrainingPreset>('balanced');
@@ -103,7 +90,7 @@ export function ParameterizationPage({ baseUrl }: ParameterizationPageProps): JS
   const [preflightPayloadJson, setPreflightPayloadJson] = useState<string>('');
   const [warningConfirmationChecked, setWarningConfirmationChecked] = useState(false);
 
-  const [selectedDatasetPresetId, setSelectedDatasetPresetId] = useState<DatasetPreset['id']>('sp500_default');
+  const [, setSelectedDatasetPresetId] = useState<DatasetPreset['id']>('sp500_default');
   const [templates, setTemplates] = useState<TrainingTemplate[]>([]);
   const [templateName, setTemplateName] = useState('My Template');
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
@@ -137,6 +124,28 @@ export function ParameterizationPage({ baseUrl }: ParameterizationPageProps): JS
 
   useEffect(() => {
     void load();
+  }, [load]);
+
+  useEffect(() => {
+    const datasetIdFromQuery = searchParams.get('datasetId')?.trim() ?? '';
+    if (!datasetIdFromQuery) {
+      return;
+    }
+    setDatasetSelectionMode('existing');
+    setDatasetId(datasetIdFromQuery);
+    void load();
+    setSearchParams((previousParams) => {
+      const next = new globalThis.URLSearchParams(previousParams);
+      next.delete('datasetId');
+      return next;
+    }, { replace: true });
+  }, [load, searchParams, setSearchParams]);
+
+  useEffect(() => {
+    const intervalId = globalThis.window.setInterval(() => {
+      void load();
+    }, 5000);
+    return () => globalThis.window.clearInterval(intervalId);
   }, [load]);
 
   const existingDatasetRows = useMemo(() => {
@@ -446,7 +455,7 @@ export function ParameterizationPage({ baseUrl }: ParameterizationPageProps): JS
         <div style={{ display: 'grid', gap: '0.5rem' }}>
           <label>
             Existing datasets
-            <select value={datasetId} onChange={(event) => setDatasetId(event.target.value)}>
+            <select value={datasetId} onChange={(event) => { setDatasetSelectionMode('existing'); setDatasetId(event.target.value); }}>
               <option value="">Select dataset</option>
               {existingDatasetRows.map((dataset) => (
                 <option key={dataset.id} value={dataset.id}>{dataset.id}</option>
@@ -465,6 +474,7 @@ export function ParameterizationPage({ baseUrl }: ParameterizationPageProps): JS
           <Link to="/datasets/create">
             <button type="button">Create new dataset in full page</button>
           </Link>
+          <p className="muted" style={{ margin: 0 }}>Selection mode: <code>{datasetSelectionMode}</code></p>
           {selectedDatasetMetadata ? (
             <p className="muted" style={{ margin: 0 }}>
               Summary: coverage {selectedDatasetMetadata.coverage === null ? 'Unknown' : `${selectedDatasetMetadata.coverage.toFixed(1)}%`}
@@ -472,6 +482,17 @@ export function ParameterizationPage({ baseUrl }: ParameterizationPageProps): JS
               {selectedDatasetMetadata.timeframe ? ` · timeframe ${selectedDatasetMetadata.timeframe}` : ''}
               {selectedDatasetMetadata.dateWindow ? ` · ${selectedDatasetMetadata.dateWindow}` : ''}
             </p>
+          ) : null}
+          {ingestions.length > 0 ? (
+            <div>
+              <p className="muted" style={{ marginBottom: '0.25rem' }}>Recent ingestion status/history</p>
+              <ul style={{ margin: 0, paddingLeft: '1rem' }}>
+                {ingestions.slice(0, 5).map((ingestion) => {
+                  const id = ingestion.dataset_id || (ingestion.request_id ? `ingestion:${ingestion.request_id}` : 'unknown');
+                  return <li key={id}><code>{id}</code> · {ingestion.status ?? 'unknown'}</li>;
+                })}
+              </ul>
+            </div>
           ) : null}
           {launchErrors.datasetId ? <small className="error">{launchErrors.datasetId}</small> : null}
         </div>
