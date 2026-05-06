@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { DATASET_PRESETS, type DatasetPreset } from '../features/datasets/forms';
 import { requestJson } from '../api/requestJson';
 import {
   requestTrainingRunPreflightOrBypass,
@@ -56,122 +57,20 @@ interface TrainingTemplate {
   parameter_preset: { name: string; parameters: Record<string, unknown> };
 }
 type TrainingPreset = 'safe' | 'balanced' | 'aggressive';
-type DatasetSelectionMode = 'existing' | 'create';
-
-interface DatasetCreateForm {
-  universeType: 'stocks' | 'options';
-  symbolsCsv: string;
-  savedUniverseId: string;
-  startDate: string;
-  endDate: string;
-  finestResolution: string;
-  featurePackEnabled: boolean;
-}
-
-
-interface DatasetPreset {
-  id: 'sp500_default' | 'all_stocks_etfs_us' | 'top_liquid_etfs' | 'custom_manual';
-  label: string;
-  universe_type: DatasetCreateForm['universeType'];
-  symbolStrategy: 'saved_universe' | 'manual_symbols';
-  savedUniverseId?: string;
-  defaultTimeframe: string;
-  defaultDateWindow: {
-    mode: 'fixed_range' | 'rolling_window';
-    startDate: string;
-    endDate: string;
-    label: string;
-  };
-  notes?: string;
-  estimatedCoverage: string;
-  roughSizeCostHint: string;
-}
-
 interface QuickStartTemplate {
   id: string;
   label: string;
   description: string;
-  datasetMode: DatasetSelectionMode;
   datasetPresetId: DatasetPreset['id'];
   trainingPreset: TrainingPreset;
 }
 
-const DATASET_PRESETS: DatasetPreset[] = [
-  {
-    id: 'sp500_default',
-    label: 'S&P 500 (default)',
-    universe_type: 'stocks',
-    symbolStrategy: 'saved_universe',
-    savedUniverseId: 'sp500',
-    defaultTimeframe: '1d',
-    defaultDateWindow: {
-      mode: 'fixed_range',
-      startDate: '2024-01-01',
-      endDate: '2024-12-31',
-      label: 'Calendar year 2024 baseline',
-    },
-    notes: 'Balanced baseline for broad US large-cap coverage.',
-    estimatedCoverage: '~500 tickers',
-    roughSizeCostHint: 'Moderate ingestion/runtime cost; good starter benchmark.',
-  },
-  {
-    id: 'all_stocks_etfs_us',
-    label: 'All US stocks + ETFs',
-    universe_type: 'stocks',
-    symbolStrategy: 'saved_universe',
-    savedUniverseId: 'all_stocks_etfs_us',
-    defaultTimeframe: '15m',
-    defaultDateWindow: {
-      mode: 'rolling_window',
-      startDate: '2024-09-01',
-      endDate: '2024-12-31',
-      label: 'Recent intraday research window',
-    },
-    notes: 'Max-coverage preset for discovery and cross-sectional experiments.',
-    estimatedCoverage: 'Thousands of symbols',
-    roughSizeCostHint: 'High ingestion/runtime cost; expect longer queue and compute time.',
-  },
-  {
-    id: 'top_liquid_etfs',
-    label: 'Top liquid ETFs',
-    universe_type: 'stocks',
-    symbolStrategy: 'saved_universe',
-    savedUniverseId: 'top_liquid_etfs',
-    defaultTimeframe: '1h',
-    defaultDateWindow: {
-      mode: 'rolling_window',
-      startDate: '2024-07-01',
-      endDate: '2024-12-31',
-      label: 'Recent liquid ETF window',
-    },
-    notes: 'Liquidity-focused for lower slippage assumptions and tighter spread behavior.',
-    estimatedCoverage: '~25-150 ETFs',
-    roughSizeCostHint: 'Lower-to-moderate cost; good for faster iteration loops.',
-  },
-  {
-    id: 'custom_manual',
-    label: 'Custom manual symbols',
-    universe_type: 'stocks',
-    symbolStrategy: 'manual_symbols',
-    defaultTimeframe: '1d',
-    defaultDateWindow: {
-      mode: 'fixed_range',
-      startDate: '2024-01-01',
-      endDate: '2024-12-31',
-      label: 'Manual baseline (editable)',
-    },
-    notes: 'Uses current manual input flow and preserves backward-compatible behavior.',
-    estimatedCoverage: 'User-defined',
-    roughSizeCostHint: 'Cost depends on symbol count and timeframe.',
-  },
-];
 
 const QUICK_START_TEMPLATES: QuickStartTemplate[] = [
   {
     id: 'large_cap_equities_daily_baseline',
     label: 'Large-cap equities daily baseline',
     description: 'S&P 500 daily dataset baseline with balanced training defaults.',
-    datasetMode: 'create',
     datasetPresetId: 'sp500_default',
     trainingPreset: 'balanced',
   },
@@ -179,7 +78,6 @@ const QUICK_START_TEMPLATES: QuickStartTemplate[] = [
     id: 'sp500_intraday_research_starter',
     label: 'S&P 500 intraday research starter',
     description: 'Broad US equities with intraday cadence and safe training defaults.',
-    datasetMode: 'create',
     datasetPresetId: 'all_stocks_etfs_us',
     trainingPreset: 'safe',
   },
@@ -187,19 +85,10 @@ const QUICK_START_TEMPLATES: QuickStartTemplate[] = [
     id: 'etf_rotation_starter',
     label: 'ETF rotation starter',
     description: 'Liquid ETF universe starter tuned for faster intraday experiments.',
-    datasetMode: 'create',
     datasetPresetId: 'top_liquid_etfs',
     trainingPreset: 'aggressive',
   },
 ];
-
-interface DatasetFormErrors {
-  symbolsCsv?: string;
-  savedUniverseId?: string;
-  startDate?: string;
-  endDate?: string;
-  finestResolution?: string;
-}
 
 type IngestionJobState = 'queued' | 'running' | 'succeeded' | 'failed';
 
@@ -263,7 +152,6 @@ export function ParameterizationPage({ baseUrl }: ParameterizationPageProps): JS
   const [ingestions, setIngestions] = useState<IngestionItem[]>([]);
 
   const [launchErrors, setLaunchErrors] = useState<LaunchErrors>({});
-  const [datasetFormErrors, setDatasetFormErrors] = useState<DatasetFormErrors>({});
   const [pageError, setPageError] = useState<string | null>(null);
   const [launchNotice, setLaunchNotice] = useState<string | null>(null);
   const [preflightWarnings, setPreflightWarnings] = useState<string[]>([]);
@@ -271,19 +159,7 @@ export function ParameterizationPage({ baseUrl }: ParameterizationPageProps): JS
   const [preflightPayloadJson, setPreflightPayloadJson] = useState<string>('');
   const [warningConfirmationChecked, setWarningConfirmationChecked] = useState(false);
 
-  const [datasetSelectionMode, setDatasetSelectionMode] = useState<DatasetSelectionMode>('existing');
-  const [datasetCreateForm, setDatasetCreateForm] = useState<DatasetCreateForm>({
-    universeType: 'stocks',
-    symbolsCsv: 'AAPL,MSFT,SPY',
-    savedUniverseId: '',
-    startDate: '2024-01-01',
-    endDate: '2024-12-31',
-    finestResolution: '1d',
-    featurePackEnabled: true,
-  });
-  const [datasetCreateNotice, setDatasetCreateNotice] = useState<string | null>(null);
   const [selectedDatasetPresetId, setSelectedDatasetPresetId] = useState<DatasetPreset['id']>('sp500_default');
-  const [ingestionJob, setIngestionJob] = useState<IngestionJobRecord | null>(null);
   const [templates, setTemplates] = useState<TrainingTemplate[]>([]);
   const [templateName, setTemplateName] = useState('My Template');
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
@@ -449,7 +325,7 @@ export function ParameterizationPage({ baseUrl }: ParameterizationPageProps): JS
     if (subtaskType === 'regime_state' && taskType !== 'regime_switching') {
       errors.subtaskType = 'Subtask regime_state can only be used with task regime_switching.';
     }
-    if (datasetSelectionMode === 'existing' && !datasetId.trim()) {
+    if (!datasetId.trim()) {
       errors.datasetId = 'Select an existing dataset or create one first.';
     }
     if (!modelConfigId.trim()) {
@@ -501,174 +377,6 @@ export function ParameterizationPage({ baseUrl }: ParameterizationPageProps): JS
     }
   };
 
-  const selectedDatasetPreset = useMemo(
-    () => DATASET_PRESETS.find((preset) => preset.id === selectedDatasetPresetId) ?? DATASET_PRESETS[0],
-    [selectedDatasetPresetId],
-  );
-
-  useEffect(() => {
-    setDatasetCreateForm((previous) => ({
-      ...previous,
-      universeType: selectedDatasetPreset.universe_type,
-      savedUniverseId: selectedDatasetPreset.symbolStrategy === 'saved_universe' ? (selectedDatasetPreset.savedUniverseId ?? '') : '',
-      finestResolution: selectedDatasetPreset.defaultTimeframe,
-      startDate: selectedDatasetPreset.defaultDateWindow.startDate,
-      endDate: selectedDatasetPreset.defaultDateWindow.endDate,
-      symbolsCsv: selectedDatasetPreset.symbolStrategy === 'manual_symbols' ? previous.symbolsCsv : '',
-    }));
-  }, [selectedDatasetPreset]);
-
-  const validateDatasetForm = (): DatasetFormErrors => {
-    const errors: DatasetFormErrors = {};
-    const symbols = resolveDatasetSymbols({
-      manualSymbolsCsv: datasetCreateForm.symbolsCsv,
-      symbolStrategy: selectedDatasetPreset.symbolStrategy,
-      savedUniverseId: datasetCreateForm.savedUniverseId,
-    });
-    const requiresManualSymbols = selectedDatasetPreset.symbolStrategy === 'manual_symbols';
-    if (symbols.length === 0) {
-      if (requiresManualSymbols) {
-        errors.symbolsCsv = 'Provide a symbols list.';
-      } else if (!datasetCreateForm.savedUniverseId.trim()) {
-        errors.savedUniverseId = 'Provide a saved universe ID.';
-      } else {
-        errors.savedUniverseId = 'Saved universe expansion is unavailable for this ID. Use a listed preset ID or switch to Custom manual symbols.';
-      }
-    }
-    if (!normalizeDate(datasetCreateForm.startDate)) {
-      errors.startDate = 'Start date is required.';
-    }
-    if (!normalizeDate(datasetCreateForm.endDate)) {
-      errors.endDate = 'End date is required.';
-    }
-    if (normalizeDate(datasetCreateForm.startDate) && normalizeDate(datasetCreateForm.endDate) && datasetCreateForm.startDate > datasetCreateForm.endDate) {
-      errors.endDate = 'End date must be on or after start date.';
-    }
-    if (!datasetCreateForm.finestResolution.trim()) {
-      errors.finestResolution = 'Finest resolution target is required.';
-    }
-    return errors;
-  };
-
-  const createDataset = async (): Promise<void> => {
-    const errors = validateDatasetForm();
-    setDatasetFormErrors(errors);
-    setDatasetCreateNotice(null);
-    if (Object.keys(errors).length > 0) {
-      return;
-    }
-
-    try {
-      const symbols = resolveDatasetSymbols({
-        manualSymbolsCsv: datasetCreateForm.symbolsCsv,
-        symbolStrategy: selectedDatasetPreset.symbolStrategy,
-        savedUniverseId: datasetCreateForm.savedUniverseId,
-      });
-      const timeframe = datasetCreateForm.finestResolution.trim();
-      const payload = await requestJson<IngestionItem>(baseUrl, '/api/v1/market-data/ingestions', {
-        method: 'POST',
-        body: JSON.stringify({
-          provider: 'massive',
-          asset_class: datasetCreateForm.universeType,
-          universe_members: symbols,
-          symbols,
-          resolutions: [timeframe],
-          timeframe,
-          start_date: datasetCreateForm.startDate,
-          end_date: datasetCreateForm.endDate,
-          feature_recipe_version: datasetCreateForm.featurePackEnabled ? 'v2' : 'v1',
-          label_recipe_version: 'v1',
-          alias: datasetCreateForm.savedUniverseId.trim() || undefined,
-        }),
-      });
-
-      const nowIso = new Date().toISOString();
-      const requestId = typeof payload.request_id === 'string' ? payload.request_id : '';
-      const createdDatasetId = (typeof payload.dataset_id === 'string' && payload.dataset_id)
-        || (typeof payload.request_id === 'string' && payload.request_id ? `ingestion:${payload.request_id}` : '');
-      const normalizedStatus: IngestionJobState = payload.status === 'failed'
-        ? 'failed'
-        : payload.status === 'succeeded'
-          ? 'succeeded'
-          : payload.status === 'running'
-            ? 'running'
-            : 'queued';
-
-      if (requestId) {
-        setIngestionJob({
-          requestId,
-          datasetId: typeof payload.dataset_id === 'string' && payload.dataset_id ? payload.dataset_id : null,
-          status: normalizedStatus,
-          startedAt: nowIso,
-          lastUpdateAt: nowIso,
-          errorMessage: null,
-        });
-      }
-
-      if (createdDatasetId) {
-        setDatasetId(createdDatasetId);
-        setDatasetSelectionMode('existing');
-      }
-
-      setDatasetCreateNotice(`Dataset creation submitted${createdDatasetId ? `: ${createdDatasetId}` : ''}.`);
-      await load();
-    } catch (submitError) {
-      setPageError(submitError instanceof Error ? submitError.message : 'Failed creating dataset ingestion request.');
-    }
-  };
-
-  useEffect(() => {
-    if (!ingestionJob || ingestionJob.status === 'succeeded' || ingestionJob.status === 'failed') {
-      return;
-    }
-
-    const intervalId = globalThis.setInterval(() => {
-      void (async () => {
-        try {
-          const items = await requestJson<IngestionItem[]>(baseUrl, '/api/v1/market-data/ingestions');
-          const matching = items.find((item) => item.request_id === ingestionJob.requestId);
-          if (!matching) {
-            return;
-          }
-          const nextStatus: IngestionJobState = matching.status === 'failed'
-            ? 'failed'
-            : matching.status === 'succeeded'
-              ? 'succeeded'
-              : matching.status === 'running'
-                ? 'running'
-                : 'queued';
-          const nextDatasetId = typeof matching.dataset_id === 'string' && matching.dataset_id ? matching.dataset_id : null;
-          const nowIso = new Date().toISOString();
-          setIngestions(items);
-          setIngestionJob((previous) => previous ? {
-            ...previous,
-            status: nextStatus,
-            datasetId: nextDatasetId ?? previous.datasetId,
-            lastUpdateAt: nowIso,
-            errorMessage: nextStatus === 'failed' ? 'Dataset ingestion failed. Review request settings and retry.' : null,
-          } : previous);
-
-          if (nextStatus === 'succeeded' && nextDatasetId) {
-            setDatasetId(nextDatasetId);
-            setDatasetSelectionMode('existing');
-          }
-        } catch {
-          // best-effort polling
-        }
-      })();
-    }, 3000);
-    return () => globalThis.clearInterval(intervalId);
-  }, [baseUrl, ingestionJob]);
-
-  const ingestionFailureMessage = useMemo(() => {
-    const message = ingestionJob?.errorMessage?.toLowerCase() ?? '';
-    if (!message) return null;
-    if (message.includes('invalid universe')) return 'Universe is invalid or unknown. Choose a valid saved universe ID or provide symbols.';
-    if (message.includes('rate limit') || message.includes('429')) return 'Provider rate limit hit. Wait a bit, reduce symbol/date scope, then retry.';
-    if (message.includes('date') && (message.includes('window') || message.includes('range'))) return 'Date window is too large for this request. Narrow the range and try again.';
-    return ingestionJob?.errorMessage ?? 'Dataset ingestion failed. Please retry.';
-  }, [ingestionJob]);
-
   const createTemplate = async (): Promise<void> => {
     try {
       const parsed = JSON.parse(parametersJson) as Record<string, unknown>;
@@ -716,7 +424,6 @@ export function ParameterizationPage({ baseUrl }: ParameterizationPageProps): JS
   );
 
   const applyQuickStartTemplate = useCallback((template: QuickStartTemplate): void => {
-    setDatasetSelectionMode(template.datasetMode);
     setSelectedDatasetPresetId(template.datasetPresetId);
     setSelectedPreset(template.trainingPreset);
     setLaunchNotice(`Quick start applied: ${template.label}. You can adjust any advanced settings before launch.`);
@@ -808,111 +515,22 @@ export function ParameterizationPage({ baseUrl }: ParameterizationPageProps): JS
               {selectedDatasetCoverage === null ? 'Unknown' : `${selectedDatasetCoverage.toFixed(1)}%`}
             </strong>
           </p>
-          <div style={{ display: 'inline-flex', border: '1px solid #2b3558', borderRadius: 8, overflow: 'hidden', width: 'fit-content' }}>
-            <button
-              type="button"
-              onClick={() => setDatasetSelectionMode('existing')}
-              disabled={datasetSelectionMode === 'existing'}
-            >
-              Use existing dataset
-            </button>
-            <button
-              type="button"
-              onClick={() => setDatasetSelectionMode('create')}
-              disabled={datasetSelectionMode === 'create'}
-            >
-              Create new dataset
-            </button>
-          </div>
-          {datasetSelectionMode === 'existing' ? (
-            <>
-              {selectedDatasetMetadata ? (
-                <p className="muted" style={{ margin: 0 }}>
-                  Summary: coverage {selectedDatasetMetadata.coverage === null ? 'Unknown' : `${selectedDatasetMetadata.coverage.toFixed(1)}%`}
-                  {selectedDatasetMetadata.universeType ? ` · universe ${selectedDatasetMetadata.universeType}` : ''}
-                  {selectedDatasetMetadata.timeframe ? ` · timeframe ${selectedDatasetMetadata.timeframe}` : ''}
-                  {selectedDatasetMetadata.dateWindow ? ` · ${selectedDatasetMetadata.dateWindow}` : ''}
-                </p>
-              ) : null}
-              {launchErrors.datasetId ? <small className="error">{launchErrors.datasetId}</small> : null}
-            </>
-          ) : null}
-        </div>
-
-        {datasetSelectionMode === 'create' ? (
-          <div style={{ marginTop: '0.75rem', border: '1px solid #2b3558', borderRadius: 8, padding: '0.75rem', display: 'grid', gap: '0.5rem' }}>
-            <h4 style={{ margin: 0 }}>Create dataset</h4>
-            <label>
-              Dataset preset
-              <select value={selectedDatasetPresetId} onChange={(event) => setSelectedDatasetPresetId(event.target.value as DatasetPreset['id'])}>
-                {DATASET_PRESETS.map((preset) => <option key={preset.id} value={preset.id}>{preset.label}</option>)}
-              </select>
-            </label>
+          <p className="muted" style={{ margin: 0 }}>
+            Need a new dataset configuration? Use the dedicated creation flow for universe, timeframe, and ingestion setup.
+          </p>
+          <Link to="/datasets/create">
+            <button type="button">Create new dataset in full page</button>
+          </Link>
+          {selectedDatasetMetadata ? (
             <p className="muted" style={{ margin: 0 }}>
-              {selectedDatasetPreset.notes} Coverage: {selectedDatasetPreset.estimatedCoverage}. {selectedDatasetPreset.roughSizeCostHint} Date window: {selectedDatasetPreset.defaultDateWindow.label}.
+              Summary: coverage {selectedDatasetMetadata.coverage === null ? 'Unknown' : `${selectedDatasetMetadata.coverage.toFixed(1)}%`}
+              {selectedDatasetMetadata.universeType ? ` · universe ${selectedDatasetMetadata.universeType}` : ''}
+              {selectedDatasetMetadata.timeframe ? ` · timeframe ${selectedDatasetMetadata.timeframe}` : ''}
+              {selectedDatasetMetadata.dateWindow ? ` · ${selectedDatasetMetadata.dateWindow}` : ''}
             </p>
-            <label>
-              Universe type
-              <select value={datasetCreateForm.universeType} onChange={(event) => setDatasetCreateForm((prev) => ({ ...prev, universeType: event.target.value as DatasetCreateForm['universeType'] }))}>
-                <option value="stocks">stocks</option>
-                <option value="options">options</option>
-              </select>
-            </label>
-            <label style={selectedDatasetPreset.symbolStrategy === 'manual_symbols' ? undefined : { opacity: 0.6 }}>
-              Symbols list (comma separated){selectedDatasetPreset.symbolStrategy === 'manual_symbols' ? '' : ' (manual override only)'}
-              <input
-                value={datasetCreateForm.symbolsCsv}
-                onChange={(event) => setDatasetCreateForm((prev) => ({ ...prev, symbolsCsv: event.target.value }))}
-                placeholder="AAPL,MSFT,SPY"
-                disabled={selectedDatasetPreset.symbolStrategy !== 'manual_symbols'}
-              />
-            </label>
-            {datasetFormErrors.symbolsCsv ? <small className="error">{datasetFormErrors.symbolsCsv}</small> : null}
-            <label style={selectedDatasetPreset.symbolStrategy === 'saved_universe' ? undefined : { opacity: 0.6 }}>
-              Saved universe ID
-              <input value={datasetCreateForm.savedUniverseId} onChange={(event) => setDatasetCreateForm((prev) => ({ ...prev, savedUniverseId: event.target.value }))} placeholder="optional_universe_id" disabled={selectedDatasetPreset.symbolStrategy !== 'saved_universe'} />
-            </label>
-            {datasetFormErrors.savedUniverseId ? <small className="error">{datasetFormErrors.savedUniverseId}</small> : null}
-            <div style={{ display: 'grid', gap: '0.5rem', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' }}>
-              <label>
-                Start date
-                <input type="date" value={datasetCreateForm.startDate} onChange={(event) => setDatasetCreateForm((prev) => ({ ...prev, startDate: event.target.value }))} />
-              </label>
-              <label>
-                End date
-                <input type="date" value={datasetCreateForm.endDate} onChange={(event) => setDatasetCreateForm((prev) => ({ ...prev, endDate: event.target.value }))} />
-              </label>
-            </div>
-            {datasetFormErrors.startDate ? <small className="error">{datasetFormErrors.startDate}</small> : null}
-            {datasetFormErrors.endDate ? <small className="error">{datasetFormErrors.endDate}</small> : null}
-            <label>
-              Finest resolution target
-              <input value={datasetCreateForm.finestResolution} onChange={(event) => setDatasetCreateForm((prev) => ({ ...prev, finestResolution: event.target.value }))} placeholder="1m, 5m, 1h, 1d" />
-            </label>
-            {datasetFormErrors.finestResolution ? <small className="error">{datasetFormErrors.finestResolution}</small> : null}
-            <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <input type="checkbox" checked={datasetCreateForm.featurePackEnabled} onChange={(event) => setDatasetCreateForm((prev) => ({ ...prev, featurePackEnabled: event.target.checked }))} />
-              Feature pack enabled
-            </label>
-            <button type="button" onClick={() => void createDataset()}>{datasetSelectionMode === 'create' ? 'Start dataset download on server' : 'Submit dataset creation'}</button>
-            {ingestionJob ? (
-              <div style={{ border: '1px solid #2b3558', borderRadius: 8, padding: '0.75rem', marginTop: '0.5rem' }}>
-                <h5 style={{ marginTop: 0, marginBottom: '0.5rem' }}>Ingestion status</h5>
-                <p className="muted" style={{ margin: '0.2rem 0' }}>State: <strong>{ingestionJob.status}</strong></p>
-                <p className="muted" style={{ margin: '0.2rem 0' }}>Last update: {new Date(ingestionJob.lastUpdateAt).toLocaleString()}</p>
-                <p className="muted" style={{ margin: '0.2rem 0' }}>Request ID: {ingestionJob.requestId}</p>
-                {ingestionJob.datasetId ? <p className="muted" style={{ margin: '0.2rem 0' }}>Dataset ID: {ingestionJob.datasetId}</p> : null}
-                {ingestionJob.status === 'failed' ? (
-                  <>
-                    <p className="error" style={{ margin: '0.2rem 0' }}>{ingestionFailureMessage}</p>
-                    <button type="button" onClick={() => void createDataset()}>Retry ingestion</button>
-                  </>
-                ) : null}
-              </div>
-            ) : null}
-          </div>
-        ) : null}
-        {datasetCreateNotice ? <p className="muted" style={{ marginTop: '0.75rem' }}>{datasetCreateNotice}</p> : null}
+          ) : null}
+          {launchErrors.datasetId ? <small className="error">{launchErrors.datasetId}</small> : null}
+        </div>
       </div>
 
       <div className="card" style={{ marginBottom: '1rem' }}>
