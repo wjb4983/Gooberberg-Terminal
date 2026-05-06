@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useCallback, useEffect, useMemo, useState, type JSX } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { fetchUniverseSymbols } from '../api/universes';
 import { requestJson } from '../api/requestJson';
 import {
@@ -21,6 +21,7 @@ function resolveManualSymbols(args: { manualSymbolsCsv: string; symbolStrategy: 
 }
 
 export function DatasetCreationPage({ baseUrl }: DatasetCreationPageProps): JSX.Element {
+  const navigate = useNavigate();
   const [selectedDatasetPresetId, setSelectedDatasetPresetId] = useState<DatasetPreset['id']>('sp500_default');
   const [datasetCreateForm, setDatasetCreateForm] = useState<DatasetCreateForm>({
     universeType: 'stocks',
@@ -34,6 +35,16 @@ export function DatasetCreationPage({ baseUrl }: DatasetCreationPageProps): JSX.
   });
   const [datasetFormErrors, setDatasetFormErrors] = useState<DatasetFormErrors>({});
   const [notice, setNotice] = useState<string | null>(null);
+  const [ingestions, setIngestions] = useState<IngestionItem[]>([]);
+
+  const loadIngestions = useCallback(async (): Promise<void> => {
+    try {
+      const ingestionPayload = await requestJson<IngestionItem[]>(baseUrl, '/api/v1/market-data/ingestions');
+      setIngestions(ingestionPayload);
+    } catch {
+      setIngestions([]);
+    }
+  }, [baseUrl]);
 
   const selectedDatasetPreset = useMemo(() => DATASET_PRESETS.find((preset) => preset.id === selectedDatasetPresetId) ?? DATASET_PRESETS[0], [selectedDatasetPresetId]);
 
@@ -48,6 +59,14 @@ export function DatasetCreationPage({ baseUrl }: DatasetCreationPageProps): JSX.
       fetchResolution: selectedDatasetPreset.defaultTimeframe,
     }));
   }, [selectedDatasetPreset]);
+
+  useEffect(() => {
+    void loadIngestions();
+    const intervalId = globalThis.window.setInterval(() => {
+      void loadIngestions();
+    }, 5000);
+    return () => globalThis.window.clearInterval(intervalId);
+  }, [loadIngestions]);
 
 
   const validateDatasetForm = async (): Promise<{ errors: DatasetFormErrors; symbols: string[] }> => {
@@ -111,6 +130,11 @@ export function DatasetCreationPage({ baseUrl }: DatasetCreationPageProps): JSX.
     });
     const id = payload.dataset_id || (payload.request_id ? `ingestion:${payload.request_id}` : 'submitted');
     setNotice(`Dataset creation submitted: ${id}`);
+    await loadIngestions();
+    if (payload.dataset_id || payload.request_id) {
+      const nextDatasetId = payload.dataset_id || `ingestion:${payload.request_id}`;
+      navigate(`/parameterization?datasetId=${encodeURIComponent(nextDatasetId)}`);
+    }
   };
 
   return (
@@ -150,6 +174,17 @@ export function DatasetCreationPage({ baseUrl }: DatasetCreationPageProps): JSX.
         <button type="button" onClick={() => void createDataset()}>Start dataset download on server</button>
         {Object.values(datasetFormErrors)[0] ? <small className="error">{Object.values(datasetFormErrors).filter(Boolean).join(' ')}</small> : null}
         {notice ? <p className="muted">{notice}</p> : null}
+        {ingestions.length > 0 ? (
+          <div>
+            <p className="muted" style={{ marginBottom: '0.25rem' }}>Recent ingestion status/history</p>
+            <ul style={{ margin: 0, paddingLeft: '1rem' }}>
+              {ingestions.slice(0, 5).map((ingestion) => {
+                const id = ingestion.dataset_id || (ingestion.request_id ? `ingestion:${ingestion.request_id}` : 'unknown');
+                return <li key={id}><code>{id}</code> · {ingestion.status ?? 'unknown'}</li>;
+              })}
+            </ul>
+          </div>
+        ) : null}
       </div>
     </section>
   );
