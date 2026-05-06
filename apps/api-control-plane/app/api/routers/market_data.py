@@ -8,6 +8,7 @@ from app.schemas import (
     MarketDataDatasetLookupResponse,
     MarketDataIngestionRequest,
     MarketDataIngestionResponse,
+    MarketDataProviderCapabilityResponse,
 )
 
 router = APIRouter(prefix="/market-data", tags=["market-data"])
@@ -51,3 +52,10 @@ def lookup_dataset(dataset_id: str, service: MarketDataService = Depends(get_mar
     if item is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="dataset not found")
     return item
+
+
+@router.get("/provider-capabilities", response_model=list[MarketDataProviderCapabilityResponse])
+def list_provider_capabilities(
+    service: MarketDataService = Depends(get_market_data_service),
+) -> list[MarketDataProviderCapabilityResponse]:
+    return service.list_provider_capabilities()

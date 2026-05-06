@@ -10,6 +10,7 @@ from app.schemas import (
     MarketDataDatasetLookupResponse,
     MarketDataIngestionRequest,
     MarketDataIngestionResponse,
+    MarketDataProviderCapabilityResponse,
 )
 
 
@@ -44,6 +45,23 @@ INGESTION_PRESETS: dict[str, IngestionPreset] = {
         allow_manual_symbols=True,
     ),
 }
+
+PROVIDER_CAPABILITIES: list[MarketDataProviderCapabilityResponse] = [
+    MarketDataProviderCapabilityResponse(
+        provider="massive",
+        asset_class="stocks",
+        minimum_fetch_interval="1 minute",
+        provider_native_subminute_supported=False,
+        notes="Provider-native aggregates are minute/hour/day; 30-second outputs require a separate transformation pipeline.",
+    ),
+    MarketDataProviderCapabilityResponse(
+        provider="massive",
+        asset_class="options",
+        minimum_fetch_interval="1 minute",
+        provider_native_subminute_supported=False,
+        notes="Provider-native aggregates are minute/hour/day; 30-second outputs require a separate transformation pipeline.",
+    ),
+]
 
 
 class Service:
@@ -115,3 +133,6 @@ class Service:
 
     def lookup_dataset(self, dataset_id: str) -> MarketDataDatasetLookupResponse | None:
         return self._repository.lookup_dataset(dataset_id)
+
+    def list_provider_capabilities(self) -> list[MarketDataProviderCapabilityResponse]:
+        return list(PROVIDER_CAPABILITIES)

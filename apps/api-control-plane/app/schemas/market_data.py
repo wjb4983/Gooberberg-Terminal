@@ -66,3 +66,11 @@ class MarketDataDatasetLookupResponse(BaseModel):
     symbol: str
     timeframe: str
     metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class MarketDataProviderCapabilityResponse(BaseModel):
+    provider: str
+    asset_class: str
+    minimum_fetch_interval: str
+    provider_native_subminute_supported: bool
+    notes: str
