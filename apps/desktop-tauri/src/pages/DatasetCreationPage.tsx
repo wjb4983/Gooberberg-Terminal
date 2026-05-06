@@ -1,15 +1,15 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { fetchUniverseSymbols } from '../api/universes';
 import { requestJson } from '../api/requestJson';
 import {
-  DATASET_PRESETS,
   RESOLUTION_OPTIONS,
   normalizeIngestResolution,
   type DatasetCreateForm,
   type DatasetFormErrors,
   type DatasetPreset,
 } from '../features/datasets/forms';
+import { DATASET_PRESETS } from '../features/datasets/catalog';
 
 interface DatasetCreationPageProps { baseUrl: string; }
 interface IngestionItem { request_id?: string; dataset_id?: string; status?: string; }
@@ -36,6 +36,19 @@ export function DatasetCreationPage({ baseUrl }: DatasetCreationPageProps): JSX.
   const [notice, setNotice] = useState<string | null>(null);
 
   const selectedDatasetPreset = useMemo(() => DATASET_PRESETS.find((preset) => preset.id === selectedDatasetPresetId) ?? DATASET_PRESETS[0], [selectedDatasetPresetId]);
+
+  useEffect(() => {
+    setDatasetCreateForm((prev) => ({
+      ...prev,
+      universeType: selectedDatasetPreset.universe_type,
+      savedUniverseId: selectedDatasetPreset.savedUniverseId ?? prev.savedUniverseId,
+      startDate: selectedDatasetPreset.defaultDateWindow.startDate,
+      endDate: selectedDatasetPreset.defaultDateWindow.endDate,
+      targetResolution: selectedDatasetPreset.defaultTimeframe,
+      fetchResolution: selectedDatasetPreset.defaultTimeframe,
+    }));
+  }, [selectedDatasetPreset]);
+
 
   const validateDatasetForm = async (): Promise<{ errors: DatasetFormErrors; symbols: string[] }> => {
     const errors: DatasetFormErrors = {};
@@ -133,6 +146,7 @@ export function DatasetCreationPage({ baseUrl }: DatasetCreationPageProps): JSX.
           </select>
         </label>
         <label><input type="checkbox" checked={datasetCreateForm.featurePackEnabled} onChange={(event) => setDatasetCreateForm((prev) => ({ ...prev, featurePackEnabled: event.target.checked }))} /> Feature pack enabled</label>
+        <small className="muted">Universe ID: <code>{selectedDatasetPreset.savedUniverseId ?? 'manual'}</code> · Window: {selectedDatasetPreset.defaultDateWindow.startDate} → {selectedDatasetPreset.defaultDateWindow.endDate} · Resolution: {selectedDatasetPreset.defaultTimeframe} · Est. symbols: {selectedDatasetPreset.estimatedSymbolCount ?? 'user-defined'} · {selectedDatasetPreset.roughSizeCostHint}</small>
         <button type="button" onClick={() => void createDataset()}>Start dataset download on server</button>
         {Object.values(datasetFormErrors)[0] ? <small className="error">{Object.values(datasetFormErrors).filter(Boolean).join(' ')}</small> : null}
         {notice ? <p className="muted">{notice}</p> : null}

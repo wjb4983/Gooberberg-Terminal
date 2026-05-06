@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { DATASET_PRESETS, type DatasetPreset } from '../features/datasets/forms';
+import type { DatasetPreset } from '../features/datasets/forms';
+import { DATASET_PRESETS, QUICK_START_TEMPLATES, type QuickStartTemplate } from '../features/datasets/catalog';
 import { requestJson } from '../api/requestJson';
 import {
   requestTrainingRunPreflightOrBypass,
@@ -57,39 +58,6 @@ interface TrainingTemplate {
   parameter_preset: { name: string; parameters: Record<string, unknown> };
 }
 type TrainingPreset = 'safe' | 'balanced' | 'aggressive';
-interface QuickStartTemplate {
-  id: string;
-  label: string;
-  description: string;
-  datasetPresetId: DatasetPreset['id'];
-  trainingPreset: TrainingPreset;
-}
-
-
-const QUICK_START_TEMPLATES: QuickStartTemplate[] = [
-  {
-    id: 'large_cap_equities_daily_baseline',
-    label: 'Large-cap equities daily baseline',
-    description: 'S&P 500 daily dataset baseline with balanced training defaults.',
-    datasetPresetId: 'sp500_default',
-    trainingPreset: 'balanced',
-  },
-  {
-    id: 'sp500_intraday_research_starter',
-    label: 'S&P 500 intraday research starter',
-    description: 'Broad US equities with intraday cadence and safe training defaults.',
-    datasetPresetId: 'all_stocks_etfs_us',
-    trainingPreset: 'safe',
-  },
-  {
-    id: 'etf_rotation_starter',
-    label: 'ETF rotation starter',
-    description: 'Liquid ETF universe starter tuned for faster intraday experiments.',
-    datasetPresetId: 'top_liquid_etfs',
-    trainingPreset: 'aggressive',
-  },
-];
-
 type IngestionJobState = 'queued' | 'running' | 'succeeded' | 'failed';
 
 interface IngestionJobRecord {
