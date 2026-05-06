@@ -82,3 +82,12 @@ def test_list_ingestions_returns_most_recent_first_with_dataset_and_request_ids(
     assert body[0]["request_id"] == "list-ingestion-second"
     assert body[0]["dataset_id"] == second_payload["dataset_id"]
     assert body[0]["effective_params"]["alias"] == "second-alias"
+
+
+def test_provider_capabilities_exposes_minimum_fetch_interval_policy() -> None:
+    response = client.get("/api/v1/market-data/provider-capabilities")
+    assert response.status_code == 200
+    body = response.json()
+    massive_stocks = next(item for item in body if item["provider"] == "massive" and item["asset_class"] == "stocks")
+    assert massive_stocks["minimum_fetch_interval"] == "1 minute"
+    assert massive_stocks["provider_native_subminute_supported"] is False

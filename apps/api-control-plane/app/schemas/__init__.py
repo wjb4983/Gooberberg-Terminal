@@ -56,6 +56,7 @@ from app.schemas.market_data import (
     MarketDataDatasetLookupResponse,
     MarketDataIngestionRequest,
     MarketDataIngestionResponse,
+    MarketDataProviderCapabilityResponse,
 )
 from app.schemas.model_configs import ModelConfigCreateRequest, ModelConfigResponse, ModelConfigUpdateRequest, ModelFamily
 from app.schemas.models import (
@@ -146,6 +147,7 @@ __all__ = [
     "MarketDataDatasetLookupResponse",
     "MarketDataIngestionRequest",
     "MarketDataIngestionResponse",
+    "MarketDataProviderCapabilityResponse",
     "ModelConfigCreateRequest",
     "ModelConfigResponse",
     "ModelConfigUpdateRequest",
