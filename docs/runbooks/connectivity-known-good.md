@@ -40,7 +40,9 @@ If using prod loopback profile, expected bind is `127.0.0.1:${API_BIND_PORT:-800
 
 ### C. Desktop endpoint alignment
 
-Desktop default preference is `http://localhost:8000`; update Settings if using tailnet/proxy endpoint.
+Desktop default preference is `http://localhost:8000`; update Settings only if using a tailnet/proxy endpoint or another API base URL.
+
+When using `pnpm dev:local` in VS Code or a remote browser environment, Vite serves the frontend on port `1420`. Open or forward port `1420` in VS Code, then browse to the forwarded frontend URL. Keep the API base URL set to `http://localhost:8000` unless your Settings profile intentionally points at a different API endpoint.
 
 ## 2) Validate HTTP path from desktop host
 
