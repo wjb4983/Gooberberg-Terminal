@@ -6,45 +6,32 @@ This runbook is designed so a new engineer can clone, run, validate, and trouble
 
 Run these tasks from the repository root in order. Each task is independently verifiable; stop and fix the first failed step before continuing.
 
-1. Install dependencies:
+1. Start backend dependencies and the API control plane:
 
    ```bash
-   timeout 10m pnpm install --frozen-lockfile
+   timeout 120s docker compose -f infra/compose/docker-compose.dev.yml up --build api-control-plane postgres redis
    ```
 
-2. Start the backend/API stack:
+2. Start the frontend dev server in a second terminal:
 
    ```bash
-   timeout 240s docker compose -f infra/compose/docker-compose.dev.yml up -d --build postgres redis api-control-plane
+   timeout 120s pnpm --filter @gb/desktop-tauri dev -- --host 0.0.0.0
    ```
 
-3. Verify the backend health endpoints:
-
-   ```bash
-   timeout 20s curl -fsS http://127.0.0.1:8000/healthz
-   timeout 20s curl -fsS http://127.0.0.1:8000/api/v1/health
-   ```
-
-4. Start the frontend dev server:
-
-   ```bash
-   pnpm --filter @gb/desktop-tauri dev -- --host 0.0.0.0
-   ```
-
-5. Run the finite local full-stack smoke script from a second terminal. It checks the API endpoints, queue health endpoint, and frontend port with bounded timeouts, and fails fast with clear messages if either service is unavailable:
-
-   ```bash
-   timeout 60s ./scripts/dev/check-local-fullstack.sh
-   ```
-
-6. Open the VS Code forwarded/browser URL for port `1420`.
+3. Open the VS Code forwarded frontend URL for port `1420`.
 
    The local full-stack script keeps the queue/worker status fresh by posting a local heartbeat while the frontend process is running. If your browser has an older Settings value, set the API base URL to `http://127.0.0.1:8000` to avoid IPv6 `localhost` resolution issues in the dev proxy.
 
-7. After closing the frontend, stop the local backend containers:
+4. Run the finite local full-stack smoke script from another terminal. It checks the API endpoints, queue health endpoint, and frontend port with bounded timeouts, and fails fast with clear messages if either service is unavailable:
 
    ```bash
-   pnpm dev:local:down
+   timeout 60s scripts/dev/check-local-fullstack.sh
+   ```
+
+5. Stop the local stack after closing the frontend:
+
+   ```bash
+   timeout 60s docker compose -f infra/compose/docker-compose.dev.yml down --remove-orphans
    ```
 
    This stops the backend/API Compose containers and removes orphaned containers, but it does not remove persistent Docker volumes. Only remove persistent local data when you explicitly intend to reset it with a destructive cleanup command such as:

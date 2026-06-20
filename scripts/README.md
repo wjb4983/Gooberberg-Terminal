@@ -9,6 +9,37 @@ Automation entry points.
 - `scripts/test-connectivity-layered.sh`: Layered connectivity verification (unit/integration/e2e contract smoke).
 - `scripts/dev/check-local-fullstack.sh`: finite local full-stack smoke check for the API health endpoints and frontend dev port after startup.
 
+
+## Local development quick start
+
+Run these tasks from the repository root in the recommended order:
+
+1. Start backend dependencies and the API control plane:
+
+   ```bash
+   timeout 120s docker compose -f infra/compose/docker-compose.dev.yml up --build api-control-plane postgres redis
+   ```
+
+2. Start the frontend in a second terminal:
+
+   ```bash
+   timeout 120s pnpm --filter @gb/desktop-tauri dev -- --host 0.0.0.0
+   ```
+
+3. Open the VS Code forwarded frontend URL for port `1420`.
+
+4. Run the smoke check from another terminal:
+
+   ```bash
+   timeout 60s scripts/dev/check-local-fullstack.sh
+   ```
+
+5. Stop the local stack when finished:
+
+   ```bash
+   timeout 60s docker compose -f infra/compose/docker-compose.dev.yml down --remove-orphans
+   ```
+
 ## Ops workflows
 
 Shared helpers:
