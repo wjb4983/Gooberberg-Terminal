@@ -5,7 +5,7 @@ This repository supports a pragmatic private deployment model for a single trust
 - API is reachable only through localhost binding or SSH tunnel.
 - Postgres and Redis stay internal to the Docker network.
 - Non-health API endpoints require a bearer token.
-- Desktop stores token in OS secure credential storage (keychain/credential manager/libsecret).
+- Local-only desktop/browser frontend does not collect, store, or attach API bearer tokens.
 
 ## 1) Configure API bearer token auth
 
@@ -43,15 +43,9 @@ POSTGRES_PASSWORD='replace-with-strong-password' \
 docker compose -f infra/compose/docker-compose.prod.yml up -d
 ```
 
-## 3) Desktop token handling
+## 3) Local-only desktop token handling
 
-Desktop settings save the API token through Tauri command bridge into OS secure storage.
-
-- Rust command: `save_api_token`
-- Rust command: `get_api_token`
-- Backing store: system keychain/credential vault via `keyring` crate.
-
-The desktop HTTP client reads the stored token and sends `Authorization: Bearer ...` on requests.
+Local-only desktop/browser settings no longer collect or store API bearer tokens, and the local-only HTTP client does not attach `Authorization` headers. Use an unauthenticated local API configuration for this mode, or access protected private deployments with an external client that can provide the required bearer token.
 
 ## 4) SSH tunnel access pattern
 
@@ -72,16 +66,13 @@ This avoids opening inbound API ports publicly while preserving operator access.
 - Rotation interval: rotate active tokens every **30 days** (or faster per incident response).
 - Use dual-accept migration window:
   1. Add new token record in `GB_API_AUTH_TOKENS` (old + new both present).
-  2. Update desktop keychain token to new value.
+  2. Update external protected-route clients to the new value.
   3. Confirm no legacy token usage in audit logs.
   4. Remove old token and optionally add old `token_id` to `GB_API_AUTH_REVOKED_TOKEN_IDS`.
 - Revocation procedure:
   1. Add compromised `token_id` to `GB_API_AUTH_REVOKED_TOKEN_IDS`.
   2. Roll/replace credential for affected clients.
   3. Monitor `auth_result=revoked_token` and `auth_result=invalid_token` during cleanup.
-- Desktop expiry/re-auth UX:
-  - On `expired_token` or `revoked_token`, operator clears token (if needed) and saves replacement in Settings.
-  - Token is stored in OS keychain only; non-Tauri mode remains in-memory only.
 - Rotate `POSTGRES_PASSWORD` with planned maintenance.
 - Keep this document and `docker-compose.prod.yml` in sync when auth model evolves (e.g., moving from static token to scoped/JWT auth).
 

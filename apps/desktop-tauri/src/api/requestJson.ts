@@ -1,5 +1,4 @@
 import { invoke } from '@tauri-apps/api/core';
-import { resolveAuthorizationHeader } from './authHeaders';
 import { normalizeApiBaseUrl } from '../settings/preferences';
 
 interface NativeApiHttpResponse {
@@ -16,13 +15,10 @@ function isTauriRuntime(): boolean {
   return typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
 }
 
-function formatNetworkFailureMessage(url: string, authAttached: boolean, error: TypeError): string {
+function formatNetworkFailureMessage(url: string, error: TypeError): string {
   const origin = typeof window !== 'undefined' ? window.location.origin : 'unknown origin';
   const detail = error.message?.trim() ? ` Browser detail: ${error.message.trim()}.` : '';
-  const authHint = authAttached
-    ? ' Authorization header was attached; re-check token formatting, CORS preflight, and token validity.'
-    : ' No Authorization header was attached.';
-  return `Network request failed for ${url} from ${origin}.${authHint} Check API base URL, CORS, TLS/certificate, and whether the API is reachable from this machine.${detail}`;
+  return `Network request failed for ${url} from ${origin}. No Authorization header was attached in local-only mode. Check API base URL, CORS, TLS/certificate, and whether the API is reachable from this machine.${detail}`;
 }
 
 function summarizeFailureBody(body: string): string {
@@ -111,17 +107,9 @@ export async function requestJson<T>(
   if (init?.body && !headers.has('Content-Type')) {
     headers.set('Content-Type', 'application/json');
   }
-  if (!headers.has('Authorization')) {
-    const authHeader = await resolveAuthorizationHeader(path);
-    if (authHeader) {
-      headers.set('Authorization', authHeader);
-    }
-  }
-
   const normalizedBaseUrl = normalizeApiBaseUrl(baseUrl);
   const url = `${normalizedBaseUrl}${path}`;
   const method = init?.method ?? 'GET';
-  const authAttached = headers.has('Authorization');
   const requestBody = typeof init?.body === 'string' ? init.body : '';
 
   if (isTauriRuntime()) {
@@ -172,7 +160,7 @@ export async function requestJson<T>(
     return (await response.json()) as T;
   } catch (error) {
     if (error instanceof TypeError) {
-      throw new Error(formatNetworkFailureMessage(url, authAttached, error));
+      throw new Error(formatNetworkFailureMessage(url, error));
     }
     throw error;
   }
