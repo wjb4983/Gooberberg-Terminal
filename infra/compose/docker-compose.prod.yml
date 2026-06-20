@@ -36,7 +36,7 @@ services:
       GB_API_PREFIX: ${GB_API_PREFIX:-/api/v1}
       GB_API_AUTH_TOKEN: ${GB_API_AUTH_TOKEN:?set_a_strong_token}
       GB_API_AUTH_SCOPE: ${GB_API_AUTH_SCOPE:-control-plane:full}
-      GB_CORS_ALLOWED_ORIGINS: ${GB_CORS_ALLOWED_ORIGINS:-http://localhost:1420,http://127.0.0.1:1420,tauri://localhost,http://tauri.localhost,https://tauri.localhost}
+      GB_CORS_ALLOWED_ORIGINS: ${GB_CORS_ALLOWED_ORIGINS:-http://127.0.0.1:1420,http://localhost:1420}
       GB_POSTGRES_DSN: postgresql+psycopg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:?set_postgres_password}@postgres:5432/${POSTGRES_DB:-gooberberg}
       GB_REDIS_DSN: redis://redis:6379/0
       GB_HEARTBEAT_INTERVAL_SECONDS: ${GB_HEARTBEAT_INTERVAL_SECONDS:-15}
@@ -84,7 +84,7 @@ services:
       GB_API_PREFIX: ${GB_API_PREFIX:-/api/v1}
       GB_API_AUTH_TOKEN: ${GB_API_AUTH_TOKEN:?set_a_strong_token}
       GB_API_AUTH_SCOPE: ${GB_API_AUTH_SCOPE:-control-plane:full}
-      GB_CORS_ALLOWED_ORIGINS: ${GB_CORS_ALLOWED_ORIGINS:-http://localhost:1420,http://127.0.0.1:1420,tauri://localhost,http://tauri.localhost,https://tauri.localhost}
+      GB_CORS_ALLOWED_ORIGINS: ${GB_CORS_ALLOWED_ORIGINS:-http://127.0.0.1:1420,http://localhost:1420}
       GB_POSTGRES_DSN: postgresql+psycopg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:?set_postgres_password}@postgres:5432/${POSTGRES_DB:-gooberberg}
       GB_REDIS_DSN: redis://redis:6379/0
       GB_HEARTBEAT_INTERVAL_SECONDS: ${GB_HEARTBEAT_INTERVAL_SECONDS:-15}

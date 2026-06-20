@@ -5,6 +5,8 @@ Use this runbook when running Gooberberg locally and opening the app from the bu
 - Backend API: `http://127.0.0.1:8000`
 - Frontend dev server: `http://127.0.0.1:1420`
 
+The backend CORS default supports local browser access from `http://127.0.0.1:1420` and `http://localhost:1420`. Packaged Tauri origins (`tauri://localhost`, `http://tauri.localhost`, and `https://tauri.localhost`) are not enabled by default; add them to `GB_CORS_ALLOWED_ORIGINS` only when you intentionally support packaged Tauri access.
+
 ## 1) Start the backend
 
 From the repository root, start the backend stack with the documented ops workflow:

@@ -113,4 +113,5 @@ Tauri commands remain available for desktop packaging experiments, but they are 
 
 ## Local browser access
 
+- Backend CORS defaults support local browser access from `http://127.0.0.1:1420` and `http://localhost:1420`. Packaged Tauri origins are opt-in through `GB_CORS_ALLOWED_ORIGINS`.
 - See `docs/runbooks/local-server-browser.md` for local backend/frontend ports, browser access, and VS Code port-forward guidance.

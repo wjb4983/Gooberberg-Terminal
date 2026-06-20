@@ -193,8 +193,8 @@ def test_cors_preflight_bypasses_bearer_auth() -> None:
                 "Access-Control-Request-Headers": "authorization,content-type",
             },
         )
-        assert packaged_response.status_code == 200
-        assert packaged_response.headers["access-control-allow-origin"] == "http://tauri.localhost"
+        assert packaged_response.status_code == 400
+        assert "access-control-allow-origin" not in packaged_response.headers
     finally:
         if previous_token is None:
             os.environ.pop(TOKEN_ENV, None)
