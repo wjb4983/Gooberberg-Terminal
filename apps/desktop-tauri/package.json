@@ -1,6 +1,7 @@
 {
   "name": "@gb/desktop-tauri",
   "version": "0.0.0",
+  "description": "Browser/Vite frontend workspace; kept at apps/desktop-tauri until a future apps/web migration.",
   "private": true,
   "type": "module",
   "scripts": {
