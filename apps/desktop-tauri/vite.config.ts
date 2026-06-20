@@ -4,9 +4,13 @@ import http from 'node:http';
 import https from 'node:https';
 import type { IncomingHttpHeaders } from 'node:http';
 import type { AddressInfo } from 'node:net';
+import { Agent as HttpAgent } from 'node:http';
+import { Agent as HttpsAgent } from 'node:https';
 
 const DEV_API_PROXY_PATH = '/__gb_api_proxy';
 const VITE_HOST = process.env.GB_VITE_HOST;
+const ipv4HttpAgent = new HttpAgent({ family: 4 });
+const ipv4HttpsAgent = new HttpsAgent({ family: 4 });
 
 function toRequestHeaders(headers: IncomingHttpHeaders, targetUrl: URL): Record<string, string | string[]> {
   const forwardedHeaders: Record<string, string | string[]> = {};
@@ -53,12 +57,17 @@ function devApiProxyPlugin() {
           return;
         }
 
+        if (targetUrl.hostname === 'localhost') {
+          targetUrl.hostname = '127.0.0.1';
+        }
+
         const client = targetUrl.protocol === 'https:' ? https : http;
         const proxyRequest = client.request(
           targetUrl,
           {
             method: request.method,
             headers: toRequestHeaders(request.headers, targetUrl),
+            agent: targetUrl.protocol === 'https:' ? ipv4HttpsAgent : ipv4HttpAgent,
           },
           (proxyResponse) => {
             response.statusCode = proxyResponse.statusCode ?? 502;
