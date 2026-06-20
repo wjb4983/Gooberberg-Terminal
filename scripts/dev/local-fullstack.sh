@@ -12,6 +12,17 @@ BACKEND_HEALTH_URL="http://127.0.0.1:8000/healthz"
 VERSIONED_HEALTH_URL="http://127.0.0.1:8000/api/v1/health"
 QUEUE_HEARTBEAT_URL="http://127.0.0.1:8000/api/v1/health/queue/heartbeat"
 HEARTBEAT_INTERVAL_SECONDS="${HEARTBEAT_INTERVAL_SECONDS:-30}"
+LOCAL_FULLSTACK_FULL_STACK="${LOCAL_FULLSTACK_FULL_STACK:-${GB_LOCAL_FULLSTACK_FULL_STACK:-0}}"
+
+compose_up_backend() {
+  if [[ "$LOCAL_FULLSTACK_FULL_STACK" =~ ^(1|true|TRUE|yes|YES|all|ALL)$ ]]; then
+    log "full stack requested via LOCAL_FULLSTACK_FULL_STACK; enabling all-services profile"
+    timeout "$COMPOSE_TIMEOUT" docker compose -f "$COMPOSE_FILE" --profile all-services up -d --build
+  else
+    log "starting default local profile only (api-control-plane + postgres)"
+    timeout "$COMPOSE_TIMEOUT" docker compose -f "$COMPOSE_FILE" up -d --build postgres api-control-plane
+  fi
+}
 
 log() {
   printf '[local-fullstack] %s\n' "$*"
@@ -49,13 +60,13 @@ require_cmd curl
 cd "$ROOT_DIR"
 
 log "starting backend dependencies/API with Docker Compose"
-timeout "$COMPOSE_TIMEOUT" docker compose -f "$COMPOSE_FILE" up -d --build postgres redis api-control-plane
+compose_up_backend
 
 log "waiting for backend health: $BACKEND_HEALTH_URL"
 if ! poll_http_health "$BACKEND_HEALTH_URL"; then
   log "backend health check failed; collecting diagnostics"
   timeout 30s docker compose -f "$COMPOSE_FILE" ps || true
-  timeout 30s docker compose -f "$COMPOSE_FILE" logs --tail=200 api-control-plane postgres redis || true
+  timeout 30s docker compose -f "$COMPOSE_FILE" logs --tail=200 api-control-plane postgres || true
   printf 'error: backend health check failed: %s\n' "$BACKEND_HEALTH_URL" >&2
   exit 70
 fi
