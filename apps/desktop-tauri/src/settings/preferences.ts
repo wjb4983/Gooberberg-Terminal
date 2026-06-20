@@ -2,6 +2,19 @@ import type { ApiPreferences } from '../types/api';
 
 const PREFERENCES_KEY = 'desktop-tauri.preferences.v2';
 
+export function normalizeApiBaseUrl(value: string): string {
+  const trimmed = value.trim().replace(/\/$/, '');
+  try {
+    const parsed = new URL(trimmed);
+    if (parsed.hostname === 'localhost') {
+      parsed.hostname = '127.0.0.1';
+    }
+    return parsed.toString().replace(/\/$/, '');
+  } catch {
+    return trimmed;
+  }
+}
+
 const defaultPreferences: ApiPreferences = {
   baseUrl: 'http://127.0.0.1:8000',
   theme: 'dark',
@@ -21,7 +34,10 @@ export function loadPreferences(): ApiPreferences {
     const parsed = JSON.parse(raw) as Partial<ApiPreferences>;
 
     return {
-      baseUrl: typeof parsed.baseUrl === 'string' && parsed.baseUrl.length > 0 ? parsed.baseUrl : defaultPreferences.baseUrl,
+      baseUrl:
+        typeof parsed.baseUrl === 'string' && parsed.baseUrl.length > 0
+          ? normalizeApiBaseUrl(parsed.baseUrl)
+          : defaultPreferences.baseUrl,
       theme: parsed.theme === 'light' ? 'light' : 'dark',
       compactLayout: Boolean(parsed.compactLayout),
       filterDefaults: {
@@ -39,5 +55,11 @@ export function loadPreferences(): ApiPreferences {
 }
 
 export function savePreferences(preferences: ApiPreferences): void {
-  localStorage.setItem(PREFERENCES_KEY, JSON.stringify(preferences));
+  localStorage.setItem(
+    PREFERENCES_KEY,
+    JSON.stringify({
+      ...preferences,
+      baseUrl: normalizeApiBaseUrl(preferences.baseUrl),
+    }),
+  );
 }
