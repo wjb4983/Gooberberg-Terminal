@@ -1,6 +1,7 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import type { ThemePreference } from '../types/api';
+import { normalizeApiBaseUrl } from '../settings/preferences';
 
 interface SettingsPageProps {
   baseUrl: string;
@@ -8,18 +9,18 @@ interface SettingsPageProps {
   compactLayout: boolean;
   defaultSeverity: 'all' | 'info' | 'warning' | 'critical';
   onSaveBaseUrl: (nextBaseUrl: string) => void;
-  onSaveUiPreferences: (theme: ThemePreference, compactLayout: boolean, defaultSeverity: 'all' | 'info' | 'warning' | 'critical') => void;
+  onSaveUiPreferences: (
+    theme: ThemePreference,
+    compactLayout: boolean,
+    defaultSeverity: 'all' | 'info' | 'warning' | 'critical',
+  ) => void;
   onSaveToken: (token: string) => Promise<void>;
   onLoadToken: () => Promise<string>;
   onClearToken: () => Promise<void>;
 }
 
-function normalizeBaseUrl(value: string): string {
-  return value.trim().replace(/\/$/, '');
-}
-
 async function probeSavedConnection(baseUrl: string, token: string): Promise<string> {
-  const normalizedBaseUrl = normalizeBaseUrl(baseUrl);
+  const normalizedBaseUrl = normalizeApiBaseUrl(baseUrl);
   const headers = { Accept: 'application/json' };
   const [liveness, health, queue, protectedRoute] = await Promise.allSettled([
     fetch(`${normalizedBaseUrl}/healthz`, { headers }),
@@ -33,9 +34,11 @@ async function probeSavedConnection(baseUrl: string, token: string): Promise<str
     }),
   ]);
 
-  const isOk = (result: PromiseSettledResult<Response>): boolean => result.status === 'fulfilled' && result.value.ok;
+  const isOk = (result: PromiseSettledResult<Response>): boolean =>
+    result.status === 'fulfilled' && result.value.ok;
   const protectedOk = protectedRoute.status === 'fulfilled' && protectedRoute.value.ok;
-  const protectedStatus = protectedRoute.status === 'fulfilled' ? protectedRoute.value.status : 'request failed';
+  const protectedStatus =
+    protectedRoute.status === 'fulfilled' ? protectedRoute.value.status : 'request failed';
   const protectedDetail =
     protectedRoute.status === 'rejected' && protectedRoute.reason instanceof Error
       ? `; ${protectedRoute.reason.message}`
@@ -97,7 +100,7 @@ export function SettingsPage({
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>): Promise<void> => {
     event.preventDefault();
 
-    const nextBaseUrl = normalizeBaseUrl(baseUrlInput);
+    const nextBaseUrl = normalizeApiBaseUrl(baseUrlInput);
     onSaveBaseUrl(nextBaseUrl);
     onSaveUiPreferences(themeInput, compactLayoutInput, defaultSeverityInput);
     if (tokenInput.trim()) {
@@ -111,7 +114,9 @@ export function SettingsPage({
   const handleClearToken = async (): Promise<void> => {
     await onClearToken();
     setTokenInput('');
-    setStatus('Stored API token cleared. Re-authentication is required before protected API calls can succeed.');
+    setStatus(
+      'Stored API token cleared. Re-authentication is required before protected API calls can succeed.',
+    );
   };
 
   return (
@@ -128,13 +133,21 @@ export function SettingsPage({
         />
 
         <label htmlFor="theme">Theme</label>
-        <select id="theme" value={themeInput} onChange={(event) => setThemeInput(event.target.value as ThemePreference)}>
+        <select
+          id="theme"
+          value={themeInput}
+          onChange={(event) => setThemeInput(event.target.value as ThemePreference)}
+        >
           <option value="dark">Dark</option>
           <option value="light">Light</option>
         </select>
 
         <label>
-          <input type="checkbox" checked={compactLayoutInput} onChange={(event) => setCompactLayoutInput(event.target.checked)} />
+          <input
+            type="checkbox"
+            checked={compactLayoutInput}
+            onChange={(event) => setCompactLayoutInput(event.target.checked)}
+          />
           Compact layout
         </label>
 
@@ -142,7 +155,9 @@ export function SettingsPage({
         <select
           id="default-severity"
           value={defaultSeverityInput}
-          onChange={(event) => setDefaultSeverityInput(event.target.value as 'all' | 'info' | 'warning' | 'critical')}
+          onChange={(event) =>
+            setDefaultSeverityInput(event.target.value as 'all' | 'info' | 'warning' | 'critical')
+          }
         >
           <option value="all">All</option>
           <option value="info">Info</option>
@@ -160,12 +175,20 @@ export function SettingsPage({
         />
 
         <button type="submit">Save Settings</button>
-        <button type="button" onClick={() => void handleClearToken()}>Clear Stored Token</button>
+        <button type="button" onClick={() => void handleClearToken()}>
+          Clear Stored Token
+        </button>
       </form>
 
       {status && <p>{status}</p>}
-      <p>Preferences are persisted locally. Tauri builds use OS credential storage for the API token; browser dev mode stores it in localStorage.</p>
-      <p>If a token expires or is revoked, the API returns 401 and you must set a new token here to re-authenticate.</p>
+      <p>
+        Preferences are persisted locally. Tauri builds use OS credential storage for the API token;
+        browser dev mode stores it in localStorage.
+      </p>
+      <p>
+        If a token expires or is revoked, the API returns 401 and you must set a new token here to
+        re-authenticate.
+      </p>
     </section>
   );
 }

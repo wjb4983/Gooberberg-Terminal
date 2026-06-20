@@ -12,14 +12,27 @@ const VITE_HOST = process.env.GB_VITE_HOST;
 const ipv4HttpAgent = new HttpAgent({ family: 4 });
 const ipv4HttpsAgent = new HttpsAgent({ family: 4 });
 
-function toRequestHeaders(headers: IncomingHttpHeaders, targetUrl: URL): Record<string, string | string[]> {
+function normalizeProxyTarget(rawTarget: string): URL {
+  const targetUrl = new URL(rawTarget);
+  if (targetUrl.hostname === 'localhost') {
+    targetUrl.hostname = '127.0.0.1';
+  }
+  return targetUrl;
+}
+
+function toRequestHeaders(
+  headers: IncomingHttpHeaders,
+  targetUrl: URL,
+): Record<string, string | string[]> {
   const forwardedHeaders: Record<string, string | string[]> = {};
 
   Object.entries(headers).forEach(([name, value]) => {
     if (typeof value === 'undefined') {
       return;
     }
-    if (['connection', 'content-length', 'host', 'origin', 'referer'].includes(name.toLowerCase())) {
+    if (
+      ['connection', 'content-length', 'host', 'origin', 'referer'].includes(name.toLowerCase())
+    ) {
       return;
     }
     forwardedHeaders[name] = value;
@@ -44,7 +57,7 @@ function devApiProxyPlugin() {
 
         let targetUrl: URL;
         try {
-          targetUrl = new URL(rawTarget);
+          targetUrl = normalizeProxyTarget(rawTarget);
         } catch {
           response.statusCode = 400;
           response.end('Invalid proxy target URL.');
@@ -57,10 +70,6 @@ function devApiProxyPlugin() {
           return;
         }
 
-        if (targetUrl.hostname === 'localhost') {
-          targetUrl.hostname = '127.0.0.1';
-        }
-
         const client = targetUrl.protocol === 'https:' ? https : http;
         const proxyRequest = client.request(
           targetUrl,
@@ -68,6 +77,7 @@ function devApiProxyPlugin() {
             method: request.method,
             headers: toRequestHeaders(request.headers, targetUrl),
             agent: targetUrl.protocol === 'https:' ? ipv4HttpsAgent : ipv4HttpAgent,
+            family: 4,
           },
           (proxyResponse) => {
             response.statusCode = proxyResponse.statusCode ?? 502;
@@ -83,13 +93,15 @@ function devApiProxyPlugin() {
         proxyRequest.on('error', (error: NodeJS.ErrnoException) => {
           response.statusCode = 502;
           response.setHeader('content-type', 'application/json');
-          response.end(JSON.stringify({
-            error: 'dev_api_proxy_failed',
-            message: error.message,
-            code: error.code,
-            address: error.address,
-            port: error.port,
-          }));
+          response.end(
+            JSON.stringify({
+              error: 'dev_api_proxy_failed',
+              message: error.message,
+              code: error.code,
+              address: error.address,
+              port: error.port,
+            }),
+          );
         });
 
         request.pipe(proxyRequest);
@@ -98,7 +110,9 @@ function devApiProxyPlugin() {
       server.httpServer?.once('listening', () => {
         const address = server.httpServer?.address() as AddressInfo | null;
         if (address) {
-          server.config.logger.info(`  API proxy: http://localhost:${address.port}${DEV_API_PROXY_PATH}?url=<encoded-api-url>`);
+          server.config.logger.info(
+            `  API proxy: http://localhost:${address.port}${DEV_API_PROXY_PATH}?url=<encoded-api-url>`,
+          );
         }
       });
     },
