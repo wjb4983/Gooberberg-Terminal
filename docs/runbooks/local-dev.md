@@ -2,6 +2,36 @@
 
 This runbook is designed so a new engineer can clone, run, validate, and troubleshoot the control plane locally.
 
+## Quick start: local full stack
+
+Run these tasks from the repository root in order. Each task is independently verifiable; stop and fix the first failed step before continuing.
+
+1. Install dependencies:
+
+   ```bash
+   timeout 10m pnpm install --frozen-lockfile
+   ```
+
+2. Start the backend/API stack:
+
+   ```bash
+   timeout 240s docker compose -f infra/compose/docker-compose.dev.yml up -d --build postgres redis api-control-plane
+   ```
+
+3. Verify the backend health endpoint:
+
+   ```bash
+   timeout 20s curl -fsS http://127.0.0.1:8000/healthz
+   ```
+
+4. Start the frontend dev server:
+
+   ```bash
+   pnpm --filter @gb/desktop-tauri dev -- --host 0.0.0.0
+   ```
+
+5. Open the VS Code forwarded/browser URL for port `1420`.
+
 ## 1) Prerequisites
 
 - Node.js + pnpm (workspace uses pinned package manager in root `package.json`).
