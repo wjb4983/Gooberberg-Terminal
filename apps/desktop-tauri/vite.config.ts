@@ -6,6 +6,7 @@ import type { IncomingHttpHeaders } from 'node:http';
 import type { AddressInfo } from 'node:net';
 
 const DEV_API_PROXY_PATH = '/__gb_api_proxy';
+const VITE_HOST = process.env.GB_VITE_HOST;
 
 function toRequestHeaders(headers: IncomingHttpHeaders, targetUrl: URL): Record<string, string | string[]> {
   const forwardedHeaders: Record<string, string | string[]> = {};
@@ -99,6 +100,7 @@ export default defineConfig({
   plugins: [react(), devApiProxyPlugin()],
   clearScreen: false,
   server: {
+    host: VITE_HOST || undefined,
     port: 1420,
     strictPort: true,
   },
