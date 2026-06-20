@@ -23,7 +23,15 @@ interface StatusSnapshot {
 }
 
 function normalizeBaseUrl(baseUrl: string): string {
-  return baseUrl.replace(/\/$/, '');
+  try {
+    const parsed = new URL(baseUrl);
+    if (parsed.hostname === 'localhost') {
+      parsed.hostname = '127.0.0.1';
+    }
+    return parsed.toString().replace(/\/$/, '');
+  } catch {
+    return baseUrl.replace(/\/$/, '');
+  }
 }
 
 function isHealthyStatus(value: string | undefined): boolean {

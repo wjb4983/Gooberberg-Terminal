@@ -10,6 +10,8 @@ HEALTH_REQUEST_TIMEOUT="${HEALTH_REQUEST_TIMEOUT:-3}"
 FRONTEND_URL="http://127.0.0.1:1420"
 BACKEND_HEALTH_URL="http://127.0.0.1:8000/healthz"
 VERSIONED_HEALTH_URL="http://127.0.0.1:8000/api/v1/health"
+QUEUE_HEARTBEAT_URL="http://127.0.0.1:8000/api/v1/health/queue/heartbeat"
+HEARTBEAT_INTERVAL_SECONDS="${HEARTBEAT_INTERVAL_SECONDS:-30}"
 
 log() {
   printf '[local-fullstack] %s\n' "$*"
@@ -62,6 +64,21 @@ log "local development URLs:"
 log "  frontend:         $FRONTEND_URL"
 log "  backend health:   $BACKEND_HEALTH_URL"
 log "  versioned health: $VERSIONED_HEALTH_URL"
+log "starting local queue heartbeat for status bar"
+(
+  while true; do
+    curl --fail --silent --show-error --max-time "$HEALTH_REQUEST_TIMEOUT" \
+      --request POST "$QUEUE_HEARTBEAT_URL" >/dev/null || true
+    sleep "$HEARTBEAT_INTERVAL_SECONDS"
+  done
+) &
+heartbeat_pid=$!
+
+cleanup() {
+  kill "$heartbeat_pid" >/dev/null 2>&1 || true
+}
+trap cleanup EXIT INT TERM
+
 log "starting frontend dev server"
 
-exec pnpm --filter @gb/desktop-tauri dev -- --host 0.0.0.0
+pnpm --filter @gb/desktop-tauri dev -- --host 0.0.0.0

@@ -36,6 +36,7 @@ require_cmd curl
 
 check_http "API liveness endpoint" "${API_BASE_URL}/healthz"
 check_http "API versioned health endpoint" "${API_BASE_URL}/api/v1/health"
+check_http "API queue health endpoint" "${API_BASE_URL}/api/v1/health/queue"
 check_http "frontend dev server" "${FRONTEND_URL}"
 
 log "all finite local full-stack smoke checks passed"

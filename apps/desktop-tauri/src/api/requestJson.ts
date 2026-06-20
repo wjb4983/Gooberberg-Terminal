@@ -34,8 +34,22 @@ function shouldUseDevProxy(url: string): boolean {
   }
 }
 
+function normalizeLocalhostLoopback(url: string): string {
+  try {
+    const parsed = new URL(url);
+    if (parsed.hostname === 'localhost') {
+      parsed.hostname = '127.0.0.1';
+      return parsed.toString();
+    }
+  } catch {
+    // Keep the original value if it is not a valid absolute URL.
+  }
+
+  return url;
+}
+
 function toDevProxyUrl(url: string): string {
-  return `/__gb_api_proxy?url=${encodeURIComponent(url)}`;
+  return `/__gb_api_proxy?url=${encodeURIComponent(normalizeLocalhostLoopback(url))}`;
 }
 
 function summarizeFailureBody(body: string): string {
