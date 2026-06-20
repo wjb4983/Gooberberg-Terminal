@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import type { HealthResponse, QueueHealthResponse } from '@gb/schemas';
+import { desktopFetch } from '../api/client';
 import { normalizeApiBaseUrl } from '../settings/preferences';
 
 type IndicatorState = 'healthy' | 'degraded' | 'offline';

@@ -2,6 +2,10 @@ import type { ApiPreferences } from '../types/api';
 
 const PREFERENCES_KEY = 'desktop-tauri.preferences.v2';
 
+export const DEFAULT_API_BASE_URL = normalizeApiBaseUrl(
+  import.meta.env.VITE_GB_API_BASE_URL ?? 'http://127.0.0.1:8000',
+);
+
 export function normalizeApiBaseUrl(value: string): string {
   const trimmed = value.trim().replace(/\/$/, '');
   try {
@@ -16,7 +20,7 @@ export function normalizeApiBaseUrl(value: string): string {
 }
 
 const defaultPreferences: ApiPreferences = {
-  baseUrl: 'http://127.0.0.1:8000',
+  baseUrl: DEFAULT_API_BASE_URL,
   theme: 'dark',
   compactLayout: false,
   filterDefaults: {
@@ -34,10 +38,7 @@ export function loadPreferences(): ApiPreferences {
     const parsed = JSON.parse(raw) as Partial<ApiPreferences>;
 
     return {
-      baseUrl:
-        typeof parsed.baseUrl === 'string' && parsed.baseUrl.length > 0
-          ? normalizeApiBaseUrl(parsed.baseUrl)
-          : defaultPreferences.baseUrl,
+      baseUrl: defaultPreferences.baseUrl,
       theme: parsed.theme === 'light' ? 'light' : 'dark',
       compactLayout: Boolean(parsed.compactLayout),
       filterDefaults: {
@@ -59,7 +60,7 @@ export function savePreferences(preferences: ApiPreferences): void {
     PREFERENCES_KEY,
     JSON.stringify({
       ...preferences,
-      baseUrl: normalizeApiBaseUrl(preferences.baseUrl),
+      baseUrl: defaultPreferences.baseUrl,
     }),
   );
 }
