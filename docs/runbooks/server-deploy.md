@@ -149,8 +149,3 @@ timeout 60s docker compose --env-file config/env/.env -f infra/compose/docker-co
 2. Re-run `docker compose ... up -d` with pinned tags.
 3. Restore database backup if schema/data incompatibility occurred.
 4. Re-enable traffic only after health/API/WS checks pass.
-
-## 12) Tailnet access (optional)
-
-If operators or internal clients connect over Tailscale, follow
-`docs/runbooks/tailscale-connectivity.md` for the end-to-end mapping and client validation flow.

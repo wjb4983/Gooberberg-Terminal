@@ -18,7 +18,7 @@
 ## Current State (Summary)
 - API currently supports a single static bearer token with coarse scope declaration.
 - Desktop storage baseline already prefers OS keychain in Tauri runtime.
-- Mixed network topologies exist (localhost, Tailscale, reverse proxy).
+- The supported local topology uses localhost backend and frontend ports.
 
 ---
 
@@ -93,21 +93,13 @@ Move from one static shared token to either:
 - Enable HSTS on public/proxied HTTPS surfaces.
 - Validate certificate chains and hostnames in desktop client.
 
-### Trust model by topology
+### Trust model
 
 #### Localhost mode
 - Trust boundary: local machine only.
 - Allow loopback-only HTTP for local development when explicitly configured.
 - Production desktop builds should default to HTTPS when non-loopback hosts are used.
 
-#### Tailscale mode
-- Treat Tailnet as private transport, but keep application-layer auth mandatory.
-- Prefer HTTPS with trusted certs even on Tailnet to prevent local interception/misrouting risks.
-
-#### Reverse proxy mode
-- TLS termination must preserve secure upstream behavior.
-- Require strict upstream auth forwarding rules and header sanitation.
-- Reject insecure proxy headers from untrusted hops.
 
 ---
 
@@ -153,7 +145,7 @@ Move from one static shared token to either:
 
 ## Dependencies
 - **Phase 1:** endpoint/auth inventory (source of truth for scope mapping).
-- **Phase 3:** transport state model completion (localhost vs Tailscale vs proxy topology rules).
+- **Phase 3:** local transport state model completion (backend, frontend, and VS Code forwarded ports).
 
 ## Risks
 - Auth migration can break existing automation/scripts using legacy static token behavior.

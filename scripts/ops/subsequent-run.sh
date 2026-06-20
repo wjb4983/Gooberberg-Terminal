@@ -69,5 +69,4 @@ if ! poll_http_health "$API_HEALTH_URL" "$HEALTH_RETRIES" "$HEALTH_SLEEP_SECONDS
   run_with_timeout 30s "${compose_cmd[@]}" logs --tail=200 "$api_log_service" postgres redis || true
   die "$EXIT_HEALTH" "health check failed: $API_HEALTH_URL"
 fi
-print_tailscale_info
 log 'subsequent run complete.'

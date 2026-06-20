@@ -79,23 +79,15 @@ jobs:
     timeout-minutes: 30
     continue-on-error: true # advisory now; make mandatory next release
 
-    strategy:
-      fail-fast: false
-      matrix:
-        topology: [localhost, tailscale, reverse-proxy]
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
       - name: Run synthetic connectivity smoke
         env:
-          TOPOLOGY: ${{ matrix.topology }}
-          LOCALHOST_BASE_URL: ${{ vars.LOCALHOST_BASE_URL }}
-          TAILSCALE_BASE_URL: ${{ vars.TAILSCALE_BASE_URL }}
-          REVERSE_PROXY_BASE_URL: ${{ vars.REVERSE_PROXY_BASE_URL }}
+          BASE_URL: ${{ vars.LOCALHOST_BASE_URL }}
         run: |
-          timeout 90s scripts/ops/run-connectivity-smoke-matrix.sh
+          timeout 90s scripts/ops/connectivity-synthetic-check.sh
 
   nightly-matrix:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
@@ -104,7 +96,6 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        topology: [localhost, tailscale, reverse-proxy]
         auth_mode: [bearer-jwt, device-bound-token]
 
     steps:
@@ -139,17 +130,14 @@ jobs:
 
       - name: Run synthetic connectivity checks
         env:
-          TOPOLOGY: ${{ matrix.topology }}
-          LOCALHOST_BASE_URL: ${{ vars.LOCALHOST_BASE_URL }}
-          TAILSCALE_BASE_URL: ${{ vars.TAILSCALE_BASE_URL }}
-          REVERSE_PROXY_BASE_URL: ${{ vars.REVERSE_PROXY_BASE_URL }}
-        run: timeout 10m scripts/ops/run-connectivity-smoke-matrix.sh
+          BASE_URL: ${{ vars.LOCALHOST_BASE_URL }}
+        run: timeout 10m scripts/ops/connectivity-synthetic-check.sh
 
       - name: Upload failure artifacts
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: nightly-failure-${{ matrix.topology }}-${{ matrix.auth_mode }}
+          name: nightly-failure-${{ matrix.auth_mode }}
           retention-days: 14
           if-no-files-found: ignore
           path: |
