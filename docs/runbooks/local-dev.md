@@ -32,6 +32,18 @@ Run these tasks from the repository root in order. Each task is independently ve
 
 5. Open the VS Code forwarded/browser URL for port `1420`.
 
+6. After closing the frontend, stop the local backend containers:
+
+   ```bash
+   pnpm dev:local:down
+   ```
+
+   This stops the backend/API Compose containers and removes orphaned containers, but it does not remove persistent Docker volumes. Only remove persistent local data when you explicitly intend to reset it with a destructive cleanup command such as:
+
+   ```bash
+   timeout 60s docker compose -f infra/compose/docker-compose.dev.yml down --remove-orphans --volumes
+   ```
+
 ## 1) Prerequisites
 
 - Node.js + pnpm (workspace uses pinned package manager in root `package.json`).
