@@ -111,6 +111,6 @@ Tauri commands remain available for desktop packaging experiments, but they are 
 - ✅ Documentation baseline established.
 - 🚧 Domain implementation intentionally deferred.
 
-## Security & private deployment
+## Local browser access
 
-- See `docs/private-network-auth.md` for private single-user deployment guidance, bearer token auth, and SSH tunnel access.
+- See `docs/runbooks/local-server-browser.md` for local backend/frontend ports, browser access, and VS Code port-forward guidance.

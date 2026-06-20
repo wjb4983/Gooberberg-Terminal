@@ -20,8 +20,7 @@ Entry points:
 - `scripts/ops/first-time-build-run.sh`: first deployment (`docker compose up -d --build` + health polling).
 - `scripts/ops/subsequent-run.sh`: idempotent routine start (`docker compose up -d` + health polling).
 - `scripts/ops/update-build-run.sh`: pull updates, rebuild, and restart (`docker compose pull` + `up -d --build`).
-- `scripts/ops/connectivity-synthetic-check.sh`: single-topology synthetic health/auth/backend-down/queue/ws checks.
-- `scripts/ops/run-connectivity-smoke-matrix.sh`: run connectivity synthetic smoke across localhost, tailscale, and reverse-proxy base URLs.
+- `scripts/ops/connectivity-synthetic-check.sh`: single local synthetic health/auth/backend-down/queue/ws check.
 
 Usage examples:
 
@@ -35,10 +34,6 @@ COMPOSE_FILE='infra/compose/docker-compose.prod.yml' \
 
 PULL_TIMEOUT='20m' COMPOSE_TIMEOUT='25m' \
 ./scripts/ops/update-build-run.sh
-
-COMPOSE_PROFILES='loopback' \
-COMPOSE_SERVICES='postgres redis api-control-plane-loopback' \
-./scripts/ops/update-build-run.sh
 ```
 
 Notes:
@@ -48,13 +43,12 @@ Notes:
 - Scripts use the compose file's project name by default; set `COMPOSE_PROJECT_NAME` only when you intentionally need a non-default project namespace.
 - `COMPOSE_PROFILES` accepts a space-delimited list of compose profiles, and `COMPOSE_SERVICES` accepts a space-delimited list of services to target.
 - Health polling targets `API_HEALTH_URL` (default derived from `API_BIND_IP`/`API_BIND_PORT`, falling back to `http://127.0.0.1:8000/healthz`) with bounded retries.
-- Scripts print concise status and a brief Tailscale summary (if `tailscale` is installed).
 
 ## Quick order of operations (beginner-friendly)
 
-Use this exact sequence on the **server**.
+Use this exact sequence on the local development machine or dev container.
 
-### A) First-time setup (new machine)
+### A) First-time setup
 
 1. Set required secrets and run:
 
@@ -64,32 +58,18 @@ Use this exact sequence on the **server**.
    timeout 30m ./scripts/ops/first-time-build-run.sh
    ```
 
-2. On the server, map HTTPS tailnet traffic to the API:
+2. Verify local backend health:
 
    ```bash
-   timeout 20s tailscale serve --https=443 http://127.0.0.1:8000
-   timeout 20s tailscale status --self
+   timeout 20s curl -fsS http://127.0.0.1:8000/healthz
+   timeout 20s curl -fsS http://127.0.0.1:8000/api/v1/health
    ```
-   If you see `listener already exists for port 443`, run:
-   ```bash
-   timeout 20s tailscale serve status
-   ```
-   and confirm the existing mapping points to `http://127.0.0.1:8000`.
 
-3. On your **other machine** (same tailnet), open:
-   - `https://<server>.<tailnet>.ts.net/healthz`
-   - `https://<server>.<tailnet>.ts.net/api/v1/health` (not `/api/v1/healthz`)
-
-4. For authenticated API calls from the other machine:
-
-   ```bash
-   timeout 20s curl -kfsS "https://<server>.<tailnet>.ts.net/api/v1/models/deployments" \
-     -H "Authorization: Bearer <GB_API_AUTH_TOKEN>"
-   ```
+3. Start or verify the frontend on `127.0.0.1:1420`, then open it through your local browser or VS Code forwarded port.
 
 ### B) After `git pull` (repo updates)
 
-1. Pull latest code on server:
+1. Pull latest code:
 
    ```bash
    timeout 60s git pull --ff-only
@@ -101,18 +81,12 @@ Use this exact sequence on the **server**.
    timeout 30m ./scripts/ops/update-build-run.sh
    ```
 
-   If your remote client connects through Tailscale to the loopback-only API, use:
+3. Re-check local health:
 
    ```bash
-   COMPOSE_PROFILES='loopback' \
-   COMPOSE_SERVICES='postgres redis api-control-plane-loopback' \
-   timeout 30m ./scripts/ops/update-build-run.sh
+   timeout 20s curl -fsS http://127.0.0.1:8000/healthz
+   timeout 20s curl -fsS http://127.0.0.1:8000/api/v1/health
    ```
-
-3. Re-check from the other machine:
-   - `https://<server>.<tailnet>.ts.net/healthz`
-   - `https://<server>.<tailnet>.ts.net/api/v1/health` (not `/api/v1/healthz`)
-   - Re-run `tailscale serve --bg http://127.0.0.1:8000` only if `tailscale serve status` no longer shows the proxy.
 
 ### C) Routine restart (no code updates)
 
@@ -122,17 +96,12 @@ Use this exact sequence on the **server**.
    timeout 20m ./scripts/ops/subsequent-run.sh
    ```
 
-   Loopback/Tailscale variant:
+2. Re-check local health:
 
    ```bash
-   COMPOSE_PROFILES='loopback' \
-   COMPOSE_SERVICES='postgres redis api-control-plane-loopback' \
-   timeout 20m ./scripts/ops/subsequent-run.sh
+   timeout 20s curl -fsS http://127.0.0.1:8000/healthz
+   timeout 20s curl -fsS http://127.0.0.1:8000/api/v1/health
    ```
-
-2. Re-check from the other machine:
-   - `https://<server>.<tailnet>.ts.net/healthz`
-   - `https://<server>.<tailnet>.ts.net/api/v1/health` (not `/api/v1/healthz`)
 
 If a script reports health check failure, inspect containers immediately:
 
@@ -166,20 +135,17 @@ These release scripts are intentionally cloud-agnostic and do not perform cloud 
 
 Use this sequence when a local deployed agent reports an API popup/error.
 
-1. **Verify health endpoints first** (server and routed endpoint):
+1. **Verify health endpoints first**:
 
    ```bash
    timeout 20s curl -fsS http://127.0.0.1:8000/healthz
    timeout 20s curl -fsS http://127.0.0.1:8000/api/v1/health
-   timeout 20s curl -kfsS "https://<server>.<tailnet>.ts.net/healthz"
-   timeout 20s curl -kfsS "https://<server>.<tailnet>.ts.net/api/v1/health"
    ```
 
-2. **Run bounded connectivity synthetic checks** (local topology first, then matrix if needed):
+2. **Run bounded connectivity synthetic checks**:
 
    ```bash
    timeout 8m ./scripts/ops/connectivity-synthetic-check.sh
-   timeout 15m ./scripts/ops/run-connectivity-smoke-matrix.sh
    ```
 
 3. **Fetch relevant service logs with timeout** (focus API + backing services):
@@ -197,3 +163,5 @@ Use this sequence when a local deployed agent reports an API popup/error.
    ```bash
    timeout 20s docker compose --env-file config/env/.env -f infra/compose/docker-compose.prod.yml logs --tail=500 api-control-plane | rg "request_id=<paste-request-id>|\"request_id\":\"<paste-request-id>\""
    ```
+
+See `docs/runbooks/local-server-browser.md` for the browser and VS Code port-forward workflow.

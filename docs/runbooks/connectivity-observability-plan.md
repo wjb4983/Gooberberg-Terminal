@@ -91,21 +91,18 @@ Synthetic checks run continuously from controlled probes for each environment.
 
 ### Check matrix
 
-1. **Localhost lane**
+1. **Localhost backend lane**
    - `http://127.0.0.1:<port>/healthz`
    - Auth-protected endpoint with valid token
    - WS subscribe/ping/pong
-2. **Tailscale HTTPS lane**
-   - `https://<tailnet-name>.ts.net/healthz`
-   - Auth-protected endpoint with service token
-   - WS subscribe/ping/pong over TLS
-3. **Reverse-proxy path/base-url lane**
-   - Validate app served under expected prefix (e.g. `/api/v1`) and no double-prefix regressions.
-   - Validate health path rewrite correctness.
+2. **Local browser lane**
+   - Frontend reachable on `http://127.0.0.1:1420`
+   - VS Code forwarded port `1420` opens the same frontend
+   - Browser API calls resolve to the local backend
 
 ### Synthetic validation steps
 
-Each lane must validate:
+Each lane must validate the applicable checks:
 
 1. **Health endpoint:** 200 + expected JSON schema keys.
 2. **Auth-protected endpoint:**
@@ -126,7 +123,7 @@ Each lane must validate:
 
 The following runbooks must exist and be referenced from `docs/runbooks/README.md`:
 
-- `desktop-cannot-connect.md`
+- `local-server-browser.md`
 - `auth-token-rejected.md`
 - `ws-reconnect-storm.md`
 - `queue-heartbeat-stale.md`

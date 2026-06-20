@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-TOPOLOGY="${1:-${TOPOLOGY:-}}"
-BASE_URL="${2:-${BASE_URL:-}}"
+TOPOLOGY="${1:-${TOPOLOGY:-localhost}}"
+BASE_URL="${2:-${BASE_URL:-http://127.0.0.1:8000}}"
 AUTH_TOKEN="${AUTH_TOKEN:-}"
 CONNECT_TIMEOUT="${CONNECT_TIMEOUT:-5}"
 REQUEST_TIMEOUT="${REQUEST_TIMEOUT:-10}"
@@ -10,10 +10,6 @@ KNOWN_FAMILY="${KNOWN_FAMILY:-gpt-4o}"
 
 MODEL_CONFIGS_MIN_PAYLOAD='{"name":"synthetic-smoke-config","provider":"openai","model_family":"gpt-4o","enabled":true}'
 
-if [[ -z "$TOPOLOGY" || -z "$BASE_URL" ]]; then
-  echo "usage: $0 <topology> <base_url>" >&2
-  exit 2
-fi
 
 curl_capture() {
   local method="$1"

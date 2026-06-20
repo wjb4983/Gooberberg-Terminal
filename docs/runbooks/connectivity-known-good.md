@@ -4,18 +4,17 @@ This runbook is the **entry-gate triage checklist** before any deeper desktop/AP
 
 Use it to confirm:
 - API process/container is up and bound to expected interface+port.
-- Desktop `baseUrl` targets the same endpoint profile.
+- Browser or desktop local base URL targets `http://127.0.0.1:8000`.
 - HTTP health probes return expected JSON.
 - Auth token mode alignment (`GB_API_AUTH_TOKEN` vs desktop keychain token).
 - WebSocket URL path/scheme resolves and upgrades.
 
-## 0) Endpoint profile matrix (one-page reference)
+## 0) Local endpoint reference
 
-| Profile | API bind expectation | Desktop `baseUrl` | Health probe base | WS URL | Auth expectation |
-|---|---|---|---|---|---|
-| Localhost dev compose | `127.0.0.1:8000` | `http://localhost:8000` | `http://127.0.0.1:8000` | `ws://127.0.0.1:8000/ws` | Health routes are unauthenticated. Non-health routes require bearer token only when `GB_API_AUTH_TOKEN` is set. |
-| Tailscale HTTPS | API still local (`127.0.0.1:8000`) and exposed via `tailscale serve` | `https://<machine>.<tailnet>.ts.net` | `https://<machine>.<tailnet>.ts.net` | `wss://<machine>.<tailnet>.ts.net/ws` | Same auth model as above; HTTPS transport does not change token requirements. |
-| Reverse proxy (nginx/LB) | Upstream API reachable by proxy at local/service address | `https://<your-domain>` | `https://<your-domain>` | `wss://<your-domain>/ws` | Same auth model; ensure proxy preserves `Authorization` and WS upgrade headers. |
+| Service | Bind expectation | Browser/API URL | WS URL | Auth expectation |
+|---|---|---|---|---|
+| Backend API | `127.0.0.1:8000` | `http://127.0.0.1:8000` | `ws://127.0.0.1:8000/ws` | Health routes are unauthenticated. Non-health routes require bearer token only when `GB_API_AUTH_TOKEN` is set. |
+| Frontend dev server | `127.0.0.1:1420` | `http://127.0.0.1:1420` or VS Code forwarded port `1420` | n/a | Uses local backend configuration. |
 
 ## 1) Verify API process/container + bind target
 
@@ -40,16 +39,16 @@ If using prod loopback profile, expected bind is `127.0.0.1:${API_BIND_PORT:-800
 
 ### C. Desktop endpoint alignment
 
-Desktop default preference is `http://localhost:8000`; update Settings only if using a tailnet/proxy endpoint or another API base URL.
+Desktop/browser default preference is `http://localhost:8000`; update Settings only if using another local API base URL.
 
-When using `pnpm dev:local` in VS Code or a remote browser environment, Vite serves the frontend on port `1420`. Open or forward port `1420` in VS Code, then browse to the forwarded frontend URL. Keep the API base URL set to `http://localhost:8000` unless your Settings profile intentionally points at a different API endpoint.
+When using `pnpm dev:local` in VS Code or a remote browser environment, Vite serves the frontend on port `1420`. Open or forward port `1420` in VS Code, then browse to the forwarded frontend URL. Keep the API base URL set to `http://localhost:8000` unless your local Settings profile intentionally points at a different local API endpoint.
 
 ## 2) Validate HTTP path from desktop host
 
 Run all three probes from the **same machine/runtime context as desktop app**:
 
 ```bash
-BASE_URL="http://127.0.0.1:8000"  # or https://<machine>.ts.net or https://<your-domain>
+BASE_URL="http://127.0.0.1:8000"
 
 timeout 20s curl -fsS "$BASE_URL/healthz"
 timeout 20s curl -fsS "$BASE_URL/api/v1/health"
@@ -61,7 +60,7 @@ Expected payload shapes:
 - `/api/v1/health` returns service/version plus dependency objects (`postgres`, `redis`).
 - `/api/v1/health/queue` returns queue status and heartbeat metadata.
 
-If any probe fails, stop rollout and restore last known-good endpoint/profile before proceeding.
+If any probe fails, stop rollout and restore the last known-good local endpoint before proceeding.
 
 ## 3) Validate auth mode (`GB_API_AUTH_TOKEN`)
 
@@ -90,11 +89,7 @@ Expected: non-401 response when token is correct (or route-specific status), and
 
 ## 4) Validate WebSocket URL path and scheme
 
-Path must be `/ws` for all profiles.
-
-- Localhost: `ws://127.0.0.1:8000/ws`
-- Tailscale HTTPS: `wss://<machine>.<tailnet>.ts.net/ws`
-- Reverse proxy HTTPS: `wss://<your-domain>/ws`
+Path must be `/ws`: `ws://127.0.0.1:8000/ws`.
 
 Sanity-check upgrade (HTTP side):
 
@@ -111,12 +106,12 @@ Then validate a real WS client can connect and subscribe at least one topic (for
 
 Proceed only when all are green:
 - [ ] API process/container running and bound to expected interface/port.
-- [ ] Desktop `baseUrl` matches selected endpoint profile.
+- [ ] Desktop/browser `baseUrl` matches the local endpoint.
 - [ ] `GET /healthz` returns expected JSON.
 - [ ] `GET /api/v1/health` returns expected JSON.
 - [ ] `GET /api/v1/health/queue` returns expected JSON.
 - [ ] Auth mode validated (`GB_API_AUTH_TOKEN` vs desktop keychain token).
-- [ ] WS URL resolves with correct `ws://` or `wss://` scheme.
+- [ ] WS URL resolves with the local `ws://` scheme.
 - [ ] WS session opens and subscribes to at least one topic.
 
-Rollback if red: revert to last known-good endpoint/profile config and freeze new changes until connectivity is green.
+Rollback if red: revert to last known-good local endpoint config and freeze new changes until connectivity is green.

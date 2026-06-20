@@ -78,14 +78,3 @@ poll_http_health() {
   err "health check failed after ${max_retries} attempts: $url"
   return 1
 }
-
-print_tailscale_info() {
-  if ! command -v tailscale >/dev/null 2>&1; then
-    log 'tailscale: command not installed.'
-    return 0
-  fi
-
-  log 'tailscale summary:'
-  run_with_timeout 10s tailscale status --peers=false || true
-  run_with_timeout 10s tailscale ip -4 || true
-}
