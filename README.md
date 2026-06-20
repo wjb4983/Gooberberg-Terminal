@@ -78,6 +78,14 @@ docs/
 - ✅ Documentation baseline established.
 - 🚧 Domain implementation intentionally deferred.
 
-## Security & private deployment
+## Local development
 
-- See `docs/private-network-auth.md` for private single-user deployment guidance, bearer token auth, and SSH tunnel access.
+The supported local server topology keeps all services on a single local/VS Code workspace:
+
+1. Start backend dependencies/API on `127.0.0.1:8000`.
+2. Start the frontend dev server on port `1420`.
+3. Open the VS Code forwarded/browser URL for port `1420`.
+4. Confirm the frontend API base URL is `http://127.0.0.1:8000`.
+5. Run finite smoke checks with `timeout 60s ./scripts/dev/check-local-fullstack.sh`.
+
+See `docs/runbooks/local-dev.md` for the full local runbook.
