@@ -72,6 +72,21 @@ async function probeApiHealth(baseUrl: string): Promise<ProbeResult<HealthRespon
   }
 }
 
+async function refreshLocalQueueHeartbeat(baseUrl: string): Promise<void> {
+  if (!import.meta.env.DEV) {
+    return;
+  }
+
+  try {
+    await desktopFetch(`${normalizeApiBaseUrl(baseUrl)}/api/v1/health/queue/heartbeat`, {
+      method: 'POST',
+      headers: { Accept: 'application/json' },
+    });
+  } catch {
+    // The following queue health probe will report the API connectivity issue.
+  }
+}
+
 async function probeQueueHealth(baseUrl: string): Promise<ProbeResult<QueueHealthResponse>> {
   try {
     const response = await fetch(`${normalizeApiBaseUrl(baseUrl)}/api/v1/health/queue`, {

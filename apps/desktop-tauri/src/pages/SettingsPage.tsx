@@ -23,10 +23,10 @@ async function probeSavedConnection(baseUrl: string, token: string): Promise<str
   const normalizedBaseUrl = normalizeApiBaseUrl(baseUrl);
   const headers = { Accept: 'application/json' };
   const [liveness, health, queue, protectedRoute] = await Promise.allSettled([
-    fetch(`${normalizedBaseUrl}/healthz`, { headers }),
-    fetch(`${normalizedBaseUrl}/api/v1/health`, { headers }),
-    fetch(`${normalizedBaseUrl}/api/v1/health/queue`, { headers }),
-    fetch(`${normalizedBaseUrl}/api/v1/models/deployments`, {
+    desktopFetch(`${normalizedBaseUrl}/healthz`, { headers }),
+    desktopFetch(`${normalizedBaseUrl}/api/v1/health`, { headers }),
+    desktopFetch(`${normalizedBaseUrl}/api/v1/health/queue`, { headers }),
+    desktopFetch(`${normalizedBaseUrl}/api/v1/models/deployments`, {
       headers: {
         ...headers,
         ...(token.trim() ? { Authorization: `Bearer ${token.trim()}` } : {}),

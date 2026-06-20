@@ -13,21 +13,34 @@ Initial Tauri + React + TypeScript desktop shell.
 
 ## Development
 
-For local desktop development, start the full stack from the repository root:
+For local desktop development, run these tasks from the repository root in order:
+
+1. Start the backend/API dependencies and Vite together:
+
+   ```bash
+   timeout 20m pnpm dev:local
+   ```
+
+2. In a second terminal, verify the finite local smoke checks:
+
+   ```bash
+   timeout 60s pnpm dev:local:check
+   ```
+
+3. Open or forward port `1420`, then browse to the forwarded frontend URL shown by your editor or terminal.
+
+The local full-stack script starts Vite on port `1420` with `--host 0.0.0.0` so browser-based environments can reach the dev frontend. It also records a local queue heartbeat so the status bar does not report a false queue/worker degradation while you are developing without a separate worker process.
+
+If you start the desktop frontend directly, start and validate the API first, then bind Vite to the host you need:
 
 ```bash
-pnpm dev:local
-```
-
-The local full-stack script starts Vite on port `1420` with `--host 0.0.0.0` so browser-based environments can reach the dev frontend. In VS Code, open or forward port `1420`, then browse to the forwarded frontend URL shown by VS Code.
-
-If you start the desktop frontend directly and need Vite to bind to a non-default host, set `GB_VITE_HOST` before running Vite:
-
-```bash
+timeout 240s docker compose -f infra/compose/docker-compose.dev.yml up -d --build postgres redis api-control-plane
+timeout 20s curl -fsS http://127.0.0.1:8000/healthz
+timeout 20s curl -fsS http://127.0.0.1:8000/api/v1/health
 GB_VITE_HOST=0.0.0.0 pnpm --filter @gb/desktop-tauri dev
 ```
 
-The default browser-facing API base URL remains `http://localhost:8000`. Change it only from the desktop Settings page when using a tailnet, proxy, or other API endpoint.
+The default API base URL is `http://127.0.0.1:8000`. Change it only from the desktop Settings page when using a tailnet, proxy, or other API endpoint.
 
 ## Tauri
 
