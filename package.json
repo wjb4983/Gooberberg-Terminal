@@ -13,7 +13,8 @@
     "test": "pnpm -r test",
     "release:version-meta": "scripts/release/gen-version-metadata.sh",
     "release:desktop": "scripts/release/build-desktop-artifacts.sh",
-    "release:images": "scripts/release/build-push-server-images.sh"
+    "release:images": "scripts/release/build-push-server-images.sh",
+    "dev:local": "scripts/dev/local-fullstack.sh"
   },
   "devDependencies": {
     "@typescript-eslint/eslint-plugin": "^8.31.1",
