@@ -2,7 +2,8 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-COMPOSE_FILE="${COMPOSE_FILE:-infra/compose/docker-compose.dev.yml}"
+LOCAL_COMPOSE_FILE="infra/compose/docker-compose.dev.yml"
+COMPOSE_FILE="${COMPOSE_FILE:-$LOCAL_COMPOSE_FILE}"
 COMPOSE_TIMEOUT="${COMPOSE_TIMEOUT:-20m}"
 HEALTH_RETRIES="${HEALTH_RETRIES:-60}"
 HEALTH_SLEEP_SECONDS="${HEALTH_SLEEP_SECONDS:-2}"
@@ -48,7 +49,7 @@ require_cmd curl
 
 cd "$ROOT_DIR"
 
-log "starting backend dependencies/API with Docker Compose"
+log "starting simplified local backend dependencies/API with Docker Compose: $COMPOSE_FILE"
 timeout "$COMPOSE_TIMEOUT" docker compose -f "$COMPOSE_FILE" up -d --build postgres redis api-control-plane
 
 log "waiting for backend health: $BACKEND_HEALTH_URL"

@@ -1,4 +1,4 @@
-name: gooberberg-prod
+name: gooberberg-local-server
 
 x-default-logging: &default-logging
   logging:
@@ -46,7 +46,7 @@ services:
       redis:
         condition: service_healthy
     ports:
-      - "${API_BIND_IP:-0.0.0.0}:${API_BIND_PORT:-8000}:8000"
+      - "${API_BIND_IP:-127.0.0.1}:${API_BIND_PORT:-8000}:8000"
     healthcheck:
       test:
         [
@@ -60,56 +60,7 @@ services:
       retries: 5
       start_period: 20s
     networks:
-      - gb-prod-private
-      - gb-prod-edge
-    <<: [*default-logging, *default-resources]
-
-  # Optional profile for local loopback-only admin access (no public exposure).
-  api-control-plane-loopback:
-    profiles: ["loopback"]
-    image: ghcr.io/gooberberg/api-control-plane:latest
-    build:
-      context: ../..
-      dockerfile: infra/docker/api.Dockerfile
-    restart: unless-stopped
-    init: true
-    read_only: true
-    security_opt:
-      - no-new-privileges:true
-    tmpfs:
-      - /tmp:size=64m,noexec,nosuid
-    environment:
-      GB_ENVIRONMENT: production
-      GB_APP_VERSION: ${GB_APP_VERSION:-0.1.0}
-      GB_API_PREFIX: ${GB_API_PREFIX:-/api/v1}
-      GB_API_AUTH_TOKEN: ${GB_API_AUTH_TOKEN:?set_a_strong_token}
-      GB_API_AUTH_SCOPE: ${GB_API_AUTH_SCOPE:-control-plane:full}
-      GB_CORS_ALLOWED_ORIGINS: ${GB_CORS_ALLOWED_ORIGINS:-http://localhost:1420,http://127.0.0.1:1420,tauri://localhost,http://tauri.localhost,https://tauri.localhost}
-      GB_POSTGRES_DSN: postgresql+psycopg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:?set_postgres_password}@postgres:5432/${POSTGRES_DB:-gooberberg}
-      GB_REDIS_DSN: redis://redis:6379/0
-      GB_HEARTBEAT_INTERVAL_SECONDS: ${GB_HEARTBEAT_INTERVAL_SECONDS:-15}
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    ports:
-      - "127.0.0.1:${API_BIND_PORT:-8000}:8000"
-    healthcheck:
-      test:
-        [
-          "CMD",
-          "python",
-          "-c",
-          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=2)",
-        ]
-      interval: 20s
-      timeout: 5s
-      retries: 5
-      start_period: 20s
-    networks:
-      - gb-prod-private
-      - gb-prod-edge
+      - gb-local-private
     <<: [*default-logging, *default-resources]
 
   postgres:
@@ -130,7 +81,7 @@ services:
     expose:
       - "5432"
     networks:
-      - gb-prod-private
+      - gb-local-private
     <<: [*default-logging]
     deploy:
       resources:
@@ -156,7 +107,7 @@ services:
     expose:
       - "6379"
     networks:
-      - gb-prod-private
+      - gb-local-private
     <<: [*default-logging]
     deploy:
       resources:
@@ -167,106 +118,13 @@ services:
           cpus: "0.25"
           memory: 128M
 
-  worker-training:
-    image: ghcr.io/gooberberg/worker-training:latest
-    build:
-      context: ../..
-      dockerfile: infra/docker/worker.Dockerfile
-      args:
-        SERVICE_PATH: services/worker-training
-        MODULE_NAME: worker_training.main
-    restart: unless-stopped
-    init: true
-    read_only: true
-    security_opt:
-      - no-new-privileges:true
-    tmpfs:
-      - /tmp:size=64m,noexec,nosuid
-    environment:
-      GB_REDIS_DSN: redis://redis:6379/0
-      GB_CONTROL_PLANE_EVENTS_URL: http://api-control-plane:8000/api/v1
-      GB_WORKER_HEARTBEAT_INTERVAL_SECONDS: ${GB_WORKER_HEARTBEAT_INTERVAL_SECONDS:-15}
-    volumes:
-      - worker-artifacts:/artifacts
-    depends_on:
-      api-control-plane:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    networks:
-      - gb-prod-private
-    <<: [*default-logging, *default-resources]
-
-  worker-research:
-    image: ghcr.io/gooberberg/worker-research:latest
-    build:
-      context: ../..
-      dockerfile: infra/docker/worker.Dockerfile
-      args:
-        SERVICE_PATH: services/worker-research
-        MODULE_NAME: worker_research.main
-    restart: unless-stopped
-    init: true
-    read_only: true
-    security_opt:
-      - no-new-privileges:true
-    tmpfs:
-      - /tmp:size=64m,noexec,nosuid
-    environment:
-      GB_REDIS_DSN: redis://redis:6379/0
-      GB_CONTROL_PLANE_EVENTS_URL: http://api-control-plane:8000/api/v1
-      GB_WORKER_HEARTBEAT_INTERVAL_SECONDS: ${GB_WORKER_HEARTBEAT_INTERVAL_SECONDS:-15}
-    volumes:
-      - worker-artifacts:/artifacts
-    depends_on:
-      api-control-plane:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    networks:
-      - gb-prod-private
-    <<: [*default-logging, *default-resources]
-
-  # Optional internet-facing reverse proxy profile with TLS termination placeholders.
-  nginx:
-    image: nginx:1.27-alpine
-    profiles: ["nginx"]
-    restart: unless-stopped
-    depends_on:
-      api-control-plane:
-        condition: service_healthy
-    ports:
-      - "${NGINX_HTTP_PORT:-80}:80"
-      - "${NGINX_HTTPS_PORT:-443}:443"
-    volumes:
-      - ../nginx/nginx.prod.conf:/etc/nginx/nginx.conf:ro
-      - nginx-certs:/etc/nginx/certs:ro
-      - nginx-acme:/var/www/acme
-    networks:
-      - gb-prod-edge
-    read_only: true
-    tmpfs:
-      - /var/cache/nginx:size=32m,noexec,nosuid
-      - /var/run:size=8m,noexec,nosuid
-    security_opt:
-      - no-new-privileges:true
-    <<: [*default-logging, *default-resources]
-
 networks:
-  gb-prod-private:
+  gb-local-private:
     driver: bridge
     internal: true
-  gb-prod-edge:
-    driver: bridge
 
 volumes:
   postgres-data:
-    name: gb-prod-postgres-data
+    name: gb-local-postgres-data
   redis-data:
-    name: gb-prod-redis-data
-  worker-artifacts:
-    name: gb-prod-worker-artifacts
-  nginx-certs:
-    name: gb-prod-nginx-certs
-  nginx-acme:
-    name: gb-prod-nginx-acme
+    name: gb-local-redis-data
