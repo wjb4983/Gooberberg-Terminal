@@ -7,22 +7,10 @@ COMPOSE_TIMEOUT="${COMPOSE_TIMEOUT:-20m}"
 HEALTH_RETRIES="${HEALTH_RETRIES:-60}"
 HEALTH_SLEEP_SECONDS="${HEALTH_SLEEP_SECONDS:-2}"
 HEALTH_REQUEST_TIMEOUT="${HEALTH_REQUEST_TIMEOUT:-3}"
-FRONTEND_URL="http://127.0.0.1:1420"
 BACKEND_HEALTH_URL="http://127.0.0.1:8000/healthz"
-VERSIONED_HEALTH_URL="http://127.0.0.1:8000/api/v1/health"
-QUEUE_HEARTBEAT_URL="http://127.0.0.1:8000/api/v1/health/queue/heartbeat"
-HEARTBEAT_INTERVAL_SECONDS="${HEARTBEAT_INTERVAL_SECONDS:-30}"
-LOCAL_FULLSTACK_FULL_STACK="${LOCAL_FULLSTACK_FULL_STACK:-${GB_LOCAL_FULLSTACK_FULL_STACK:-0}}"
-
-compose_up_backend() {
-  if [[ "$LOCAL_FULLSTACK_FULL_STACK" =~ ^(1|true|TRUE|yes|YES|all|ALL)$ ]]; then
-    log "full stack requested via LOCAL_FULLSTACK_FULL_STACK; enabling all-services profile"
-    timeout "$COMPOSE_TIMEOUT" docker compose -f "$COMPOSE_FILE" --profile all-services up -d --build
-  else
-    log "starting default local profile only (api-control-plane + postgres)"
-    timeout "$COMPOSE_TIMEOUT" docker compose -f "$COMPOSE_FILE" up -d --build postgres api-control-plane
-  fi
-}
+VITE_PORT="${VITE_PORT:-1420}"
+VITE_HOST="${VITE_HOST:-${LOCAL_FULLSTACK_VITE_HOST:-127.0.0.1}}"
+FRONTEND_URL="http://127.0.0.1:${VITE_PORT}"
 
 log() {
   printf '[local-fullstack] %s\n' "$*"
@@ -35,12 +23,30 @@ require_cmd() {
   fi
 }
 
+validate_vite_host() {
+  case "$VITE_HOST" in
+    127.0.0.1|0.0.0.0) ;;
+    *)
+      printf 'error: VITE_HOST must be either 127.0.0.1 or 0.0.0.0, got: %s\n' "$VITE_HOST" >&2
+      exit 64
+      ;;
+  esac
+}
+
+compose() {
+  timeout "$COMPOSE_TIMEOUT" docker compose -f "$COMPOSE_FILE" "$@"
+}
+
+compose_up_backend() {
+  compose up -d --build postgres api-control-plane
+}
+
 poll_http_health() {
   local url="$1"
   local attempt
 
   for ((attempt = 1; attempt <= HEALTH_RETRIES; attempt += 1)); do
-    if curl --fail --silent --show-error --max-time "$HEALTH_REQUEST_TIMEOUT" "$url" >/dev/null; then
+    if timeout "$HEALTH_REQUEST_TIMEOUT" curl --fail --silent --show-error --max-time "$HEALTH_REQUEST_TIMEOUT" "$url" >/dev/null; then
       return 0
     fi
 
@@ -56,10 +62,11 @@ require_cmd docker
 require_cmd pnpm
 require_cmd timeout
 require_cmd curl
+validate_vite_host
 
 cd "$ROOT_DIR"
 
-log "starting backend dependencies/API with Docker Compose"
+log "starting minimal backend stack with Docker Compose"
 compose_up_backend
 
 log "waiting for backend health: $BACKEND_HEALTH_URL"
@@ -71,29 +78,10 @@ if ! poll_http_health "$BACKEND_HEALTH_URL"; then
   exit 70
 fi
 
-log "local development URLs:"
-log "  frontend:         $FRONTEND_URL"
-log "  backend health:   $BACKEND_HEALTH_URL"
-log "  versioned health: $VERSIONED_HEALTH_URL"
-log "recording initial queue heartbeat for status bar"
-curl --fail --silent --show-error --max-time "$HEALTH_REQUEST_TIMEOUT" \
-  --request POST "$QUEUE_HEARTBEAT_URL" >/dev/null || true
+log "local URLs:"
+log "  frontend:       $FRONTEND_URL"
+log "  backend health: $BACKEND_HEALTH_URL"
+log "VS Code browser guidance: forward port ${VITE_PORT}, then open the forwarded frontend URL."
+log "Use VITE_HOST=0.0.0.0 when VS Code port forwarding cannot reach a 127.0.0.1-bound Vite server; otherwise keep VITE_HOST=127.0.0.1."
 
-log "starting local queue heartbeat for status bar"
-(
-  while true; do
-    curl --fail --silent --show-error --max-time "$HEALTH_REQUEST_TIMEOUT" \
-      --request POST "$QUEUE_HEARTBEAT_URL" >/dev/null || true
-    sleep "$HEARTBEAT_INTERVAL_SECONDS"
-  done
-) &
-heartbeat_pid=$!
-
-cleanup() {
-  kill "$heartbeat_pid" >/dev/null 2>&1 || true
-}
-trap cleanup EXIT INT TERM
-
-log "starting frontend dev server"
-
-pnpm --filter @gb/desktop-tauri dev -- --host 0.0.0.0
+pnpm --filter @gb/desktop-tauri dev -- --host "$VITE_HOST" --port "$VITE_PORT" --strictPort
