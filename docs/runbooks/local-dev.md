@@ -72,7 +72,22 @@ timeout 20s curl -fsS -X POST http://127.0.0.1:8000/api/v1/jobs \
 # timeout 20s curl -fsS http://127.0.0.1:8000/api/v1/jobs/<job_id> -H "Authorization: Bearer $TOKEN"
 ```
 
-## 7) WebSocket smoke checks
+## 7) Full-stack local mode on a remote server
+
+Use this order when running the full stack from a remote development host, such as VS Code Remote SSH or a dev container:
+
+1. Start the API bound only to the remote server loopback interface at `127.0.0.1:8000`.
+2. Start Vite/frontend on `0.0.0.0:1420` so the VS Code browser or port forwarding can reach it.
+3. Open the app through the VS Code forwarded browser from the same remote environment and configure the frontend API base URL as `http://localhost:8000`.
+
+Verify the API from the remote environment before opening the app:
+
+```bash
+timeout 20s curl -fsS http://127.0.0.1:8000/healthz
+timeout 20s curl -fsS http://127.0.0.1:8000/api/v1/health
+```
+
+## 8) WebSocket smoke checks
 
 Use a WS CLI/client to:
 
@@ -81,7 +96,7 @@ Use a WS CLI/client to:
 3. Trigger a job creation through HTTP.
 4. Confirm topic envelopes with `event_id`, `seq`, `topic`, `timestamp`, `payload`, `version`.
 
-## 8) Troubleshooting (local)
+## 9) Troubleshooting (local)
 
 ### API issues
 
@@ -117,7 +132,7 @@ Use a WS CLI/client to:
 - Verify DSN configuration separately in env and service logs.
 - In compose environments, confirm `postgres` container health and credentials.
 
-## 9) Local release dry-run (no cloud deployment)
+## 10) Local release dry-run (no cloud deployment)
 
 ```bash
 VERSION=0.1.0
