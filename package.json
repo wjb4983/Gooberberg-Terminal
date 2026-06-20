@@ -12,7 +12,6 @@
     "lint": "pnpm -r lint",
     "test": "pnpm -r test",
     "release:version-meta": "scripts/release/gen-version-metadata.sh",
-    "release:desktop": "scripts/release/build-desktop-artifacts.sh",
     "release:images": "scripts/release/build-push-server-images.sh",
     "dev:frontend": "pnpm --filter @gb/desktop-tauri dev",
     "dev:local": "scripts/dev/local-fullstack.sh",

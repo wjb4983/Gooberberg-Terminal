@@ -23,9 +23,8 @@ A release produces:
 1. Confirm branch is clean and checks pass.
 2. Select release version and create a release branch/tag.
 3. Generate version metadata.
-4. Build desktop artifacts.
-5. Build server images and optionally push registry tags.
-6. Draft notes from `docs/release-notes-template.md`.
+4. Build server images and optionally push registry tags.
+5. Draft notes from `docs/release-notes-template.md`.
 
 ## Scripted flow
 
@@ -33,7 +32,6 @@ A release produces:
 VERSION=0.1.0
 
 timeout 2m scripts/release/gen-version-metadata.sh "$VERSION"
-timeout 30m scripts/release/build-desktop-artifacts.sh "$VERSION"
 timeout 90m scripts/release/build-push-server-images.sh "$VERSION"
 ```
 

@@ -1,18 +1,9 @@
-import { invoke } from '@tauri-apps/api/core';
 import { normalizeApiBaseUrl } from '../settings/preferences';
 
-interface NativeApiHttpResponse {
-  status: number;
-  body: string;
-}
 function clipText(value: string, maxLen = 3000): string {
   return value.length <= maxLen
     ? value
     : `${value.slice(0, maxLen)}…[truncated ${value.length - maxLen} chars]`;
-}
-
-function isTauriRuntime(): boolean {
-  return typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
 }
 
 function formatNetworkFailureMessage(url: string, error: TypeError): string {
@@ -111,31 +102,6 @@ export async function requestJson<T>(
   const url = `${normalizedBaseUrl}${path}`;
   const method = init?.method ?? 'GET';
   const requestBody = typeof init?.body === 'string' ? init.body : '';
-
-  if (isTauriRuntime()) {
-    const response = await invoke<NativeApiHttpResponse>('api_http_request', {
-      request: {
-        method,
-        url,
-        headers: Array.from(headers.entries()),
-        body: typeof init?.body === 'string' ? init.body : undefined,
-      },
-    });
-
-    if (response.status < 200 || response.status >= 300) {
-      throw new Error(
-        buildVerboseHttpFailureMessage({
-          status: response.status,
-          method,
-          url,
-          requestBody,
-          responseBody: response.body,
-        }),
-      );
-    }
-
-    return JSON.parse(response.body) as T;
-  }
 
   try {
     const response = await fetch(url, {
