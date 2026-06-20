@@ -25,22 +25,6 @@ function formatNetworkFailureMessage(url: string, authAttached: boolean, error: 
   return `Network request failed for ${url} from ${origin}.${authHint} Check API base URL, CORS, TLS/certificate, and whether the API is reachable from this machine.${detail}`;
 }
 
-function shouldUseDevProxy(url: string): boolean {
-  if (!import.meta.env.DEV || typeof window === 'undefined') {
-    return false;
-  }
-
-  try {
-    return new URL(url).origin !== window.location.origin;
-  } catch {
-    return false;
-  }
-}
-
-function toDevProxyUrl(url: string): string {
-  return `/__gb_api_proxy?url=${encodeURIComponent(url)}`;
-}
-
 function summarizeFailureBody(body: string): string {
   const trimmed = body.trim();
   if (!trimmed) {
@@ -138,7 +122,6 @@ export async function requestJson<T>(
   const url = `${normalizedBaseUrl}${path}`;
   const method = init?.method ?? 'GET';
   const authAttached = headers.has('Authorization');
-  const browserUrl = shouldUseDevProxy(url) ? toDevProxyUrl(url) : url;
   const requestBody = typeof init?.body === 'string' ? init.body : '';
 
   if (isTauriRuntime()) {
@@ -167,7 +150,7 @@ export async function requestJson<T>(
   }
 
   try {
-    const response = await fetch(browserUrl, {
+    const response = await fetch(url, {
       ...init,
       headers,
     });
