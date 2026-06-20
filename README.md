@@ -36,7 +36,7 @@ The slow path optimizes for correctness, controls, and resilience:
 
 ```text
 apps/
-  desktop-tauri/
+  desktop-tauri/  # Browser/Vite frontend workspace; package remains @gb/desktop-tauri until a future apps/web migration.
   api-control-plane/
 
 services/
@@ -71,6 +71,39 @@ scripts/
 docs/
   runbooks/
 ```
+
+
+## Local frontend development
+
+The canonical local frontend is the browser-based Vite app. The workspace still lives at `apps/desktop-tauri` and keeps the package name `@gb/desktop-tauri` for now to avoid a large rename; a later cleanup can migrate it to `apps/web`.
+
+Recommended quick-start order:
+
+1. Start the browser frontend with Vite:
+
+   ```bash
+   timeout 20m pnpm dev:frontend
+   ```
+
+   This is equivalent to the initially supported direct command:
+
+   ```bash
+   timeout 20m pnpm --filter @gb/desktop-tauri dev
+   ```
+
+2. For a full local stack, start API dependencies and the Vite frontend together:
+
+   ```bash
+   timeout 20m pnpm dev:local
+   ```
+
+3. In a second terminal, run the finite smoke checks:
+
+   ```bash
+   timeout 60s pnpm dev:local:check
+   ```
+
+Tauri commands remain available for desktop packaging experiments, but they are not the default local frontend workflow.
 
 ## Status
 

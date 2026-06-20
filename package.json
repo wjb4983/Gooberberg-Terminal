@@ -14,6 +14,7 @@
     "release:version-meta": "scripts/release/gen-version-metadata.sh",
     "release:desktop": "scripts/release/build-desktop-artifacts.sh",
     "release:images": "scripts/release/build-push-server-images.sh",
+    "dev:frontend": "pnpm --filter @gb/desktop-tauri dev",
     "dev:local": "scripts/dev/local-fullstack.sh",
     "dev:local:check": "scripts/dev/check-local-fullstack.sh",
     "dev:local:down": "timeout 60s docker compose -f infra/compose/docker-compose.dev.yml down --remove-orphans"
