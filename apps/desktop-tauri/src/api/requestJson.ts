@@ -9,7 +9,7 @@ function clipText(value: string, maxLen = 3000): string {
 function formatNetworkFailureMessage(url: string, error: TypeError): string {
   const origin = typeof window !== 'undefined' ? window.location.origin : 'unknown origin';
   const detail = error.message?.trim() ? ` Browser detail: ${error.message.trim()}.` : '';
-  return `Network request failed for ${url} from ${origin}. No Authorization header was attached in local-only mode. Check API base URL, CORS, TLS/certificate, and whether the API is reachable from this machine.${detail}`;
+  return `Network request failed for ${url} from ${origin}. No Authorization header was attached in local-only mode. Start the backend on 127.0.0.1:8000. Run scripts/dev/check-local-fullstack.sh. Check Docker Compose logs for api-control-plane.${detail}`;
 }
 
 function summarizeFailureBody(body: string): string {
@@ -81,8 +81,8 @@ function buildVerboseHttpFailureMessage(args: {
     'Response headers:',
     headerBlock || '  - (none)',
     'Debug hints:',
-    '  - 405 Method Not Allowed usually means wrong HTTP method or route mismatch at reverse proxy.',
-    '  - 500 Internal Server Error usually indicates a backend exception; inspect server logs using request_id/error_code if present above.',
+    '  - 405 Method Not Allowed usually means wrong HTTP method or route mismatch in api-control-plane.',
+    '  - 500 Internal Server Error usually indicates a backend exception; check Docker Compose logs for api-control-plane using request_id/error_code if present above.',
   ].join('\n');
 }
 
