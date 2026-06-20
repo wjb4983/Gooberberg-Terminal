@@ -158,7 +158,7 @@ export class GbApiClient {
 
   constructor(options: ApiClientOptions) {
     this.fetchImpl = options.fetchImpl ?? fetch;
-    this.baseHttpUrl = options.baseHttpUrl.replace(/\/$/, '');
+    this.baseHttpUrl = normalizeLocalhostLoopback(options.baseHttpUrl).replace(/\/$/, '');
     this.apiPrefix = options.apiPrefix ?? '/api/v1';
     this.websocketUrl = options.websocketUrl;
     this.authHeaderProvider = options.authHeaderProvider;
@@ -782,7 +782,7 @@ export class GbApiClient {
   }
 
   private resolveWebSocketUrl(): string {
-    if (this.websocketUrl) return this.websocketUrl;
+    if (this.websocketUrl) return normalizeLocalhostLoopback(this.websocketUrl);
     return `${this.baseHttpUrl.replace(/^http/, 'ws')}/ws`;
   }
 
@@ -1287,6 +1287,21 @@ function parseJobStatusResponse(payload: unknown): JobStatusResponse {
     updatedAtIso: payload.updated_at,
   };
 }
+
+function normalizeLocalhostLoopback(url: string): string {
+  try {
+    const parsed = new URL(url);
+    if (parsed.hostname === 'localhost') {
+      parsed.hostname = '127.0.0.1';
+      return parsed.toString();
+    }
+  } catch {
+    // Keep relative or otherwise non-URL values unchanged.
+  }
+
+  return url;
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
 }

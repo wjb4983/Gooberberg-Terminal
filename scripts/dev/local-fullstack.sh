@@ -64,6 +64,10 @@ log "local development URLs:"
 log "  frontend:         $FRONTEND_URL"
 log "  backend health:   $BACKEND_HEALTH_URL"
 log "  versioned health: $VERSIONED_HEALTH_URL"
+log "recording initial queue heartbeat for status bar"
+curl --fail --silent --show-error --max-time "$HEALTH_REQUEST_TIMEOUT" \
+  --request POST "$QUEUE_HEARTBEAT_URL" >/dev/null || true
+
 log "starting local queue heartbeat for status bar"
 (
   while true; do
