@@ -3,7 +3,7 @@ import type { ApiPreferences } from '../types/api';
 const PREFERENCES_KEY = 'desktop-tauri.preferences.v2';
 
 const defaultPreferences: ApiPreferences = {
-  baseUrl: 'http://localhost:8000',
+  baseUrl: 'http://127.0.0.1:8000',
   theme: 'dark',
   compactLayout: false,
   filterDefaults: {

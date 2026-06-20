@@ -31,13 +31,15 @@ Run these tasks from the repository root in order. Each task is independently ve
    pnpm --filter @gb/desktop-tauri dev -- --host 0.0.0.0
    ```
 
-5. Run the finite local full-stack smoke script from a second terminal. It checks the API endpoints and frontend port with bounded timeouts, and fails fast with clear messages if either service is unavailable:
+5. Run the finite local full-stack smoke script from a second terminal. It checks the API endpoints, queue health endpoint, and frontend port with bounded timeouts, and fails fast with clear messages if either service is unavailable:
 
    ```bash
    timeout 60s ./scripts/dev/check-local-fullstack.sh
    ```
 
 6. Open the VS Code forwarded/browser URL for port `1420`.
+
+   The local full-stack script keeps the queue/worker status fresh by posting a local heartbeat while the frontend process is running. If your browser has an older Settings value, set the API base URL to `http://127.0.0.1:8000` to avoid IPv6 `localhost` resolution issues in the dev proxy.
 
 7. After closing the frontend, stop the local backend containers:
 
