@@ -3,48 +3,7 @@ import { GbApiClient, type ApiClientOptions } from '@gb/api-client';
 import { resolveAuthorizationHeader } from './authHeaders';
 import { normalizeApiBaseUrl } from '../settings/preferences';
 
-function isTauriRuntime(): boolean {
-  return typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
-}
-
-function normalizeAbsoluteApiUrl(url: string): string {
-  try {
-    const parsed = new URL(url);
-    if (parsed.hostname === 'localhost') {
-      parsed.hostname = '127.0.0.1';
-    }
-    return parsed.toString();
-  } catch {
-    return url;
-  }
-}
-
-function shouldUseDevProxy(url: string): boolean {
-  if (!import.meta.env.DEV || isTauriRuntime() || typeof window === 'undefined') {
-    return false;
-  }
-
-  try {
-    return new URL(url).origin !== window.location.origin;
-  } catch {
-    return false;
-  }
-}
-
-export function toDesktopTransportUrl(url: string): string {
-  const normalizedUrl = normalizeAbsoluteApiUrl(url);
-  return shouldUseDevProxy(normalizedUrl)
-    ? `/__gb_api_proxy?url=${encodeURIComponent(normalizedUrl)}`
-    : normalizedUrl;
-}
-
 export function desktopFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
-  if (typeof input === 'string') {
-    return fetch(toDesktopTransportUrl(input), init);
-  }
-  if (input instanceof URL) {
-    return fetch(toDesktopTransportUrl(input.toString()), init);
-  }
   return fetch(input, init);
 }
 
