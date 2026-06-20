@@ -1,12 +1,15 @@
 import { invoke } from '@tauri-apps/api/core';
 import { resolveAuthorizationHeader } from './authHeaders';
+import { normalizeApiBaseUrl } from '../settings/preferences';
 
 interface NativeApiHttpResponse {
   status: number;
   body: string;
 }
 function clipText(value: string, maxLen = 3000): string {
-  return value.length <= maxLen ? value : `${value.slice(0, maxLen)}…[truncated ${value.length - maxLen} chars]`;
+  return value.length <= maxLen
+    ? value
+    : `${value.slice(0, maxLen)}…[truncated ${value.length - maxLen} chars]`;
 }
 
 function isTauriRuntime(): boolean {
@@ -18,7 +21,7 @@ function formatNetworkFailureMessage(url: string, authAttached: boolean, error: 
   const detail = error.message?.trim() ? ` Browser detail: ${error.message.trim()}.` : '';
   const authHint = authAttached
     ? ' Authorization header was attached; re-check token formatting, CORS preflight, and token validity.'
-    : ' No Authorization header was attached.'
+    : ' No Authorization header was attached.';
   return `Network request failed for ${url} from ${origin}.${authHint} Check API base URL, CORS, TLS/certificate, and whether the API is reachable from this machine.${detail}`;
 }
 
@@ -34,22 +37,8 @@ function shouldUseDevProxy(url: string): boolean {
   }
 }
 
-function normalizeLocalhostLoopback(url: string): string {
-  try {
-    const parsed = new URL(url);
-    if (parsed.hostname === 'localhost') {
-      parsed.hostname = '127.0.0.1';
-      return parsed.toString();
-    }
-  } catch {
-    // Keep the original value if it is not a valid absolute URL.
-  }
-
-  return url;
-}
-
 function toDevProxyUrl(url: string): string {
-  return `/__gb_api_proxy?url=${encodeURIComponent(normalizeLocalhostLoopback(url))}`;
+  return `/__gb_api_proxy?url=${encodeURIComponent(url)}`;
 }
 
 function summarizeFailureBody(body: string): string {
@@ -83,7 +72,10 @@ function summarizeCorrelatedFailure(body: string): string {
     const requestId = typeof parsed.request_id === 'string' ? parsed.request_id : undefined;
     const errorCode = typeof parsed.error_code === 'string' ? parsed.error_code : undefined;
     const detail = typeof parsed.detail === 'string' ? parsed.detail : undefined;
-    const correlation = [requestId ? `request_id=${requestId}` : '', errorCode ? `error_code=${errorCode}` : '']
+    const correlation = [
+      requestId ? `request_id=${requestId}` : '',
+      errorCode ? `error_code=${errorCode}` : '',
+    ]
       .filter(Boolean)
       .join(', ');
     const prefix = correlation ? ` [${correlation}]` : '';
@@ -104,7 +96,9 @@ function buildVerboseHttpFailureMessage(args: {
 }): string {
   const { status, method, url, requestBody, responseBody, responseHeaders } = args;
   const headerBlock = responseHeaders
-    ? Array.from(responseHeaders.entries()).map(([name, value]) => `  - ${name}: ${value}`).join('\n')
+    ? Array.from(responseHeaders.entries())
+        .map(([name, value]) => `  - ${name}: ${value}`)
+        .join('\n')
     : '  - (headers unavailable in this runtime)';
   const correlatedSummary = summarizeCorrelatedFailure(responseBody);
   return [
@@ -121,7 +115,11 @@ function buildVerboseHttpFailureMessage(args: {
   ].join('\n');
 }
 
-export async function requestJson<T>(baseUrl: string, path: string, init?: RequestInit): Promise<T> {
+export async function requestJson<T>(
+  baseUrl: string,
+  path: string,
+  init?: RequestInit,
+): Promise<T> {
   const headers = new Headers(init?.headers);
   if (!headers.has('Accept')) {
     headers.set('Accept', 'application/json');
@@ -136,7 +134,8 @@ export async function requestJson<T>(baseUrl: string, path: string, init?: Reque
     }
   }
 
-  const url = `${baseUrl.replace(/\/$/, '')}${path}`;
+  const normalizedBaseUrl = normalizeApiBaseUrl(baseUrl);
+  const url = `${normalizedBaseUrl}${path}`;
   const method = init?.method ?? 'GET';
   const authAttached = headers.has('Authorization');
   const browserUrl = shouldUseDevProxy(url) ? toDevProxyUrl(url) : url;
@@ -153,13 +152,15 @@ export async function requestJson<T>(baseUrl: string, path: string, init?: Reque
     });
 
     if (response.status < 200 || response.status >= 300) {
-      throw new Error(buildVerboseHttpFailureMessage({
-        status: response.status,
-        method,
-        url,
-        requestBody,
-        responseBody: response.body,
-      }));
+      throw new Error(
+        buildVerboseHttpFailureMessage({
+          status: response.status,
+          method,
+          url,
+          requestBody,
+          responseBody: response.body,
+        }),
+      );
     }
 
     return JSON.parse(response.body) as T;
@@ -173,14 +174,16 @@ export async function requestJson<T>(baseUrl: string, path: string, init?: Reque
 
     if (!response.ok) {
       const responseBody = await response.text();
-      throw new Error(buildVerboseHttpFailureMessage({
-        status: response.status,
-        method,
-        url,
-        requestBody,
-        responseBody,
-        responseHeaders: response.headers,
-      }));
+      throw new Error(
+        buildVerboseHttpFailureMessage({
+          status: response.status,
+          method,
+          url,
+          requestBody,
+          responseBody,
+          responseHeaders: response.headers,
+        }),
+      );
     }
 
     return (await response.json()) as T;
