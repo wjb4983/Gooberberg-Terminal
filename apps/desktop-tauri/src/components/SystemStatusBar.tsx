@@ -1,7 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import type { HealthResponse, QueueHealthResponse } from '@gb/schemas';
 import { normalizeApiBaseUrl } from '../settings/preferences';
-import { desktopFetch } from '../api/client';
 
 type IndicatorState = 'healthy' | 'degraded' | 'offline';
 
@@ -31,7 +30,7 @@ function isHealthyStatus(value: string | undefined): boolean {
 
 async function probeLiveness(baseUrl: string): Promise<ProbeResult<{ status: string }>> {
   try {
-    const response = await desktopFetch(`${normalizeApiBaseUrl(baseUrl)}/healthz`, {
+    const response = await fetch(`${normalizeApiBaseUrl(baseUrl)}/healthz`, {
       headers: { Accept: 'application/json' },
     });
     if (!response.ok) {
@@ -55,7 +54,7 @@ async function probeLiveness(baseUrl: string): Promise<ProbeResult<{ status: str
 
 async function probeApiHealth(baseUrl: string): Promise<ProbeResult<HealthResponse>> {
   try {
-    const response = await desktopFetch(`${normalizeApiBaseUrl(baseUrl)}/api/v1/health`, {
+    const response = await fetch(`${normalizeApiBaseUrl(baseUrl)}/api/v1/health`, {
       headers: { Accept: 'application/json' },
     });
     if (!response.ok) {
@@ -90,8 +89,7 @@ async function refreshLocalQueueHeartbeat(baseUrl: string): Promise<void> {
 
 async function probeQueueHealth(baseUrl: string): Promise<ProbeResult<QueueHealthResponse>> {
   try {
-    await refreshLocalQueueHeartbeat(baseUrl);
-    const response = await desktopFetch(`${normalizeApiBaseUrl(baseUrl)}/api/v1/health/queue`, {
+    const response = await fetch(`${normalizeApiBaseUrl(baseUrl)}/api/v1/health/queue`, {
       headers: { Accept: 'application/json' },
     });
     if (!response.ok) {

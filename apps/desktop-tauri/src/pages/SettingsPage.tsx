@@ -2,7 +2,6 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import type { ThemePreference } from '../types/api';
 import { normalizeApiBaseUrl } from '../settings/preferences';
-import { desktopFetch } from '../api/client';
 
 interface SettingsPageProps {
   baseUrl: string;
