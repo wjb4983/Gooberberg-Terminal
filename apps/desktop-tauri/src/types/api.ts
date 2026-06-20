@@ -12,10 +12,6 @@ export interface ApiPreferences extends UiPreferences {
   baseUrl: string;
 }
 
-export interface ApiCredentials {
-  token: string;
-}
-
 export const TASK_TYPES = ['time_series_momentum', 'cross_sectional', 'volatility', 'regime_switching'] as const;
 export type TaskType = (typeof TASK_TYPES)[number];
 

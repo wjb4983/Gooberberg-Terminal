@@ -6,10 +6,10 @@ Browser-first Vite + React + TypeScript frontend. The package and path still use
 
 - Route-based shell with pages: Dashboard, Jobs, Models, Strategies, Portfolio, Graph, Alerts & Health, Settings.
 - Dashboard widget that fetches `GET /api/v1/health` using shared `@gb/api-client` and `@gb/schemas` contracts.
-- Settings page for API base URL + token.
+- Settings page for API base URL and UI preferences.
 - Local persistence for non-sensitive preferences (`baseUrl`).
-- Browser-compatible token and preference storage with Tauri command fallbacks when the app is packaged as desktop.
-- HTTP requests include `Authorization: Bearer <token>` when a token is present in storage.
+- Browser-compatible preference storage.
+- Local-only HTTP requests do not attach API bearer tokens.
 
 ## Development
 

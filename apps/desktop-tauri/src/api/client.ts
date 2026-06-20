@@ -1,6 +1,5 @@
 import { GbApiClient, type ApiClientOptions } from '@gb/api-client';
 
-import { resolveAuthorizationHeader } from './authHeaders';
 import { normalizeApiBaseUrl } from '../settings/preferences';
 
 export function desktopFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
@@ -24,7 +23,6 @@ export function createDesktopApiClient(
     ...options,
     baseHttpUrl: normalizeApiBaseUrl(options.baseHttpUrl),
     fetchImpl: options.fetchImpl ?? desktopFetch,
-    authHeaderProvider: (path) => resolveAuthorizationHeader(path),
     onTelemetry: ({ counter, value, tags }) => {
       console.debug(`[transport-telemetry] ${counter}=${value}`, tags ?? {});
     },
