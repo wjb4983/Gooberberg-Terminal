@@ -7,6 +7,7 @@ Automation entry points.
 - `scripts/lint-all.sh`: Python lint/format/type checks.
 - `scripts/test-all.sh`: Python test suite entry point.
 - `scripts/test-connectivity-layered.sh`: Layered connectivity verification (unit/integration/e2e contract smoke).
+- `scripts/dev/check-local-fullstack.sh`: finite local full-stack smoke check for the API health endpoints and frontend dev port after startup.
 
 ## Ops workflows
 

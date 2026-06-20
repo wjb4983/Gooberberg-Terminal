@@ -18,10 +18,11 @@ Run these tasks from the repository root in order. Each task is independently ve
    timeout 240s docker compose -f infra/compose/docker-compose.dev.yml up -d --build postgres redis api-control-plane
    ```
 
-3. Verify the backend health endpoint:
+3. Verify the backend health endpoints:
 
    ```bash
    timeout 20s curl -fsS http://127.0.0.1:8000/healthz
+   timeout 20s curl -fsS http://127.0.0.1:8000/api/v1/health
    ```
 
 4. Start the frontend dev server:
@@ -30,9 +31,15 @@ Run these tasks from the repository root in order. Each task is independently ve
    pnpm --filter @gb/desktop-tauri dev -- --host 0.0.0.0
    ```
 
-5. Open the VS Code forwarded/browser URL for port `1420`.
+5. Run the finite local full-stack smoke script from a second terminal. It checks the API endpoints and frontend port with bounded timeouts, and fails fast with clear messages if either service is unavailable:
 
-6. After closing the frontend, stop the local backend containers:
+   ```bash
+   timeout 60s ./scripts/dev/check-local-fullstack.sh
+   ```
+
+6. Open the VS Code forwarded/browser URL for port `1420`.
+
+7. After closing the frontend, stop the local backend containers:
 
    ```bash
    pnpm dev:local:down
@@ -122,11 +129,17 @@ Use this order when running the full stack from a remote development host, such 
 2. Start Vite/frontend on `0.0.0.0:1420` so the VS Code browser or port forwarding can reach it.
 3. Open the app through the VS Code forwarded browser from the same remote environment and configure the frontend API base URL as `http://localhost:8000`.
 
-Verify the API from the remote environment before opening the app:
+After startup, run these manual smoke checks from the remote environment before opening the app:
 
 ```bash
 timeout 20s curl -fsS http://127.0.0.1:8000/healthz
 timeout 20s curl -fsS http://127.0.0.1:8000/api/v1/health
+```
+
+Then open the VS Code forwarded frontend URL for port `1420`. For a finite scripted check of the API endpoints and frontend port, run this from a second terminal:
+
+```bash
+timeout 60s ./scripts/dev/check-local-fullstack.sh
 ```
 
 ## 8) WebSocket smoke checks
