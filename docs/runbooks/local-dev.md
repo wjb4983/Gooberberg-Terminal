@@ -195,7 +195,6 @@ Use a WS CLI/client to:
 VERSION=0.1.0
 
 timeout 2m scripts/release/gen-version-metadata.sh "$VERSION"
-timeout 30m scripts/release/build-desktop-artifacts.sh "$VERSION"
 timeout 90m scripts/release/build-push-server-images.sh "$VERSION"
 ```
 

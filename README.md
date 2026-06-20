@@ -103,7 +103,7 @@ Recommended quick-start order:
    timeout 60s pnpm dev:local:check
    ```
 
-Tauri commands remain available for desktop packaging experiments, but they are not the default local frontend workflow.
+Packaged desktop/Tauri builds have been removed from the default workflow; use the Vite browser frontend for local UI development.
 
 ## Status
 
@@ -113,5 +113,5 @@ Tauri commands remain available for desktop packaging experiments, but they are 
 
 ## Local browser access
 
-- Backend CORS defaults support local browser access from `http://127.0.0.1:1420` and `http://localhost:1420`. Packaged Tauri origins are opt-in through `GB_CORS_ALLOWED_ORIGINS`.
+- Backend CORS defaults support local browser access from `http://127.0.0.1:1420` and `http://localhost:1420`. Packaged Tauri origins are no longer part of the default release workflow.
 - See `docs/runbooks/local-server-browser.md` for local backend/frontend ports, browser access, and VS Code port-forward guidance.

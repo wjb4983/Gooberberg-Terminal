@@ -48,6 +48,6 @@ GB_VITE_HOST=0.0.0.0 timeout 20m pnpm --filter @gb/desktop-tauri dev
 
 The default API base URL is `http://127.0.0.1:8000`. Change it only from the Settings page when using a tailnet, proxy, or other API endpoint.
 
-## Tauri
+## Packaged desktop builds
 
-Tauri remains available for desktop packaging experiments via `pnpm --filter @gb/desktop-tauri tauri:dev` and `pnpm --filter @gb/desktop-tauri tauri:build`, but Vite/browser is the canonical local frontend workflow. Rust sources are in `src-tauri/` and intentionally minimal.
+Packaged desktop/Tauri builds are no longer part of this workspace. The canonical frontend artifact is the Vite browser build produced by `pnpm --filter @gb/desktop-tauri build`. A future focused cleanup can rename this package and path to `apps/web` without mixing that path churn into the packaging removal.

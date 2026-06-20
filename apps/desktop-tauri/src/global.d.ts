@@ -2,13 +2,9 @@
 import type * as React from 'react';
 
 declare global {
-  interface Window {
-    __TAURI_INTERNALS__?: unknown;
-  }
-
   namespace JSX {
     type Element = React.JSX.Element;
-    interface IntrinsicElements extends React.JSX.IntrinsicElements {}
+    type IntrinsicElements = React.JSX.IntrinsicElements;
   }
 }
 
