@@ -79,28 +79,30 @@ The canonical local frontend is the browser-based Vite app. The workspace still 
 
 Recommended quick-start order:
 
-1. Start the browser frontend with Vite:
+1. Start backend dependencies and the API control plane:
 
    ```bash
-   timeout 20m pnpm dev:frontend
+   timeout 120s docker compose -f infra/compose/docker-compose.dev.yml up --build api-control-plane postgres redis
    ```
 
-   This is equivalent to the initially supported direct command:
+2. Start the browser frontend with Vite in a second terminal:
 
    ```bash
-   timeout 20m pnpm --filter @gb/desktop-tauri dev
+   timeout 120s pnpm --filter @gb/desktop-tauri dev -- --host 0.0.0.0
    ```
 
-2. For a full local stack, start API dependencies and the Vite frontend together:
+3. Open the VS Code forwarded frontend URL for port `1420`.
+
+4. Run the finite local full-stack smoke check from another terminal:
 
    ```bash
-   timeout 20m pnpm dev:local
+   timeout 60s scripts/dev/check-local-fullstack.sh
    ```
 
-3. In a second terminal, run the finite smoke checks:
+5. Stop the local stack when you are done:
 
    ```bash
-   timeout 60s pnpm dev:local:check
+   timeout 60s docker compose -f infra/compose/docker-compose.dev.yml down --remove-orphans
    ```
 
 Packaged desktop/Tauri builds have been removed from the default workflow; use the Vite browser frontend for local UI development.
