@@ -77,7 +77,7 @@ export function SettingsPage({
       </form>
 
       {status && <p>{status}</p>}
-      <p>Preferences are persisted locally on this device.</p>
+      <p>Preferences and the API token are stored locally in the browser.</p>
     </section>
   );
 }
