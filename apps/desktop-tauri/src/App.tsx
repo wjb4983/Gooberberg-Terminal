@@ -10,8 +10,7 @@ import { ModelMonitorPage } from './pages/ModelMonitorPage';
 import { PortfolioPage } from './pages/PortfolioPage';
 import { DataCachePage } from './pages/DataCachePage';
 import { loadPreferences, savePreferences } from './settings/preferences';
-import { createTokenStorage } from './settings/tokenStorage';
-import { useCallback, useMemo, useState } from 'react';
+import { useState } from 'react';
 import { OperatorConsoleProvider } from './context/OperatorConsoleContext';
 import type { ThemePreference } from './types/api';
 import { ErrorBoundary } from './components/ErrorBoundary';
@@ -33,26 +32,16 @@ interface ToastItem {
   tone: 'warning' | 'critical';
 }
 
-
-
 export function App(): JSX.Element {
   const [preferences, setPreferences] = useState(() => loadPreferences());
-  const tokenStorage = useMemo(() => createTokenStorage(), []);
   const [wsStatus, setWsStatus] = useState('connecting');
   const [toasts, setToasts] = useState<ToastItem[]>([]);
-  const saveToken = useCallback((token: string) => tokenStorage.save({ token }), [tokenStorage]);
-  const loadToken = useCallback(() => tokenStorage.getToken(), [tokenStorage]);
-  const clearToken = useCallback(() => tokenStorage.clear(), [tokenStorage]);
 
-  const saveBaseUrl = (nextBaseUrl: string): void => {
-    setPreferences((previous) => {
-      const next = { ...previous, baseUrl: nextBaseUrl };
-      savePreferences(next);
-      return next;
-    });
-  };
-
-  const saveUiPreferences = (nextTheme: ThemePreference, compactLayout: boolean, defaultSeverity: 'all' | 'info' | 'warning' | 'critical'): void => {
+  const saveUiPreferences = (
+    nextTheme: ThemePreference,
+    compactLayout: boolean,
+    defaultSeverity: 'all' | 'info' | 'warning' | 'critical',
+  ): void => {
     setPreferences((previous) => {
       const next = {
         ...previous,
@@ -74,27 +63,134 @@ export function App(): JSX.Element {
   };
 
   return (
-    <OperatorConsoleProvider value={{ reportApiStatus: () => undefined, reportWebSocketStatus: setWsStatus, pushToast }}>
+    <OperatorConsoleProvider
+      value={{ reportApiStatus: () => undefined, reportWebSocketStatus: setWsStatus, pushToast }}
+    >
       <Routes>
-        <Route path="/" element={<AppShell baseUrl={preferences.baseUrl} wsStatus={wsStatus} toasts={toasts} theme={preferences.theme} compactLayout={preferences.compactLayout} />}>
-          <Route index element={<ErrorBoundary><DashboardPage baseUrl={preferences.baseUrl} /></ErrorBoundary>} />
-          <Route path="jobs" element={<ErrorBoundary><JobsPage baseUrl={preferences.baseUrl} /></ErrorBoundary>} />
-          <Route path="jobs/:jobId" element={<ErrorBoundary><JobDetailPage baseUrl={preferences.baseUrl} /></ErrorBoundary>} />
+        <Route
+          path="/"
+          element={
+            <AppShell
+              baseUrl={preferences.baseUrl}
+              wsStatus={wsStatus}
+              toasts={toasts}
+              theme={preferences.theme}
+              compactLayout={preferences.compactLayout}
+            />
+          }
+        >
+          <Route
+            index
+            element={
+              <ErrorBoundary>
+                <DashboardPage baseUrl={preferences.baseUrl} />
+              </ErrorBoundary>
+            }
+          />
+          <Route
+            path="jobs"
+            element={
+              <ErrorBoundary>
+                <JobsPage baseUrl={preferences.baseUrl} />
+              </ErrorBoundary>
+            }
+          />
+          <Route
+            path="jobs/:jobId"
+            element={
+              <ErrorBoundary>
+                <JobDetailPage baseUrl={preferences.baseUrl} />
+              </ErrorBoundary>
+            }
+          />
 
           <Route path="models">
-            <Route path="build" element={<ErrorBoundary><BuildingModelsPage baseUrl={preferences.baseUrl} /></ErrorBoundary>} />
-            <Route path="train" element={<ErrorBoundary><TrainingRunsPage baseUrl={preferences.baseUrl} /></ErrorBoundary>} />
-            <Route path="backtest" element={<ErrorBoundary><BacktestsPage baseUrl={preferences.baseUrl} /></ErrorBoundary>} />
-            <Route path="deploy" element={<ErrorBoundary><ModelDeploymentsPage baseUrl={preferences.baseUrl} /></ErrorBoundary>} />
-            <Route path="monitor" element={<ErrorBoundary><ModelMonitorPage baseUrl={preferences.baseUrl} defaultSeverity={preferences.filterDefaults.severity} /></ErrorBoundary>} />
+            <Route
+              path="build"
+              element={
+                <ErrorBoundary>
+                  <BuildingModelsPage baseUrl={preferences.baseUrl} />
+                </ErrorBoundary>
+              }
+            />
+            <Route
+              path="train"
+              element={
+                <ErrorBoundary>
+                  <TrainingRunsPage baseUrl={preferences.baseUrl} />
+                </ErrorBoundary>
+              }
+            />
+            <Route
+              path="backtest"
+              element={
+                <ErrorBoundary>
+                  <BacktestsPage baseUrl={preferences.baseUrl} />
+                </ErrorBoundary>
+              }
+            />
+            <Route
+              path="deploy"
+              element={
+                <ErrorBoundary>
+                  <ModelDeploymentsPage baseUrl={preferences.baseUrl} />
+                </ErrorBoundary>
+              }
+            />
+            <Route
+              path="monitor"
+              element={
+                <ErrorBoundary>
+                  <ModelMonitorPage
+                    baseUrl={preferences.baseUrl}
+                    defaultSeverity={preferences.filterDefaults.severity}
+                  />
+                </ErrorBoundary>
+              }
+            />
             <Route index element={<Navigate to="build" replace />} />
           </Route>
 
-          <Route path="model-catalog" element={<ErrorBoundary><ModelCatalogPage baseUrl={preferences.baseUrl} /></ErrorBoundary>} />
-          <Route path="parameterization" element={<ErrorBoundary><ParameterizationPage baseUrl={preferences.baseUrl} /></ErrorBoundary>} />
-          <Route path="datasets/create" element={<ErrorBoundary><DatasetCreationPage baseUrl={preferences.baseUrl} /></ErrorBoundary>} />
-          <Route path="parameter-sweeps" element={<ErrorBoundary><ParameterSweepsPage baseUrl={preferences.baseUrl} /></ErrorBoundary>} />
-          <Route path="testing" element={<ErrorBoundary><TestingPage baseUrl={preferences.baseUrl} /></ErrorBoundary>} />
+          <Route
+            path="model-catalog"
+            element={
+              <ErrorBoundary>
+                <ModelCatalogPage baseUrl={preferences.baseUrl} />
+              </ErrorBoundary>
+            }
+          />
+          <Route
+            path="parameterization"
+            element={
+              <ErrorBoundary>
+                <ParameterizationPage baseUrl={preferences.baseUrl} />
+              </ErrorBoundary>
+            }
+          />
+          <Route
+            path="datasets/create"
+            element={
+              <ErrorBoundary>
+                <DatasetCreationPage baseUrl={preferences.baseUrl} />
+              </ErrorBoundary>
+            }
+          />
+          <Route
+            path="parameter-sweeps"
+            element={
+              <ErrorBoundary>
+                <ParameterSweepsPage baseUrl={preferences.baseUrl} />
+              </ErrorBoundary>
+            }
+          />
+          <Route
+            path="testing"
+            element={
+              <ErrorBoundary>
+                <TestingPage baseUrl={preferences.baseUrl} />
+              </ErrorBoundary>
+            }
+          />
 
           {/* Legacy aliases (kept for backward compatibility) */}
           <Route path="training-runs" element={<Navigate to="/models/train" replace />} />
@@ -105,25 +201,58 @@ export function App(): JSX.Element {
           <Route path="full-on-backtesting" element={<Navigate to="/models/backtest" replace />} />
           <Route path="graph" element={<Navigate to="/models/monitor" replace />} />
 
-          <Route path="data-cache" element={<ErrorBoundary><DataCachePage baseUrl={preferences.baseUrl} /></ErrorBoundary>} />
-          <Route path="strategies" element={<ErrorBoundary><StrategiesPage baseUrl={preferences.baseUrl} /></ErrorBoundary>} />
-          <Route path="strategies/workbench" element={<ErrorBoundary><StrategyWorkbenchPage baseUrl={preferences.baseUrl} /></ErrorBoundary>} />
-          <Route path="portfolio" element={<ErrorBoundary><PortfolioPage baseUrl={preferences.baseUrl} /></ErrorBoundary>} />
-          <Route path="alerts-health" element={<ErrorBoundary><AlertsHealthPage baseUrl={preferences.baseUrl} defaultSeverity={preferences.filterDefaults.severity} /></ErrorBoundary>} />
+          <Route
+            path="data-cache"
+            element={
+              <ErrorBoundary>
+                <DataCachePage baseUrl={preferences.baseUrl} />
+              </ErrorBoundary>
+            }
+          />
+          <Route
+            path="strategies"
+            element={
+              <ErrorBoundary>
+                <StrategiesPage baseUrl={preferences.baseUrl} />
+              </ErrorBoundary>
+            }
+          />
+          <Route
+            path="strategies/workbench"
+            element={
+              <ErrorBoundary>
+                <StrategyWorkbenchPage baseUrl={preferences.baseUrl} />
+              </ErrorBoundary>
+            }
+          />
+          <Route
+            path="portfolio"
+            element={
+              <ErrorBoundary>
+                <PortfolioPage baseUrl={preferences.baseUrl} />
+              </ErrorBoundary>
+            }
+          />
+          <Route
+            path="alerts-health"
+            element={
+              <ErrorBoundary>
+                <AlertsHealthPage
+                  baseUrl={preferences.baseUrl}
+                  defaultSeverity={preferences.filterDefaults.severity}
+                />
+              </ErrorBoundary>
+            }
+          />
           <Route
             path="settings"
             element={
               <ErrorBoundary>
                 <SettingsPage
-                  baseUrl={preferences.baseUrl}
                   theme={preferences.theme}
                   compactLayout={preferences.compactLayout}
                   defaultSeverity={preferences.filterDefaults.severity}
-                  onSaveBaseUrl={saveBaseUrl}
                   onSaveUiPreferences={saveUiPreferences}
-                  onSaveToken={saveToken}
-                  onLoadToken={loadToken}
-                  onClearToken={clearToken}
                 />
               </ErrorBoundary>
             }
