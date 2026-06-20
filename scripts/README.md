@@ -45,15 +45,14 @@ Use this exact sequence from the repository root.
 
 Shared helpers:
 
-- `scripts/ops/lib.sh`: strict mode, timeout wrappers, health polling, and standardized error exits.
+- `scripts/ops/lib.sh`: strict mode, timeout wrappers, local health polling, and standardized error exits.
 
 Entry points:
 
 - `scripts/ops/first-time-build-run.sh`: first local/server startup (`docker compose up -d --build` + health polling).
 - `scripts/ops/subsequent-run.sh`: idempotent routine start (`docker compose up -d` + health polling).
 - `scripts/ops/update-build-run.sh`: pull updates, rebuild, and restart (`docker compose pull` + `up -d --build`).
-- `scripts/ops/connectivity-synthetic-check.sh`: single-topology synthetic health/auth/backend-down/queue/ws checks.
-- `scripts/ops/run-connectivity-smoke-matrix.sh`: broader connectivity smoke runner for configured local base URLs.
+- `scripts/ops/connectivity-synthetic-check.sh`: local smoke check for `http://127.0.0.1:8000/healthz`, `http://127.0.0.1:8000/api/v1/health`, and `http://127.0.0.1:1420`.
 
 Usage examples:
 
@@ -66,6 +65,8 @@ timeout 20m ./scripts/ops/subsequent-run.sh
 
 PULL_TIMEOUT='20m' COMPOSE_TIMEOUT='25m' \
 timeout 30m ./scripts/ops/update-build-run.sh
+
+timeout 60s ./scripts/ops/connectivity-synthetic-check.sh
 ```
 
 Notes:
@@ -113,10 +114,10 @@ Use this sequence when a local deployed agent reports an API popup/error.
    timeout 20s curl -fsS http://127.0.0.1:8000/api/v1/health
    ```
 
-2. **Run bounded connectivity synthetic checks**:
+2. **Run bounded local smoke checks**:
 
    ```bash
-   timeout 8m ./scripts/ops/connectivity-synthetic-check.sh
+   timeout 60s ./scripts/ops/connectivity-synthetic-check.sh
    ```
 
 3. **Fetch relevant service logs with timeout** (focus API + backing services):
